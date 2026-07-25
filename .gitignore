@@ -1,0 +1,14 @@
+bin/
+obj/
+.vs/
+*.user
+
+# Derleme çıktısı — tools/adim1-olcum.ps1 sürüm kontrolündeki kopyadır.
+publish/
+
+# Bağlantı dizeleri içerir — repoya girmemeli.
+jobs.json
+!jobs.example.json
+
+# Ölçüm çıktıları
+adim1-sonuc-*.txt

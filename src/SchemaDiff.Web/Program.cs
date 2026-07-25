@@ -1,0 +1,359 @@
+using System.Text.Json;
+using Microsoft.AspNetCore.Connections;
+using SchemaDiff.Core.Connections;
+using SchemaDiff.Core.Model;
+using SchemaDiff.Core.Scripting;
+using SchemaDiff.Web;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddSingleton<CompareService>();
+builder.Services.AddSingleton<RecentConnections>();
+
+var app = builder.Build();
+
+// Kimlik doğrulama YOK ve bağlantı bilgileri sunucuda duruyor. Bu yüzden yalnızca
+// yerel makineden erişilebilir olmalı — 0.0.0.0'a açmak bu bağlantılarla sorgu
+// koşturma yetkisini ağdaki herkese vermek demektir.
+var port = ResolvePort(args);
+app.Urls.Clear();
+app.Urls.Add($"http://127.0.0.1:{port}");
+
+app.UseDefaultFiles();
+
+// Statik dosyalar her istekte doğrulanmalı. Varsayılan davranışta tarayıcı
+// sezgisel önbellekleme yapıp eski CSS/JS'i sunabiliyor; yerel bir araçta bu,
+// düzeltilmiş bir hatanın hâlâ duruyormuş gibi görünmesine yol açar.
+// "no-cache" içeriği yeniden indirmez, yalnızca ETag ile doğrular.
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = context =>
+        context.Context.Response.Headers.CacheControl = "no-cache, must-revalidate",
+});
+
+var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+
+// --- bağlantılar ---
+
+app.MapGet("/api/connections/recent", (RecentConnections recent) =>
+    Results.Ok(recent.All.Select(e => new RecentConnectionDto(
+        e.Id, e.Server, e.Database, e.Authentication.ToString(), e.UserName,
+        e.Encrypt, e.TrustServerCertificate, e.HasStoredPassword,
+        string.IsNullOrWhiteSpace(e.Database) ? e.Server : $"{e.Server}.{e.Database}",
+        e.LastUsed))));
+
+app.MapDelete("/api/connections/recent/{id}", (string id, RecentConnections recent) =>
+{
+    recent.Forget(id);
+    return Results.NoContent();
+});
+
+app.MapPost("/api/connections/test", async (ConnectionDto dto, RecentConnections recent, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(dto.Server))
+        return Results.BadRequest(new { error = "Sunucu adı zorunlu." });
+
+    var probe = await SqlServerExplorer.TestAsync(ToConnectionInfo(dto, recent), ct);
+    return Results.Ok(probe);
+});
+
+app.MapPost("/api/connections/databases", async (ConnectionDto dto, RecentConnections recent, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(dto.Server))
+        return Results.BadRequest(new { error = "Sunucu adı zorunlu." });
+
+    try
+    {
+        var databases = await SqlServerExplorer.ListDatabasesAsync(ToConnectionInfo(dto, recent), ct);
+        return Results.Ok(databases);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { error = ex.Message.Split('\n')[0].Trim() });
+    }
+});
+
+// --- karşılaştırma ---
+
+app.MapPost("/api/compare", (CompareRequest request, CompareService compare, RecentConnections recent) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Source.Server) || string.IsNullOrWhiteSpace(request.Target.Server))
+        return Results.BadRequest(new { error = "Kaynak ve hedef sunucu zorunlu." });
+
+    if (string.IsNullOrWhiteSpace(request.Source.Database) || string.IsNullOrWhiteSpace(request.Target.Database))
+        return Results.BadRequest(new { error = "Kaynak ve hedef veritabanı seçilmeli." });
+
+    var source = ToConnectionInfo(request.Source, recent);
+    var target = ToConnectionInfo(request.Target, recent);
+
+    recent.Remember(source, request.Source.RememberPassword);
+    recent.Remember(target, request.Target.RememberPassword);
+
+    var session = compare.Start(source, target, request.Options ?? new CompareOptionsDto());
+    return Results.Ok(new { runId = session.Id, source = source.Label, target = target.Label });
+});
+
+app.MapGet("/api/runs/{id}", (string id, CompareService compare) =>
+{
+    var session = compare.Get(id);
+    if (session is null) return Results.NotFound();
+    if (session.Error is not null) return Results.Ok(new { finished = true, error = session.Error });
+    return Results.Ok(new { finished = session.Finished, result = session.Dto });
+});
+
+app.MapGet("/api/runs/{id}/events", async (string id, HttpContext context, CompareService compare, CancellationToken ct) =>
+{
+    var session = compare.Get(id);
+    if (session is null)
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+
+    context.Response.Headers.ContentType = "text/event-stream";
+    context.Response.Headers.CacheControl = "no-cache";
+    context.Response.Headers["X-Accel-Buffering"] = "no";
+
+    try
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            // Sinyali durum okumasından ÖNCE al, yoksa iki adım arasında biten koşum kaçar.
+            var changed = session.Changed;
+
+            if (session.Finished)
+            {
+                if (session.Error is not null)
+                    await WriteEventAsync(context.Response, "failed", new { error = session.Error }, jsonOptions, ct);
+                else
+                    await WriteEventAsync(context.Response, "result", session.Dto!, jsonOptions, ct);
+                break;
+            }
+
+            await WriteEventAsync(context.Response, "progress",
+                new { source = session.SourceLabel, target = session.TargetLabel }, jsonOptions, ct);
+
+            await changed.WaitAsync(ct);
+        }
+    }
+    catch (OperationCanceledException)
+    {
+        // Tarayıcı sekmeyi kapattı; koşum arka planda tamamlanır.
+    }
+});
+
+// Dağıtım script'i. scope: "modules" | "tables" | "all" (varsayılan all).
+// Selection verilirse YALNIZCA işaretlenen objeler yazılır; boşsa tümü.
+// dataLoss=true verilmedikçe kolon/tablo silme ve tip daraltma script'e GİRMEZ,
+// ayrı listede raporlanır. Kapsam dışı kalan her şey ismen görünür, sessizce düşmez.
+app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareService compare) =>
+{
+    var session = compare.Get(id);
+    if (session?.Comparison is null) return Results.NotFound();
+
+    var comparison = session.Comparison;
+    var generatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+    var scope = request.Scope;
+    var wantModules = scope is null or "all" or "modules";
+    var wantTables = scope is null or "all" or "tables";
+    var allowDataLoss = request.DataLoss;
+
+    // İşaretlenen objeler → ObjectKey kümesi. Boşsa null = tümü.
+    ISet<ObjectKey>? selection = null;
+    if (request.Selection is { Length: > 0 } picks)
+    {
+        selection = new HashSet<ObjectKey>(ObjectKeyComparer.CaseInsensitive);
+        foreach (var pick in picks)
+            selection.Add(new ObjectKey(pick.Schema, pick.Name, CompareService.ResolveKind(pick.ObjectType)));
+    }
+
+    var sb = new System.Text.StringBuilder(16384);
+    var included = 0;
+    var outOfScope = 0;
+    var skipped = new List<object>();
+    var dataLossActions = new List<object>();
+    var hadCycle = false;
+
+    // Kullanıcı tanımlı tipler EN BAŞTA: tablo ve modüller onlara bağlı olabilir.
+    if (wantTables || wantModules)
+    {
+        var types = TypeScriptGenerator.Generate(comparison, selection, new TypeScriptOptions
+        {
+            GeneratedAt = generatedAt,
+        });
+        if (!types.IsEmpty)
+        {
+            sb.AppendLine(types.Sql);
+            sb.AppendLine();
+            included += types.Included.Count;
+        }
+        skipped.AddRange(types.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
+    }
+
+    // Tablolar: yeni view/prosedürler yeni tablolara bağlı olabilir.
+    if (wantTables)
+    {
+        var table = TableScriptGenerator.Generate(comparison, selection, new TableScriptOptions
+        {
+            GeneratedAt = generatedAt,
+            AllowDataLoss = allowDataLoss,
+        });
+        sb.AppendLine(table.Sql);
+        sb.AppendLine();
+        included += table.Included.Count;
+        hadCycle |= table.HadDependencyCycle;
+        skipped.AddRange(table.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
+        dataLossActions.AddRange(table.DataLossActions.Select(a =>
+            (object)new { table = a.Table.ToString(), a.Column, a.Description, a.Sql }));
+    }
+
+    if (wantModules)
+    {
+        var module = ModuleScriptGenerator.Generate(comparison, selection, new ScriptOptions
+        {
+            GeneratedAt = generatedAt,
+            TablesHandledElsewhere = wantTables,
+            HandledElsewhere = new HashSet<ObjectKind>
+            {
+                ObjectKind.Role, ObjectKind.UserDefinedType, ObjectKind.TableType,
+                ObjectKind.Sequence, ObjectKind.Synonym,
+                ObjectKind.PartitionFunction, ObjectKind.PartitionScheme,
+            },
+        });
+        sb.AppendLine(module.Sql);
+        included += module.Included.Count;
+        outOfScope += module.OutOfScope.Count;
+        hadCycle |= module.HadDependencyCycle;
+        skipped.AddRange(module.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
+    }
+
+    // Roller: her zaman (güvenli, veri kaybı yok). Modüllerden sonra, bağımsız.
+    if (wantModules)
+    {
+        var roles = RoleScriptGenerator.Generate(comparison, selection, new RoleScriptOptions
+        {
+            GeneratedAt = generatedAt,
+        });
+        if (!roles.IsEmpty)
+        {
+            sb.AppendLine();
+            sb.AppendLine(roles.Sql);
+            included += roles.Included.Count;
+        }
+        skipped.AddRange(roles.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
+    }
+
+    // Extended property'ler: tüm host objeler oluştuktan sonra, en sonda. Yalnızca birleşik
+    // ("all") kapsamda — eklenen bir tablonun EP'si tablo diliminin de koşmasını gerektirir.
+    if (wantModules && wantTables)
+    {
+        var ep = ExtendedPropertyScriptGenerator.Generate(comparison, selection, generatedAt);
+        if (!ep.IsEmpty)
+        {
+            sb.AppendLine();
+            sb.AppendLine(ep.Sql);
+            included += ep.Included.Count;
+        }
+        skipped.AddRange(ep.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
+
+        var perms = PermissionScriptGenerator.Generate(comparison, selection, generatedAt);
+        if (!perms.IsEmpty)
+        {
+            sb.AppendLine();
+            sb.AppendLine(perms.Sql);
+            included += perms.Included.Count;
+        }
+        skipped.AddRange(perms.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
+    }
+
+    var tag = selection is null ? scope ?? "all" : "secili";
+    var fileName = $"{comparison.Target.Database}_{tag}_{DateTime.Now:yyyyMMdd-HHmm}.sql";
+
+    return Results.Ok(new
+    {
+        fileName,
+        sql = sb.ToString(),
+        included,
+        outOfScope,
+        skipped,
+        dataLossActions,
+        hadDependencyCycle = hadCycle,
+        selectedCount = selection?.Count ?? 0,
+    });
+});
+
+app.MapGet("/api/runs/{id}/detail", (
+    string id, string schema, string name, string kind, CompareService compare) =>
+{
+    var session = compare.Get(id);
+    if (session is null) return Results.NotFound();
+
+    var detail = compare.Detail(session, schema, name, kind);
+    return detail is null ? Results.NotFound() : Results.Ok(detail);
+});
+
+try
+{
+    app.Run();
+}
+catch (IOException ex) when (ex.InnerException is AddressInUseException)
+{
+    // Çıplak yığın izi yerine ne yapılacağını söyle.
+    Console.Error.WriteLine($"""
+
+        HATA: {port} portu zaten kullanımda.
+
+        Muhtemelen SchemaDiff.Web zaten çalışıyor — önce http://127.0.0.1:{port} adresini deneyin.
+
+        Portu kimin tuttuğunu görmek için:
+            Get-NetTCPConnection -LocalPort {port} | Select-Object OwningProcess
+        Başka bir port kullanmak için:
+            dotnet run -c Release -- --port 5300
+        """);
+    return 2;
+}
+
+return 0;
+
+/// <summary>
+/// İstemciden gelen alanları bağlantı bilgisine çevirir. Parola boş bırakılmış ve
+/// kayıtlı bir bağlantı seçilmişse, parola sunucu tarafında çözülür — tarayıcıya
+/// hiçbir zaman gönderilmez.
+/// </summary>
+static SqlConnectionInfo ToConnectionInfo(ConnectionDto dto, RecentConnections recent)
+{
+    var authentication = string.Equals(dto.Authentication, "SqlLogin", StringComparison.OrdinalIgnoreCase)
+        ? SqlAuthentication.SqlLogin
+        : SqlAuthentication.Windows;
+
+    var password = dto.Password;
+    if (string.IsNullOrEmpty(password) && authentication == SqlAuthentication.SqlLogin)
+        password = recent.ResolvePassword(dto.Id);
+
+    return new SqlConnectionInfo
+    {
+        Server = dto.Server.Trim(),
+        Database = string.IsNullOrWhiteSpace(dto.Database) ? null : dto.Database.Trim(),
+        Authentication = authentication,
+        UserName = dto.UserName,
+        Password = password,
+        Encrypt = dto.Encrypt,
+        TrustServerCertificate = dto.TrustServerCertificate,
+    };
+}
+
+static async Task WriteEventAsync(
+    HttpResponse response, string name, object payload, JsonSerializerOptions options, CancellationToken ct)
+{
+    var json = JsonSerializer.Serialize(payload, options);
+    await response.WriteAsync($"event: {name}\ndata: {json}\n\n", ct);
+    await response.Body.FlushAsync(ct);
+}
+
+static int ResolvePort(string[] args)
+{
+    for (var i = 0; i < args.Length - 1; i++)
+        if (args[i] is "--port" or "-p" && int.TryParse(args[i + 1], out var parsed))
+            return parsed;
+
+    return 5290;
+}

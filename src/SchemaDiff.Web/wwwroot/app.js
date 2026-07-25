@@ -1,0 +1,1144 @@
+'use strict';
+
+const $ = (id) => document.getElementById(id);
+let LANG = localStorage.getItem('lang') || 'en';
+let THEME = localStorage.getItem('theme') || 'light';
+const num = (n) => (n ?? 0).toLocaleString(LANG === 'tr' ? 'tr-TR' : 'en-US');
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// ================= i18n (EN / TR) =================
+
+const I18N = {
+  en: {
+    source: 'Source', target: 'Target', selectConnection: 'select connection',
+    swap: 'Source ↔ Target', compare: 'Compare', generateScript: 'Generate Script',
+    generateScriptTip: 'Generate a deployment script from selected changes',
+    options: 'Comparison options', toggleTheme: 'Toggle theme', toggleLang: 'Language',
+    pickTwo: 'Select two connections to compare.', allTypes: 'All types',
+    searchPh: 'search schema or object…', copySelected: 'Copy selected',
+    tabDiff: 'Differences', tabRisk: 'Deployment risk', tabTriggers: 'Triggers',
+    type: 'Type', objectDefinitions: 'Object Definitions',
+    prevDiff: 'Previous difference', nextDiff: 'Next difference', canonicalText: 'canonical text',
+    selectRow: 'Select a row above.', connect: 'Connect', recentConnections: 'Recent connections',
+    none: 'None.', connectionProperties: 'Connection properties', serverName: 'Server name',
+    authentication: 'Authentication', username: 'Username', password: 'Password',
+    rememberPassword: 'Remember password', database: 'Database', listFirst: '— list first —',
+    list: 'List', trustCert: 'Trust server certificate', testConnection: 'Test connection',
+    cancel: 'Cancel', comparisonOptions: 'Comparison options', resetDefaults: 'Reset to defaults', ok: 'OK',
+    connectSource: 'Source connection', connectTarget: 'Target connection',
+    pwSaved: ' · password saved', listUnreadable: 'Could not read list.',
+    storedPwHint: 'Stored password is resolved on the server — leave the field empty.',
+    enterServerFirst: 'Enter the server name first.', listingDatabases: 'listing databases…',
+    couldNotList: 'Could not list.', selectOpt: '— select —', databasesFound: '{n} databases found.',
+    testing: 'testing…', couldNotConnect: 'Could not connect.',
+    connectedAs: 'Connected — {server} ({version}), user {login}',
+    serverRequired: 'Server name is required.', databaseRequired: 'Select a database — use "List".',
+    startingCompare: 'starting comparison…', couldNotStart: 'Could not start.',
+    comparing: 'comparing {source} → {target}…', connectionLost: 'Connection lost.',
+    notComparedYet: 'No comparison yet.', noDiffForFilters: 'No differences to show with these filters.',
+    listLimited: 'List limited to {n} records — there are more.',
+    flagBlock: 'WILL BLOCK', flagIndeterminate: 'INDETERMINATE',
+    pickInfo: '{n} objects selected → Generate Script writes only these · Shift+click for range',
+    statResult: '{source} → {target} · {objects} objects · {equal} equal · +{add} ~{change} −{delete} · {ms} ms',
+    renameWarn: ' · ⚠ {n} possible RENAME (consider sp_rename instead of drop+create)',
+    noStructuralRisk: 'No structural change carries risk.',
+    riskS1: '<b>{n}</b> tables have structural changes.',
+    riskS2: '<b>{n}</b> are <b>full</b> in target → will stop during deployment ({loss} with data-loss risk).',
+    riskS3: '<b>{n}</b> are risky but empty in target → apply cleanly.',
+    riskS4: '<b>{n}</b> are low risk → applied in place.',
+    riskS5: '<b>{n}</b> have an unreadable row count → check manually.',
+    rLabelDataLoss: 'DATA LOSS', rLabelBlock: 'WILL BLOCK', rLabelEmpty: 'empty table',
+    rLabelRisky: 'RISKY (row count unreadable)', rLabelInPlace: 'in place', rLabelSafe: 'safe',
+    rowsN: '{n} rows', rowsUnknown: '? rows',
+    noTriggers: 'No triggers found.',
+    triggerMismatch: '<b>{n}</b> triggers differ in state between the two environments — highlighted below.',
+    thTrigger: 'Trigger', thTarget: 'Target', thSource: 'Source', stateOff: 'DISABLED', stateOn: 'enabled',
+    loading: 'loading…', noDefinition: 'No definition found for this object.',
+    noContent: 'No content.', notOnThisSide: 'Not present on this side.', missingSuffix: ' — missing',
+    noDiff: 'no differences', diffOfTotal: '{i} / {n} differences',
+    generatingScript: 'generating script…', scriptFailed: 'Could not generate script.',
+    scriptIncluded: '{n} objects written ({sel} of selected)',
+    scriptIncludedAll: '{n} objects written (ALL — nothing selected)',
+    dataLossIncluded: '⚠ DATA-LOSS steps (drop column/table, narrowing) INCLUDED',
+    stillGated: '{n} steps still gated', outOfScopeN: '{n} objects out of scope (sequence/synonym etc.)',
+    skippedN: '{n} objects skipped', downloaded: '{file} downloaded · {parts}',
+    copiedN: '{n} rows copied to clipboard.',
+    opt_ignoreWhitespace: 'Ignore whitespace', optn_ignoreWhitespace: 'Indentation and line-break differences are not counted.',
+    opt_ignoreComments: 'Ignore comments', optn_ignoreComments: 'An object that only differs in comments is treated as identical.',
+    opt_ignoreKeywordCasing: 'Ignore keyword casing', optn_ignoreKeywordCasing: '"select" equals "SELECT"; identifiers and literals are unaffected.',
+    opt_ignoreSemicolons: 'Ignore semicolons', optn_ignoreSemicolons: 'Trailing ";" differences are not counted.',
+    opt_ignoreColumnOrder: 'Ignore column order', optn_ignoreColumnOrder: 'Columns are matched by name, not by position.',
+    opt_ignoreCollation: 'Ignore collation differences', optn_ignoreCollation: 'When the two servers have different default collations every text column looks changed; this suppresses that noise.',
+    opt_ignoreIdentitySeed: 'Ignore IDENTITY seed/increment', optn_ignoreIdentitySeed: 'Whether the column is an IDENTITY is still compared.',
+    opt_ignoreIndexPhysical: 'Ignore index fill factor / padding', optn_ignoreIndexPhysical: 'Physical storage options are not counted.',
+    opt_ignoreSystemNamedConstraints: 'Ignore system-named constraints', optn_ignoreSystemNamedConstraints: 'Auto names like PK__Tbl__A1B2C3 differ between environments.',
+    opt_ignoreExtendedProperties: 'Ignore extended properties', optn_ignoreExtendedProperties: 'Descriptions like MS_Description are not compared. Default: compared (SSDT does too).',
+    opt_ignorePermissions: 'Ignore permissions and roles', optn_ignorePermissions: 'User-defined roles, memberships and object/schema permissions are not compared. Default: compared.',
+    opt_caseSensitiveNames: 'Case-sensitive names', optn_caseSensitiveNames: "Default is case-insensitive — SQL Server's usual collation behaviour.",
+  },
+  tr: {
+    source: 'Kaynak', target: 'Hedef', selectConnection: 'bağlantı seçin',
+    swap: 'Kaynak ↔ Hedef', compare: 'Karşılaştır', generateScript: 'Script Üret',
+    generateScriptTip: 'Seçili değişikliklerden dağıtım script\'i üret',
+    options: 'Karşılaştırma seçenekleri', toggleTheme: 'Temayı değiştir', toggleLang: 'Dil',
+    pickTwo: 'Karşılaştırmak için iki bağlantı seçin.', allTypes: 'Tüm türler',
+    searchPh: 'şema veya obje ara…', copySelected: 'Seçilenleri kopyala',
+    tabDiff: 'Farklar', tabRisk: 'Deployment riski', tabTriggers: 'Trigger\'lar',
+    type: 'Tür', objectDefinitions: 'Obje Tanımları',
+    prevDiff: 'Önceki fark', nextDiff: 'Sonraki fark', canonicalText: 'kanonik metin',
+    selectRow: 'Üstteki listeden bir satır seçin.', connect: 'Bağlan', recentConnections: 'Son bağlantılar',
+    none: 'Kayıt yok.', connectionProperties: 'Bağlantı özellikleri', serverName: 'Sunucu adı',
+    authentication: 'Kimlik doğrulama', username: 'Kullanıcı adı', password: 'Parola',
+    rememberPassword: 'Parolayı hatırla', database: 'Veritabanı', listFirst: '— önce listele —',
+    list: 'Listele', trustCert: 'Sunucu sertifikasına güven', testConnection: 'Bağlantıyı sına',
+    cancel: 'İptal', comparisonOptions: 'Karşılaştırma seçenekleri', resetDefaults: 'Varsayılana dön', ok: 'Tamam',
+    connectSource: 'Kaynak bağlantısı', connectTarget: 'Hedef bağlantısı',
+    pwSaved: ' · parola kayıtlı', listUnreadable: 'Liste okunamadı.',
+    storedPwHint: 'Kayıtlı parola sunucuda çözülecek — alanı boş bırakın.',
+    enterServerFirst: 'Önce sunucu adını girin.', listingDatabases: 'veritabanları listeleniyor…',
+    couldNotList: 'Listelenemedi.', selectOpt: '— seçin —', databasesFound: '{n} veritabanı bulundu.',
+    testing: 'sınanıyor…', couldNotConnect: 'Bağlanılamadı.',
+    connectedAs: 'Bağlandı — {server} ({version}), kullanıcı {login}',
+    serverRequired: 'Sunucu adı zorunlu.', databaseRequired: 'Veritabanı seçilmeli — "Listele" ile doldurun.',
+    startingCompare: 'karşılaştırma başlatılıyor…', couldNotStart: 'Başlatılamadı.',
+    comparing: '{source} → {target} karşılaştırılıyor…', connectionLost: 'Bağlantı koptu.',
+    notComparedYet: 'Henüz karşılaştırma yapılmadı.', noDiffForFilters: 'Bu filtrelerle gösterilecek fark yok.',
+    listLimited: 'Liste {n} kayıtla sınırlandı — daha fazlası var.',
+    flagBlock: 'BLOKLANIR', flagIndeterminate: 'BELİRSİZ',
+    pickInfo: '{n} obje seçili → Script üret yalnızca bunları yazar · Shift+tık ile aralık seç',
+    statResult: '{source} → {target} · {objects} obje · {equal} aynı · +{add} ~{change} −{delete} · {ms} ms',
+    renameWarn: ' · ⚠ {n} olası YENİDEN ADLANDIRMA (drop+create yerine sp_rename düşünün)',
+    noStructuralRisk: 'Tablo yapısında risk taşıyan değişiklik yok.',
+    riskS1: '<b>{n}</b> tabloda yapısal değişiklik var.',
+    riskS2: '<b>{n}</b> tanesi hedefte <b>dolu</b> → deployment sırasında duracak ({loss} tanesinde veri kaybı riski).',
+    riskS3: '<b>{n}</b> tanesi riskli ama hedefte boş → sorunsuz uygulanır.',
+    riskS4: '<b>{n}</b> tanesi düşük riskli → yerinde uygulanır.',
+    riskS5: '<b>{n}</b> tanesinin satır sayısı okunamadı → elle kontrol edin.',
+    rLabelDataLoss: 'VERİ KAYBI', rLabelBlock: 'BLOKLANIR', rLabelEmpty: 'boş tablo',
+    rLabelRisky: 'RİSKLİ (satır sayısı okunamadı)', rLabelInPlace: 'yerinde', rLabelSafe: 'güvenli',
+    rowsN: '{n} satır', rowsUnknown: '? satır',
+    noTriggers: 'Trigger bulunamadı.',
+    triggerMismatch: '<b>{n}</b> trigger\'ın durumu iki ortamda farklı — aşağıda vurgulandı.',
+    thTrigger: 'Trigger', thTarget: 'Hedef', thSource: 'Kaynak', stateOff: 'PASİF', stateOn: 'aktif',
+    loading: 'yükleniyor…', noDefinition: 'Bu obje için tanım bulunamadı.',
+    noContent: 'İçerik yok.', notOnThisSide: 'Bu tarafta yok.', missingSuffix: ' — yok',
+    noDiff: 'fark yok', diffOfTotal: '{i} / {n} fark',
+    generatingScript: 'script üretiliyor…', scriptFailed: 'Script üretilemedi.',
+    scriptIncluded: '{n} obje script\'e girdi ({sel} seçiliden)',
+    scriptIncludedAll: '{n} obje script\'e girdi (TÜMÜ — hiçbir şey seçilmedi)',
+    dataLossIncluded: '⚠ VERİ KAYBI adımları (kolon/tablo silme, tip daraltma) DAHİL',
+    stillGated: '{n} adım yine de gated', outOfScopeN: '{n} obje kapsam dışı (sequence/synonym vb.)',
+    skippedN: '{n} obje atlandı', downloaded: '{file} indirildi · {parts}',
+    copiedN: '{n} satır panoya kopyalandı.',
+    opt_ignoreWhitespace: 'Boşlukları yok say', optn_ignoreWhitespace: 'Girinti ve satır sonu farkları fark sayılmaz.',
+    opt_ignoreComments: 'Yorumları yok say', optn_ignoreComments: 'Yalnızca yorumu değişen obje "aynı" sayılır.',
+    opt_ignoreKeywordCasing: 'Anahtar kelime büyük/küçük harfini yok say', optn_ignoreKeywordCasing: '"select" ile "SELECT" aynı sayılır; tanımlayıcılar ve literaller etkilenmez.',
+    opt_ignoreSemicolons: 'Noktalı virgülleri yok say', optn_ignoreSemicolons: 'İfade sonundaki ";" farkları fark sayılmaz.',
+    opt_ignoreColumnOrder: 'Kolon sırasını yok say', optn_ignoreColumnOrder: 'Kolonlar tanım sırasına değil ada göre eşleştirilir.',
+    opt_ignoreCollation: 'Collation farklarını yok say', optn_ignoreCollation: 'İki sunucunun varsayılan collation\'ı farklıysa her metin kolonu fark görünür; bu gürültüyü bastırır.',
+    opt_ignoreIdentitySeed: 'IDENTITY seed/increment yok say', optn_ignoreIdentitySeed: 'Kolonun IDENTITY olup olmadığı yine karşılaştırılır.',
+    opt_ignoreIndexPhysical: 'Index fill factor / padding yok say', optn_ignoreIndexPhysical: 'Fiziksel depolama ayarları fark sayılmaz.',
+    opt_ignoreSystemNamedConstraints: 'Sistem üretimi constraint adlarını yok say', optn_ignoreSystemNamedConstraints: 'PK__Tbl__A1B2C3 gibi otomatik adlar ortamlar arasında farklıdır.',
+    opt_ignoreExtendedProperties: 'Extended property\'leri yok say', optn_ignoreExtendedProperties: 'MS_Description gibi açıklamalar karşılaştırılmaz. Varsayılan: karşılaştırılır (SSDT de eder).',
+    opt_ignorePermissions: 'İzin ve rolleri yok say', optn_ignorePermissions: 'Kullanıcı tanımlı roller, üyelikler ve obje/şema izinleri karşılaştırılmaz. Varsayılan: karşılaştırılır.',
+    opt_caseSensitiveNames: 'İsimlerde büyük/küçük harf duyarlı', optn_caseSensitiveNames: 'Varsayılan duyarsızdır — SQL Server\'ın olağan collation davranışı.',
+  },
+};
+
+function t(key, vars) {
+  let s = (I18N[LANG] && I18N[LANG][key]) ?? I18N.en[key] ?? key;
+  if (vars) for (const k in vars) s = s.replaceAll(`{${k}}`, vars[k]);
+  return s;
+}
+
+function applyI18n() {
+  document.documentElement.lang = LANG;
+  for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
+  for (const el of document.querySelectorAll('[data-i18n-title]')) el.title = t(el.dataset.i18nTitle);
+  for (const el of document.querySelectorAll('[data-i18n-ph]')) el.placeholder = t(el.dataset.i18nPh);
+  $('langLabel').textContent = LANG === 'en' ? 'TR' : 'EN';
+}
+
+function applyTheme() {
+  document.documentElement.dataset.theme = THEME;
+  $('themeBtn').textContent = THEME === 'dark' ? '☀' : '☾';
+}
+
+// ================= T-SQL renklendirme =================
+
+const SQL_KEYWORDS = new Set(('ADD ALL ALTER AND APPLY AS ASC AFTER BEGIN BETWEEN BY CASCADE CASE CATCH CHECK ' +
+  'CLUSTERED COLLATE COLUMN COMMIT CONSTRAINT CREATE CROSS DECLARE DEFAULT DELETE DESC DISTINCT DROP ELSE END ' +
+  'EXEC EXECUTE EXISTS FILLFACTOR FOR FOREIGN FROM FULL FUNCTION GO GROUP HAVING IDENTITY IF IN INCLUDE INDEX ' +
+  'INNER INSERT INSTEAD INTO IS JOIN KEY LEFT LIKE NO NOCOUNT NONCLUSTERED NOT NULL OF ON OR ORDER OUTER OUTPUT ' +
+  'PERSISTED PRIMARY PRINT PROC PROCEDURE REFERENCES RETURN RETURNS RIGHT ROLLBACK SCHEMA SELECT SEQUENCE SET ' +
+  'SYNONYM TABLE THEN THROW TOP TRAN TRANSACTION TRIGGER TRY UNION UNIQUE UPDATE VALUES VIEW WHEN WHERE WHILE WITH')
+  .split(' '));
+
+const SQL_TYPES = new Set(('BIGINT BINARY BIT CHAR DATE DATETIME DATETIME2 DATETIMEOFFSET DECIMAL FLOAT GEOGRAPHY ' +
+  'GEOMETRY HIERARCHYID IMAGE INT MAX MONEY NCHAR NTEXT NUMERIC NVARCHAR REAL SMALLDATETIME SMALLINT SMALLMONEY ' +
+  'SQL_VARIANT TEXT TIME TINYINT UNIQUEIDENTIFIER VARBINARY VARCHAR XML').split(' '));
+
+const SQL_FUNCTIONS = new Set(('ABS CAST CEILING COALESCE CONCAT CONVERT COUNT DATEADD DATEDIFF FLOOR FORMAT ' +
+  'GETDATE ISNULL LEN LOWER LTRIM NEWID REPLACE ROUND ROW_NUMBER RTRIM SUBSTRING SUM SYSDATETIME SYSUTCDATETIME ' +
+  'TRIM UPPER').split(' '));
+
+const tag = (cls, text) => `<span class="t-${cls}">${esc(text)}</span>`;
+
+/**
+ * Satır satır renklendirir. Blok yorumlar satır aşarsa durum bir sonraki satıra
+ * taşınır — tek satır tek satır bakan bir renklendirici /* ... *​/ arasında bozulurdu.
+ */
+function highlightLines(lines) {
+  let inBlockComment = false;
+
+  return lines.map((line) => {
+    let out = '';
+    let i = 0;
+
+    while (i < line.length) {
+      if (inBlockComment) {
+        const end = line.indexOf('*/', i);
+        if (end === -1) { out += tag('cmt', line.slice(i)); break; }
+        out += tag('cmt', line.slice(i, end + 2));
+        i = end + 2;
+        inBlockComment = false;
+        continue;
+      }
+
+      const rest = line.slice(i);
+      let match;
+
+      if ((match = /^--.*/.exec(rest))) { out += tag('cmt', match[0]); break; }
+
+      if (rest.startsWith('/*')) {
+        const end = line.indexOf('*/', i + 2);
+        if (end === -1) { out += tag('cmt', rest); inBlockComment = true; break; }
+        out += tag('cmt', line.slice(i, end + 2));
+        i = end + 2;
+        continue;
+      }
+
+      if ((match = /^N?'(?:''|[^'])*'/.exec(rest))) { out += tag('str', match[0]); i += match[0].length; continue; }
+      if ((match = /^\[[^\]]*\]/.exec(rest))) { out += tag('id', match[0]); i += match[0].length; continue; }
+      if ((match = /^@@?[A-Za-z_]\w*/.exec(rest))) { out += tag('var', match[0]); i += match[0].length; continue; }
+      if ((match = /^(?:0x[0-9A-Fa-f]+|\d+(?:\.\d+)?)/.exec(rest))) { out += tag('num', match[0]); i += match[0].length; continue; }
+
+      if ((match = /^[A-Za-z_]\w*/.exec(rest))) {
+        const upper = match[0].toUpperCase();
+        const cls = SQL_KEYWORDS.has(upper) ? 'kw'
+          : SQL_TYPES.has(upper) ? 'typ'
+          : SQL_FUNCTIONS.has(upper) ? 'fn' : null;
+        out += cls ? tag(cls, match[0]) : esc(match[0]);
+        i += match[0].length;
+        continue;
+      }
+
+      if ((match = /^\s+/.exec(rest))) { out += esc(match[0]); i += match[0].length; continue; }
+
+      out += tag('op', line[i]);
+      i += 1;
+    }
+
+    return out;
+  });
+}
+
+// SSDT'nin sonuç ağacındaki sıra: önce silinecekler, sonra değişenler, sonra eklenecekler.
+const GROUPS = [
+  { action: 'Delete', label: 'Delete', cls: 'delete', mark: '−' },
+  { action: 'Change', label: 'Change', cls: 'change', mark: '~' },
+  { action: 'Add', label: 'Add', cls: 'add', mark: '+' },
+];
+
+const OPTION_KEYS = [
+  'ignoreWhitespace', 'ignoreComments', 'ignoreKeywordCasing', 'ignoreSemicolons',
+  'ignoreColumnOrder', 'ignoreCollation', 'ignoreIdentitySeed', 'ignoreIndexPhysical',
+  'ignoreSystemNamedConstraints', 'ignoreExtendedProperties', 'ignorePermissions', 'caseSensitiveNames',
+];
+
+const DEFAULT_OPTIONS = {
+  ignoreWhitespace: true, ignoreComments: true, ignoreKeywordCasing: false,
+  ignoreSemicolons: false, ignoreColumnOrder: false, ignoreCollation: false,
+  ignoreIdentitySeed: false, ignoreIndexPhysical: false,
+  ignoreSystemNamedConstraints: true, ignoreExtendedProperties: false,
+  ignorePermissions: false, caseSensitiveNames: false, maxQueries: 16,
+};
+
+const state = {
+  source: null,
+  target: null,
+  options: { ...DEFAULT_OPTIONS },
+  runId: null,
+  result: null,
+  selected: null,
+  detail: null,
+  editing: null,
+  expanded: new Set(),      // açılmış objeler
+  collapsed: new Set(),     // kapatılmış üst gruplar
+  collapsedCats: new Set(), // kapatılmış kategori klasörleri (varsayılan açık)
+  checked: new Set(),       // işaretlenmiş satırlar
+  lastPick: null,           // shift+tık aralık seçimi için son tıklanan kutu (çapa)
+  eventSource: null,
+  hunks: [],                // fark bloklarının başladığı satır indeksleri
+  hunkIndex: -1,
+};
+
+// Ağaçtaki klasör sırası — SSDT'nin gösterdiği sırayla aynı.
+const CATEGORY_ORDER = ['Columns', 'Primary Key', 'Unique Constraints', 'Indexes',
+                        'Foreign Keys', 'Check Constraints', 'Properties'];
+
+const ACTION_ICON = { Add: '＋', Change: '✎', Delete: '✕' };
+
+// ================= bağlantı diyaloğu =================
+
+function openConnect(which) {
+  state.editing = which;
+  const existing = state[which];
+
+  $('connTitle').textContent = t(which === 'source' ? 'connectSource' : 'connectTarget');
+  $('cServer').value = existing?.server ?? '';
+  $('cAuth').value = existing?.authentication ?? 'Windows';
+  $('cUser').value = existing?.userName ?? '';
+  $('cPass').value = existing?.password ?? '';
+  $('cRemember').checked = existing?.rememberPassword ?? false;
+  $('cEncrypt').value = String(existing?.encrypt ?? false);
+  $('cTrust').value = String(existing?.trustServerCertificate ?? true);
+  $('cDatabase').innerHTML = existing?.database
+    ? `<option value="${esc(existing.database)}">${esc(existing.database)}</option>`
+    : `<option value="">${esc(t('listFirst'))}</option>`;
+  $('connStatus').textContent = '';
+  $('connStatus').className = 'conn-status';
+  $('cDatabase').dataset.recentId = existing?.id ?? '';
+
+  syncAuthRows();
+  loadRecent();
+
+  $('connScrim').hidden = false;
+  $('connDialog').hidden = false;
+  $('cServer').focus();
+}
+
+function closeConnect() {
+  $('connScrim').hidden = true;
+  $('connDialog').hidden = true;
+  state.editing = null;
+}
+
+function syncAuthRows() {
+  const isSql = $('cAuth').value === 'SqlLogin';
+  for (const id of ['rowUser', 'rowPass', 'rowRemember']) $(id).classList.toggle('hidden', !isSql);
+}
+
+function readDialogConnection() {
+  return {
+    server: $('cServer').value.trim(),
+    database: $('cDatabase').value || null,
+    authentication: $('cAuth').value,
+    userName: $('cUser').value.trim() || null,
+    password: $('cPass').value || null,
+    rememberPassword: $('cRemember').checked,
+    encrypt: $('cEncrypt').value === 'true',
+    trustServerCertificate: $('cTrust').value === 'true',
+    id: $('cDatabase').dataset.recentId || null,
+  };
+}
+
+async function loadRecent() {
+  const list = $('recentList');
+  try {
+    const items = await (await fetch('/api/connections/recent')).json();
+    if (!items.length) { list.innerHTML = `<p class="hint">${esc(t('none'))}</p>`; return; }
+
+    list.innerHTML = items.map((r) => `
+      <div class="recent-item" data-id="${esc(r.id)}">
+        <div class="recent-main">
+          <div class="recent-label">${esc(r.label)}</div>
+          <div class="recent-sub">${esc(r.authentication === 'SqlLogin' ? (r.userName ?? 'SQL') : 'Windows')}${r.hasStoredPassword ? esc(t('pwSaved')) : ''}</div>
+        </div>
+        <button class="recent-x" data-forget="${esc(r.id)}">✕</button>
+      </div>`).join('');
+
+    for (const el of list.querySelectorAll('.recent-item')) {
+      el.addEventListener('click', (e) => {
+        if (e.target.dataset.forget) return;
+        applyRecent(items.find((i) => i.id === el.dataset.id));
+      });
+    }
+    for (const btn of list.querySelectorAll('[data-forget]')) {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await fetch(`/api/connections/recent/${btn.dataset.forget}`, { method: 'DELETE' });
+        loadRecent();
+      });
+    }
+  } catch {
+    list.innerHTML = `<p class="hint">${esc(t('listUnreadable'))}</p>`;
+  }
+}
+
+function applyRecent(item) {
+  if (!item) return;
+  $('cServer').value = item.server;
+  $('cAuth').value = item.authentication;
+  $('cUser').value = item.userName ?? '';
+  $('cPass').value = '';                       // parola tarayıcıya hiç gönderilmez
+  $('cRemember').checked = item.hasStoredPassword;
+  $('cEncrypt').value = String(item.encrypt);
+  $('cTrust').value = String(item.trustServerCertificate);
+  $('cDatabase').innerHTML = item.database
+    ? `<option value="${esc(item.database)}">${esc(item.database)}</option>`
+    : `<option value="">${esc(t('listFirst'))}</option>`;
+  $('cDatabase').dataset.recentId = item.id;
+  syncAuthRows();
+  setConnStatus(item.hasStoredPassword ? t('storedPwHint') : '');
+}
+
+function setConnStatus(text, kind = '') {
+  const el = $('connStatus');
+  el.textContent = text;
+  el.className = `conn-status ${kind}`;
+}
+
+async function loadDatabases() {
+  const connection = readDialogConnection();
+  if (!connection.server) { setConnStatus(t('enterServerFirst'), 'error'); return; }
+
+  setConnStatus(t('listingDatabases'));
+  try {
+    const response = await fetch('/api/connections/databases', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(connection),
+    });
+    const data = await response.json();
+    if (!response.ok) { setConnStatus(data.error ?? t('couldNotList'), 'error'); return; }
+
+    const current = $('cDatabase').value;
+    $('cDatabase').innerHTML = `<option value="">${esc(t('selectOpt'))}</option>` +
+      data.map((d) => `<option value="${esc(d)}" ${d === current ? 'selected' : ''}>${esc(d)}</option>`).join('');
+    setConnStatus(t('databasesFound', { n: data.length }), 'ok');
+  } catch (error) {
+    setConnStatus(error.message, 'error');
+  }
+}
+
+async function testConnection() {
+  setConnStatus(t('testing'));
+  try {
+    const response = await fetch('/api/connections/test', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(readDialogConnection()),
+    });
+    const probe = await response.json();
+    if (!response.ok) { setConnStatus(probe.error ?? t('couldNotConnect'), 'error'); return; }
+    setConnStatus(probe.ok
+      ? t('connectedAs', { server: probe.serverName, version: probe.version, login: probe.loginName })
+      : probe.error, probe.ok ? 'ok' : 'error');
+  } catch (error) {
+    setConnStatus(error.message, 'error');
+  }
+}
+
+function confirmConnection() {
+  const connection = readDialogConnection();
+  if (!connection.server) { setConnStatus(t('serverRequired'), 'error'); return; }
+  if (!connection.database) { setConnStatus(t('databaseRequired'), 'error'); return; }
+
+  state[state.editing] = connection;
+  renderEndpoints();
+  closeConnect();
+}
+
+function renderEndpoints() {
+  for (const which of ['source', 'target']) {
+    const connection = state[which];
+    const button = $(which === 'source' ? 'sourceBtn' : 'targetBtn');
+    const value = $(which === 'source' ? 'sourceValue' : 'targetValue');
+    button.classList.toggle('unset', !connection);
+    value.textContent = connection ? `${connection.server}.${connection.database}` : t('selectConnection');
+  }
+  $('compareBtn').disabled = !(state.source && state.target);
+}
+
+// ================= seçenekler =================
+
+function renderOptions() {
+  $('optList').innerHTML = OPTION_KEYS.map((key) => `
+    <label>
+      <input type="checkbox" data-opt="${key}" ${state.options[key] ? 'checked' : ''}>
+      <span class="opt-text"><span>${esc(t('opt_' + key))}</span><span class="opt-note">${esc(t('optn_' + key))}</span></span>
+    </label>`).join('');
+
+  for (const box of $('optList').querySelectorAll('[data-opt]'))
+    box.addEventListener('change', () => { state.options[box.dataset.opt] = box.checked; });
+}
+
+// ================= karşılaştırma =================
+
+async function compare() {
+  $('compareBtn').disabled = true;
+  setStatus(t('startingCompare'), 'busy');
+  state.eventSource?.close();
+  state.result = null;
+  state.selected = null;
+  state.checked.clear();
+  state.lastPick = null;
+  renderAll();
+
+  let data;
+  try {
+    const response = await fetch('/api/compare', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: state.source, target: state.target, options: state.options }),
+    });
+    data = await response.json();
+    if (!response.ok) throw new Error(data.error ?? t('couldNotStart'));
+  } catch (error) {
+    setStatus(error.message, 'error');
+    $('compareBtn').disabled = false;
+    return;
+  }
+
+  state.runId = data.runId;
+  setStatus(t('comparing', { source: data.source, target: data.target }), 'busy');
+
+  const source = new EventSource(`/api/runs/${data.runId}/events`);
+  state.eventSource = source;
+  let done = false;
+
+  source.addEventListener('result', (event) => {
+    done = true;
+    source.close();
+    state.result = JSON.parse(event.data);
+    selectAllChanges();   // ilk başta hepsi seçili gelsin
+    $('scriptBtn').disabled = false;
+    renderAll();
+    const r = state.result;
+    const renameCount = (r.renames || []).length;
+    let msg = t('statResult', {
+      source: r.sourceLabel, target: r.targetLabel, objects: num(r.sourceObjects),
+      equal: num(r.equal), add: num(r.addCount), change: num(r.changeCount),
+      delete: num(r.deleteCount), ms: num(Math.round(r.durationMs)),
+    });
+    if (renameCount > 0) msg += t('renameWarn', { n: num(renameCount) });
+    setStatus(msg, renameCount > 0 ? 'error' : '');
+    $('compareBtn').disabled = false;
+  });
+
+  source.addEventListener('failed', (event) => {
+    done = true;
+    source.close();
+    setStatus(JSON.parse(event.data).error, 'error');
+    $('compareBtn').disabled = false;
+  });
+
+  // Sunucu akışı normal kapattığında da 'error' tetiklenir; biteni hata sanmayalım.
+  source.onerror = () => {
+    if (done) return;
+    source.close();
+    setStatus(t('connectionLost'), 'error');
+    $('compareBtn').disabled = false;
+  };
+}
+
+function setStatus(text, kind = '') {
+  const bar = $('statusbar');
+  bar.textContent = text;
+  bar.className = `statusbar ${kind}`;
+}
+
+// ================= ağaç =================
+
+function visibleChanges() {
+  if (!state.result) return [];
+  const term = $('search').value.trim().toLowerCase();
+  const type = $('typeFilter').value;
+  const allowed = new Set([
+    ...($('fAdd').checked ? ['Add'] : []),
+    ...($('fChange').checked ? ['Change'] : []),
+    ...($('fDelete').checked ? ['Delete'] : []),
+  ]);
+
+  return state.result.changes.filter((c) =>
+    allowed.has(c.action) &&
+    (!type || c.objectType === type) &&
+    (!term || `${c.schema}.${c.name}`.toLowerCase().includes(term)));
+}
+
+function renderTree() {
+  const tree = $('tree');
+  if (!state.result) {
+    tree.innerHTML = `<p class="missing">${esc(t('notComparedYet'))}</p>`;
+    return;
+  }
+
+  const changes = visibleChanges();
+  if (changes.length === 0) {
+    tree.innerHTML = `<p class="missing">${esc(t('noDiffForFilters'))}</p>`;
+    return;
+  }
+
+  let html = '';
+  for (const group of GROUPS) {
+    const rows = changes.filter((c) => c.action === group.action);
+    if (rows.length === 0) continue;
+
+    const collapsed = state.collapsed.has(group.action);
+    html += `<div class="group ${group.cls}" data-group="${group.action}">
+      <span class="caret">${collapsed ? '▸' : '▾'}</span>
+      <span class="gname">${group.label}</span>
+      <span class="gcount">${num(rows.length)}</span>
+    </div>`;
+    if (collapsed) continue;
+
+    for (const change of rows) {
+      const objKey = `${change.objectType}|${change.schema}|${change.name}`;
+      html += objectRow(change, objKey);
+
+      if (!state.expanded.has(objKey) || change.children.length === 0) continue;
+
+      for (const category of orderedCategories(change.children)) {
+        const items = change.children.filter((c) => c.category === category);
+        const catKey = `${objKey}›${category}`;
+        const catOpen = !state.collapsedCats.has(catKey);
+
+        html += `<div class="row-cat" data-cat="${esc(catKey)}">
+          <span class="c-type" style="padding-left:26px">
+            <span class="caret">${catOpen ? '▾' : '▸'}</span>
+            <span class="folder">${esc(category)}</span>
+            <span class="catcount">${items.length}</span>
+          </span><span></span><span></span><span></span>
+        </div>`;
+
+        if (catOpen) for (const item of items) html += childRow(change, objKey, catKey, item);
+      }
+    }
+  }
+
+  if (state.result.truncated)
+    html += `<p class="missing">${esc(t('listLimited', { n: num(state.result.changes.length) }))}</p>`;
+
+  tree.innerHTML = html;
+  bindTree(tree);
+  renderPickInfo();
+}
+
+function orderedCategories(children) {
+  const present = new Set(children.map((c) => c.category));
+  const known = CATEGORY_ORDER.filter((c) => present.has(c));
+  const extra = [...present].filter((c) => !CATEGORY_ORDER.includes(c)).sort();
+  return [...known, ...extra];
+}
+
+function objectRow(change, objKey) {
+  const full = `${change.schema}.${change.name}`;
+  const open = state.expanded.has(objKey);
+  const expandable = change.children.length > 0;
+  const selected = state.selected === objKey ? ' selected' : '';
+
+  const flag = change.willBlock ? `<span class="flag">${esc(t('flagBlock'))}</span>`
+    : change.indeterminate ? `<span class="flag warn">${esc(t('flagIndeterminate'))}</span>` : '';
+
+  return `<div class="row-obj${selected}" data-key="${esc(objKey)}"
+      data-schema="${esc(change.schema)}" data-name="${esc(change.name)}" data-kind="${esc(change.objectType)}">
+    <span class="c-type" style="padding-left:8px">
+      <span class="caret" data-toggle="${esc(objKey)}">${expandable ? (open ? '▾' : '▸') : ''}</span>
+      <span class="otype">${esc(change.objectType)}</span>
+    </span>
+    <span class="c-name">${change.action === 'Delete' ? '' : esc(full)}</span>
+    <span class="c-mid">
+      <input type="checkbox" class="pick" data-pick="${esc(objKey)}" title="Shift+tık: aralığı toplu seç/kaldır" ${state.checked.has(objKey) ? 'checked' : ''}>
+      <span class="act ${change.action}">${ACTION_ICON[change.action]}</span>
+    </span>
+    <span class="c-name">${change.action === 'Add' ? '' : esc(full)}${flag}</span>
+  </div>`;
+}
+
+function childRow(change, objKey, catKey, item) {
+  const pickKey = `${catKey}›${item.name}`;
+  const name = item.qualifiedName;
+  const detail = item.detail ? `<span class="child-detail">${esc(item.detail)}</span>` : '';
+
+  return `<div class="row-child" data-key="${esc(objKey)}"
+      data-schema="${esc(change.schema)}" data-name="${esc(change.name)}" data-kind="${esc(change.objectType)}">
+    <span class="c-type" style="padding-left:52px">${esc(item.itemType)}</span>
+    <span class="c-name">${item.action === 'Delete' ? '' : esc(name)}</span>
+    <span class="c-mid">
+      <input type="checkbox" class="pick" data-pick="${esc(pickKey)}" title="Shift+tık: aralığı toplu seç/kaldır" ${state.checked.has(pickKey) ? 'checked' : ''}>
+      <span class="act ${item.action}">${ACTION_ICON[item.action]}</span>
+    </span>
+    <span class="c-name">${item.action === 'Add' ? '' : esc(name)}${detail}</span>
+  </div>`;
+}
+
+function bindTree(tree) {
+  for (const el of tree.querySelectorAll('.group'))
+    el.addEventListener('click', () => {
+      const action = el.dataset.group;
+      state.collapsed.has(action) ? state.collapsed.delete(action) : state.collapsed.add(action);
+      renderTree();
+    });
+
+  for (const el of tree.querySelectorAll('.row-cat'))
+    el.addEventListener('click', () => {
+      const key = el.dataset.cat;
+      state.collapsedCats.has(key) ? state.collapsedCats.delete(key) : state.collapsedCats.add(key);
+      renderTree();
+    });
+
+  // İşaret kutuları satır seçimini tetiklemesin. Shift+tık: son tıklanan kutu ile
+  // şimdiki arasındaki tüm kutuları (alt alta olanları) toplu olarak aynı duruma getirir.
+  for (const box of tree.querySelectorAll('.pick'))
+    box.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const key = box.dataset.pick;
+      const target = box.checked;   // tık sonrası yeni durum
+
+      if (e.shiftKey && state.lastPick && state.lastPick !== key) {
+        const boxes = [...tree.querySelectorAll('.pick')];
+        const from = boxes.findIndex((b) => b.dataset.pick === state.lastPick);
+        const to = boxes.findIndex((b) => b.dataset.pick === key);
+        if (from !== -1 && to !== -1) {
+          const [lo, hi] = from < to ? [from, to] : [to, from];
+          for (let i = lo; i <= hi; i++) {
+            boxes[i].checked = target;
+            target ? state.checked.add(boxes[i].dataset.pick) : state.checked.delete(boxes[i].dataset.pick);
+          }
+        }
+      } else {
+        target ? state.checked.add(key) : state.checked.delete(key);
+      }
+
+      state.lastPick = key;
+      renderPickInfo();
+    });
+
+  for (const el of tree.querySelectorAll('.row-obj, .row-child'))
+    el.addEventListener('click', (e) => {
+      if (e.target.dataset.toggle) {
+        const key = e.target.dataset.toggle;
+        state.expanded.has(key) ? state.expanded.delete(key) : state.expanded.add(key);
+        renderTree();
+        return;
+      }
+      state.selected = el.dataset.key;
+      renderTree();
+      loadDetail(el.dataset.schema, el.dataset.name, el.dataset.kind);
+    });
+}
+
+/// İşaret kutuları "Script üret" için seçim belirler: yalnızca işaretlenen objeler
+/// (ya da işaretlenen bir alt öğenin objesi) script'e girer. Hiçbir şey seçilmezse tümü.
+function renderPickInfo() {
+  const objectCount = selectedObjectItems().length;
+  const count = state.checked.size;
+  $('pickedInfo').hidden = count === 0;
+  $('copyPicked').hidden = count === 0;
+  $('pickedInfo').textContent = t('pickInfo', { n: num(objectCount) });
+}
+
+function renderCounts() {
+  const r = state.result;
+  $('cAdd').textContent = num(r?.addCount ?? 0);
+  $('cChange').textContent = num(r?.changeCount ?? 0);
+  $('cDelete').textContent = num(r?.deleteCount ?? 0);
+
+  const blocking = (r?.risks ?? []).filter((x) => x.willBlock).length;
+  const badge = $('cBlock');
+  badge.textContent = num(blocking);
+  badge.dataset.zero = blocking === 0 ? '1' : '0';
+
+  const types = [...new Set((r?.changes ?? []).map((c) => c.objectType))].sort();
+  const current = $('typeFilter').value;
+  $('typeFilter').innerHTML = `<option value="">${esc(t('allTypes'))}</option>` +
+    types.map((tp) => `<option value="${esc(tp)}" ${tp === current ? 'selected' : ''}>${esc(tp)}</option>`).join('');
+}
+
+function renderRisk() {
+  const wrap = $('riskWrap');
+  const risks = state.result?.risks ?? [];
+  if (risks.length === 0) {
+    wrap.innerHTML = `<p class="missing">${esc(t('noStructuralRisk'))}</p>`;
+    return;
+  }
+
+  const rank = { DataLoss: 3, BlockedIfNotEmpty: 2, InPlace: 1, Safe: 0 };
+  const blocking = risks.filter((r) => r.willBlock);
+  const losesData = blocking.filter((r) => r.risk === 'DataLoss');
+  const emptyRisky = risks.filter((r) => r.rows === 0 && rank[r.risk] >= 2);
+  const unknown = risks.filter((r) => r.rows === null && rank[r.risk] >= 2);
+  const low = risks.filter((r) => rank[r.risk] < 2);
+
+  wrap.innerHTML = `<div class="tally">
+      <div>${t('riskS1', { n: num(risks.length) })}</div>
+      <div>${t('riskS2', { n: num(blocking.length), loss: num(losesData.length) })}</div>
+      <div>${t('riskS3', { n: num(emptyRisky.length) })}</div>
+      ${low.length ? `<div>${t('riskS4', { n: num(low.length) })}</div>` : ''}
+      ${unknown.length ? `<div>${t('riskS5', { n: num(unknown.length) })}</div>` : ''}
+    </div>` + risks.map((r) => {
+      let label = t('rLabelSafe'), tag = '';
+      if (r.willBlock && r.risk === 'DataLoss') { label = t('rLabelDataLoss'); tag = 'danger'; }
+      else if (r.willBlock) { label = t('rLabelBlock'); tag = 'danger'; }
+      else if (r.rows === 0 && rank[r.risk] >= 2) label = t('rLabelEmpty');
+      else if (r.rows === null && rank[r.risk] >= 2) { label = t('rLabelRisky'); tag = 'warn'; }
+      else if (r.risk === 'InPlace') label = t('rLabelInPlace');
+
+      return `<div class="risk ${r.willBlock ? 'block' : (r.risk === 'InPlace' ? 'inplace' : '')}">
+        <div class="risk-head">
+          <span class="tag ${tag}">${esc(label)}</span>
+          <strong>${esc(r.schema)}.${esc(r.name)}</strong>
+          <span class="rows">${r.rows === null ? esc(t('rowsUnknown')) : esc(t('rowsN', { n: num(r.rows) }))}</span>
+        </div>
+        ${r.findings.map((f) => `<div class="finding"><span>${esc(f.column)}</span><span>${esc(f.description)}</span></div>`).join('')}
+      </div>`;
+    }).join('');
+}
+
+function renderTriggers() {
+  const wrap = $('triggerWrap');
+  const triggers = state.result?.triggers ?? [];
+  if (triggers.length === 0) {
+    wrap.innerHTML = `<p class="missing">${esc(t('noTriggers'))}</p>`;
+    return;
+  }
+
+  const mismatched = triggers.filter((x) => x.sourceDisabled !== null && x.sourceDisabled !== x.disabled);
+  const off = t('stateOff'), on = t('stateOn');
+  wrap.innerHTML = (mismatched.length
+      ? `<div class="tally"><div>${t('triggerMismatch', { n: num(mismatched.length) })}</div></div>`
+      : '') +
+    `<table class="trg"><thead><tr><th>${esc(t('thTrigger'))}</th><th>${esc(t('thTarget'))}</th><th>${esc(t('thSource'))}</th></tr></thead><tbody>` +
+    triggers.map((trg) => {
+      const differs = trg.sourceDisabled !== null && trg.sourceDisabled !== trg.disabled;
+      return `<tr class="${differs ? 'mismatch' : ''}">
+        <td class="mono">${esc(trg.schema)}.${esc(trg.name)}</td>
+        <td class="${trg.disabled ? 'state-off' : 'state-on'}">${trg.disabled ? esc(off) : esc(on)}</td>
+        <td class="${trg.sourceDisabled === null ? '' : (trg.sourceDisabled ? 'state-off' : 'state-on')}">
+          ${trg.sourceDisabled === null ? '—' : (trg.sourceDisabled ? esc(off) : esc(on))}</td></tr>`;
+    }).join('') + `</tbody></table>`;
+}
+
+function renderAll() {
+  renderCounts();
+  renderTree();
+  renderRisk();
+  renderTriggers();
+}
+
+// ================= alt panel =================
+
+async function loadDetail(schema, name, kind) {
+  $('defTitle').textContent = `${kind} ${schema}.${name}`;
+  $('defBody').innerHTML = `<p class="missing">${esc(t('loading'))}</p>`;
+
+  const query = new URLSearchParams({ schema, name, kind });
+  const response = await fetch(`/api/runs/${state.runId}/detail?${query}`);
+  if (!response.ok) {
+    $('defBody').innerHTML = `<p class="missing">${esc(t('noDefinition'))}</p>`;
+    return;
+  }
+  state.detail = await response.json();
+  renderDetail();
+}
+
+function renderDetail() {
+  const detail = state.detail;
+  if (!detail) { resetDiffNav(); return; }
+
+  // Script = tam metin (modülde özgün gövde, tabloda üretilmiş CREATE).
+  // Kanonik metin yalnızca "karşılaştırma neyi gördü?" sorusu için.
+  const hasScript = detail.sourceScript !== null || detail.targetScript !== null;
+  const useScript = hasScript && !$('showCanonical').checked;
+  const left = (useScript ? detail.sourceScript : detail.sourceText) ?? null;
+  const right = (useScript ? detail.targetScript : detail.targetText) ?? null;
+
+  if (left === null && right === null) {
+    $('defBody').innerHTML = `<p class="missing">${esc(t('noContent'))}</p>`;
+    resetDiffNav();
+    return;
+  }
+
+  const rows = alignLines(left ?? '', right ?? '');
+
+  // Ardışık fark satırlarını tek blok say — gezinirken her satırda durmayalım.
+  state.hunks = [];
+  for (let i = 0; i < rows.length; i++)
+    if (rows[i].type !== 'same' && (i === 0 || rows[i - 1].type === 'same')) state.hunks.push(i);
+  const hunkStarts = new Set(state.hunks);
+  state.hunkIndex = -1;
+
+  // Renklendirme metnin tamamı üzerinden yapılır (blok yorum durumu satırlar arası
+  // taşınsın), sonra satır numarasıyla eşleştirilir. Kanonik metin SQL değil, boyanmaz.
+  const leftHtml = useScript && left !== null ? highlightLines(left.split('\n')) : null;
+  const rightHtml = useScript && right !== null ? highlightLines(right.split('\n')) : null;
+
+  const pane = (side, highlighted) => rows.map((row, i) => {
+    const mark = hunkStarts.has(i) ? ' hunk' : '';
+    if (row[side] === null)
+      return `<div class="dline pad${mark}" data-row="${i}"><span class="ln"></span><span></span></div>`;
+
+    const cls = row.type === 'same' ? '' : (side === 'left' ? 'del' : 'add');
+    const lineNo = row[side + 'No'];
+    const code = (highlighted ? highlighted[lineNo - 1] : esc(row[side])) || '&nbsp;';
+    return `<div class="dline ${cls}${mark}" data-row="${i}">` +
+           `<span class="ln">${lineNo}</span><span class="code">${code}</span></div>`;
+  }).join('');
+
+  $('defBody').innerHTML = `<div class="diff-grid">
+    <div class="diff-pane"><div class="pane-head">${esc(t('source'))}${left === null ? esc(t('missingSuffix')) : ''}</div>
+      ${left === null ? `<p class="missing">${esc(t('notOnThisSide'))}</p>` : pane('left', leftHtml)}</div>
+    <div class="diff-pane"><div class="pane-head">${esc(t('target'))}${right === null ? esc(t('missingSuffix')) : ''}</div>
+      ${right === null ? `<p class="missing">${esc(t('notOnThisSide'))}</p>` : pane('right', rightHtml)}</div>
+  </div>`;
+
+  updateDiffNav();
+  if (state.hunks.length) gotoHunk(0);
+}
+
+function resetDiffNav() {
+  state.hunks = [];
+  state.hunkIndex = -1;
+  updateDiffNav();
+}
+
+function updateDiffNav() {
+  const total = state.hunks.length;
+  $('diffCount').textContent = total === 0 ? t('noDiff') : t('diffOfTotal', { i: state.hunkIndex + 1, n: total });
+  $('prevDiff').disabled = total === 0;
+  $('nextDiff').disabled = total === 0;
+}
+
+/// Fark bloğunu görünümün ortasına getirir — öncesi ve sonrası birlikte görünsün.
+function gotoHunk(index) {
+  const total = state.hunks.length;
+  if (total === 0) return;
+
+  state.hunkIndex = ((index % total) + total) % total;
+  const row = state.hunks[state.hunkIndex];
+  document.querySelector(`#defBody .dline[data-row="${row}"]`)?.scrollIntoView({ block: 'center' });
+  updateDiffNav();
+}
+
+/**
+ * Satır bazlı LCS ile iki metni hizalar. Çok büyük metinlerde O(n*m) tablo
+ * pahalıya gelir; o durumda hizalamadan yan yana gösterilir.
+ */
+function alignLines(a, b) {
+  const A = a.split('\n'), B = b.split('\n');
+  const LIMIT = 2000;
+
+  if (A.length > LIMIT || B.length > LIMIT) {
+    const rows = [];
+    for (let i = 0; i < Math.max(A.length, B.length); i++)
+      rows.push({
+        type: A[i] === B[i] ? 'same' : 'diff',
+        left: A[i] ?? null, right: B[i] ?? null,
+        leftNo: i < A.length ? i + 1 : '', rightNo: i < B.length ? i + 1 : '',
+      });
+    return rows;
+  }
+
+  const table = Array.from({ length: A.length + 1 }, () => new Uint32Array(B.length + 1));
+  for (let i = A.length - 1; i >= 0; i--)
+    for (let j = B.length - 1; j >= 0; j--)
+      table[i][j] = A[i] === B[j] ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1]);
+
+  const ops = [];
+  let i = 0, j = 0;
+  while (i < A.length && j < B.length) {
+    if (A[i] === B[j]) { ops.push({ t: 'same', a: A[i], b: B[j] }); i++; j++; }
+    else if (table[i + 1][j] >= table[i][j + 1]) { ops.push({ t: 'del', a: A[i] }); i++; }
+    else { ops.push({ t: 'add', b: B[j] }); j++; }
+  }
+  while (i < A.length) ops.push({ t: 'del', a: A[i++] });
+  while (j < B.length) ops.push({ t: 'add', b: B[j++] });
+
+  // Silme ve ekleme bloklarını yan yana eşle — okunması kolay olsun.
+  const rows = [];
+  let leftNo = 0, rightNo = 0, k = 0;
+  while (k < ops.length) {
+    if (ops[k].t === 'same') {
+      rows.push({ type: 'same', left: ops[k].a, right: ops[k].b, leftNo: ++leftNo, rightNo: ++rightNo });
+      k++;
+      continue;
+    }
+    const dels = [], adds = [];
+    while (k < ops.length && ops[k].t !== 'same') {
+      (ops[k].t === 'del' ? dels : adds).push(ops[k].t === 'del' ? ops[k].a : ops[k].b);
+      k++;
+    }
+    for (let n = 0; n < Math.max(dels.length, adds.length); n++)
+      rows.push({
+        type: 'diff',
+        left: n < dels.length ? dels[n] : null,
+        right: n < adds.length ? adds[n] : null,
+        leftNo: n < dels.length ? ++leftNo : '',
+        rightNo: n < adds.length ? ++rightNo : '',
+      });
+  }
+  return rows;
+}
+
+// ================= olaylar =================
+
+$('sourceBtn').addEventListener('click', () => openConnect('source'));
+$('targetBtn').addEventListener('click', () => openConnect('target'));
+$('swapBtn').addEventListener('click', () => {
+  [state.source, state.target] = [state.target, state.source];
+  renderEndpoints();
+});
+
+$('connClose').addEventListener('click', closeConnect);
+$('connCancel').addEventListener('click', closeConnect);
+$('connScrim').addEventListener('click', closeConnect);
+$('connOk').addEventListener('click', confirmConnection);
+$('connTest').addEventListener('click', testConnection);
+$('cLoadDbs').addEventListener('click', loadDatabases);
+$('cAuth').addEventListener('change', syncAuthRows);
+
+$('optionsBtn').addEventListener('click', () => {
+  renderOptions();
+  $('optScrim').hidden = false;
+  $('optDialog').hidden = false;
+});
+const closeOptions = () => { $('optScrim').hidden = true; $('optDialog').hidden = true; };
+$('optClose').addEventListener('click', closeOptions);
+$('optOk').addEventListener('click', closeOptions);
+$('optScrim').addEventListener('click', closeOptions);
+$('optReset').addEventListener('click', () => { state.options = { ...DEFAULT_OPTIONS }; renderOptions(); });
+
+$('compareBtn').addEventListener('click', compare);
+$('showCanonical').addEventListener('change', renderDetail);
+$('prevDiff').addEventListener('click', () => gotoHunk(state.hunkIndex - 1));
+$('nextDiff').addEventListener('click', () => gotoHunk(state.hunkIndex + 1));
+
+// Karşılaştırma biter bitmez tüm değişiklikler seçili gelir — kullanıcı istemediklerini
+// kaldırır (dahil et değil, hariç tut mantığı). Hem obje satırı hem alt öğeleri işaretlenir
+// ki obje açıldığında içindekiler de seçili görünsün.
+function selectAllChanges() {
+  state.checked.clear();
+  for (const c of state.result?.changes ?? []) {
+    const objKey = `${c.objectType}|${c.schema}|${c.name}`;
+    state.checked.add(objKey);
+    for (const child of c.children ?? [])
+      state.checked.add(`${objKey}›${child.category}›${child.name}`);
+  }
+}
+
+// İşaretlenen her anahtar 'Type|schema|name' ya da onun altında 'Type|schema|name›kategori›öğe'
+// biçimindedir. Alt öğe işaretlense de obje kimliğini çıkarıp objeyi script'e alırız — böylece
+// bir kolonu işaretlemek, o tablonun değişikliğini script'e sokar.
+function selectedObjectItems() {
+  const seen = new Map();
+  for (const key of state.checked) {
+    const objId = key.split('›')[0];
+    if (seen.has(objId)) continue;
+    const parts = objId.split('|');
+    seen.set(objId, { objectType: parts[0], schema: parts[1] ?? '', name: parts.slice(2).join('|') });
+  }
+  return [...seen.values()];
+}
+
+$('scriptBtn').addEventListener('click', async () => {
+  if (!state.runId) return;
+  $('scriptBtn').disabled = true;
+  setStatus(t('generatingScript'), 'busy');
+
+  const selection = selectedObjectItems();
+
+  try {
+    const response = await fetch(`/api/runs/${state.runId}/script`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scope: 'all', dataLoss: true, selection }),
+    });
+    if (!response.ok) throw new Error(t('scriptFailed'));
+    const data = await response.json();
+
+    // Tarayıcıdan indir — sunucuya dosya yazmıyoruz. Başa UTF-8 BOM: sqlcmd/SSMS
+    // dosyayı UTF-8 olarak tanısın, PRINT'teki Türkçe karakterler bozulmasın.
+    const url = URL.createObjectURL(new Blob(['﻿' + data.sql], { type: 'application/sql' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = data.fileName;
+    link.click();
+    URL.revokeObjectURL(url);
+
+    // Veri kaybı adımları ŞU AN script'e DAHİL (güvenlik modu kapalı) — açıkça uyar.
+    const dataLoss = (data.dataLossActions || []).length;
+    const parts = [selection.length > 0
+      ? t('scriptIncluded', { n: num(data.included), sel: num(selection.length) })
+      : t('scriptIncludedAll', { n: num(data.included) })];
+    parts.push(t('dataLossIncluded'));
+    if (dataLoss > 0) parts.push(t('stillGated', { n: num(dataLoss) }));
+    if (data.outOfScope > 0) parts.push(t('outOfScopeN', { n: num(data.outOfScope) }));
+    if (data.skipped.length > 0) parts.push(t('skippedN', { n: num(data.skipped.length) }));
+    setStatus(t('downloaded', { file: data.fileName, parts: parts.join(' · ') }), 'error');
+  } catch (error) {
+    setStatus(error.message, 'error');
+  } finally {
+    $('scriptBtn').disabled = false;
+  }
+});
+
+$('copyPicked').addEventListener('click', async () => {
+  const list = [...state.checked].map((k) => k.split('|').slice(1).join('.').replaceAll('›', ' → ')).sort();
+  await navigator.clipboard.writeText(list.join('\n'));
+  setStatus(t('copiedN', { n: num(list.length) }));
+});
+for (const id of ['fAdd', 'fChange', 'fDelete', 'typeFilter']) $(id).addEventListener('change', renderTree);
+$('search').addEventListener('input', renderTree);
+
+for (const tab of document.querySelectorAll('.vtab')) {
+  tab.addEventListener('click', () => {
+    for (const other of document.querySelectorAll('.vtab')) other.classList.toggle('active', other === tab);
+    $('treeWrap').hidden = tab.dataset.view !== 'tree';
+    $('riskWrap').hidden = tab.dataset.view !== 'risk';
+    $('triggerWrap').hidden = tab.dataset.view !== 'triggers';
+    $('gridhead').hidden = tab.dataset.view !== 'tree';
+  });
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (!$('connDialog').hidden) closeConnect();
+  if (!$('optDialog').hidden) closeOptions();
+});
+
+// Üst/alt panel arasındaki sürüklenebilir ayırıcı.
+(() => {
+  const splitter = $('splitter');
+  const upper = document.querySelector('.upper');
+  let dragging = false;
+
+  splitter.addEventListener('mousedown', (e) => { dragging = true; e.preventDefault(); });
+  window.addEventListener('mouseup', () => { dragging = false; });
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const top = splitter.parentElement.getBoundingClientRect().top;
+    const height = splitter.parentElement.clientHeight;
+    const ratio = Math.min(0.85, Math.max(0.15, (e.clientY - top) / height));
+    upper.style.flex = `1 1 ${ratio * 100}%`;
+    document.querySelector('.lower').style.flex = `1 1 ${(1 - ratio) * 100}%`;
+  });
+})();
+
+// ---- tema / dil geçişi ----
+$('themeBtn').addEventListener('click', () => {
+  THEME = THEME === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('theme', THEME);
+  applyTheme();
+});
+$('langBtn').addEventListener('click', () => {
+  LANG = LANG === 'en' ? 'tr' : 'en';
+  localStorage.setItem('lang', LANG);
+  applyI18n();
+  renderEndpoints();
+  if (state.result) renderAll();
+  if (state.detail) renderDetail();
+});
+
+applyTheme();
+applyI18n();
+renderEndpoints();
+renderAll();

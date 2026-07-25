@@ -1,0 +1,308 @@
+namespace SchemaDiff.Core.Extraction;
+
+/// <summary>
+/// Katalog sorguları. Kural: obje başına sorgu YOK — obje sınıfı başına tek sorgu.
+/// Hepsi salt okunur ve birbirinden bağımsız, dolayısıyla paralel koşabilir.
+/// </summary>
+internal static class Sql
+{
+    public const string Preflight = """
+        SELECT
+            CONVERT(nvarchar(256), SERVERPROPERTY('ServerName')),
+            DB_NAME(),
+            SERVERPROPERTY('ProductVersion'),
+            CONVERT(int, HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'VIEW DEFINITION'));
+        """;
+
+    // schema_id 1..4 yerleşik (dbo, guest, INFORMATION_SCHEMA, sys),
+    // 16384+ sabit veritabanı rollerine ait.
+    public const string Schemas = """
+        SELECT s.schema_id, s.name
+        FROM sys.schemas AS s
+        WHERE s.schema_id > 4 AND s.schema_id < 16384;
+        """;
+
+    // Temporal history tabloları (temporal_type=1) hariç: bunlar system-versioned tablonun
+    // parçasıdır, ayrı obje olarak karşılaştırılmaz (adları çoğu zaman otomatik üretilir).
+    public const string Objects = """
+        SELECT o.object_id, s.name, o.name, RTRIM(o.type), o.modify_date, o.parent_object_id
+        FROM sys.objects AS o
+        INNER JOIN sys.schemas AS s ON s.schema_id = o.schema_id
+        WHERE o.is_ms_shipped = 0
+          AND o.type IN ('U','V','P','FN','IF','TF','TR','SN','SO')
+          AND o.object_id NOT IN (SELECT ht.object_id FROM sys.tables AS ht WHERE ht.temporal_type = 1);
+        """;
+
+    // System-versioned temporal tablolar (temporal_type=2): history tablosu + PERIOD kolonları.
+    // sys.periods eski sürümlerde yok olabilir; sorgu opsiyonel çalışır.
+    public const string Temporal = """
+        SELECT t.object_id, SCHEMA_NAME(h.schema_id), h.name, sc.name, ec.name
+        FROM sys.tables AS t
+        LEFT JOIN sys.tables  AS h  ON h.object_id = t.history_table_id
+        LEFT JOIN sys.periods AS p  ON p.object_id = t.object_id
+        LEFT JOIN sys.columns AS sc ON sc.object_id = t.object_id AND sc.column_id = p.start_column_id
+        LEFT JOIN sys.columns AS ec ON ec.object_id = t.object_id AND ec.column_id = p.end_column_id
+        WHERE t.is_ms_shipped = 0 AND t.temporal_type = 2;
+        """;
+
+    public const string Modules = """
+        SELECT m.object_id, m.definition, m.uses_ansi_nulls, m.uses_quoted_identifier
+        FROM sys.sql_modules AS m
+        INNER JOIN sys.objects AS o ON o.object_id = m.object_id
+        WHERE o.is_ms_shipped = 0;
+        """;
+
+    public const string Columns = """
+        SELECT c.object_id, c.column_id, c.name,
+               SCHEMA_NAME(tp.schema_id), tp.name,
+               c.max_length, c.precision, c.scale,
+               c.is_nullable, c.collation_name, c.is_identity, c.is_computed,
+               dc.name, dc.definition, dc.is_system_named,
+               cc.definition, cc.is_persisted,
+               ic.seed_value, ic.increment_value
+        FROM sys.columns AS c
+        INNER JOIN sys.objects AS o
+            ON o.object_id = c.object_id AND o.is_ms_shipped = 0 AND o.type IN ('U','V')
+        INNER JOIN sys.types AS tp ON tp.user_type_id = c.user_type_id
+        LEFT JOIN sys.default_constraints AS dc ON dc.object_id = c.default_object_id
+        LEFT JOIN sys.computed_columns AS cc
+            ON cc.object_id = c.object_id AND cc.column_id = c.column_id
+        LEFT JOIN sys.identity_columns AS ic
+            ON ic.object_id = c.object_id AND ic.column_id = c.column_id;
+        """;
+
+    // type = 0 heap'tir, karşılaştırılacak bir tanımı yok.
+    public const string Indexes = """
+        SELECT i.object_id, i.index_id, i.name, i.type_desc,
+               i.is_unique, i.is_primary_key, i.is_unique_constraint,
+               i.fill_factor, i.is_padded, i.ignore_dup_key, i.filter_definition
+        FROM sys.indexes AS i
+        INNER JOIN sys.objects AS o
+            ON o.object_id = i.object_id AND o.is_ms_shipped = 0 AND o.type IN ('U','V')
+        WHERE i.type <> 0;
+        """;
+
+    public const string IndexColumns = """
+        SELECT ic.object_id, ic.index_id, ic.index_column_id, ic.column_id,
+               ic.key_ordinal, ic.is_descending_key, ic.is_included_column
+        FROM sys.index_columns AS ic
+        INNER JOIN sys.objects AS o
+            ON o.object_id = ic.object_id AND o.is_ms_shipped = 0 AND o.type IN ('U','V');
+        """;
+
+    // PK/UQ constraint adları için: sistem tarafından üretilmiş adlar (PK__Tbl__A1B2C3)
+    // ortamlar arasında farklıdır ve karşılaştırmaya girmemeli.
+    public const string KeyConstraints = """
+        SELECT kc.parent_object_id, kc.unique_index_id, kc.name, RTRIM(kc.type), kc.is_system_named
+        FROM sys.key_constraints AS kc
+        INNER JOIN sys.objects AS o ON o.object_id = kc.parent_object_id AND o.is_ms_shipped = 0;
+        """;
+
+    public const string ForeignKeys = """
+        SELECT fk.object_id, fk.parent_object_id, fk.name, fk.is_system_named,
+               fk.referenced_object_id,
+               fk.delete_referential_action, fk.update_referential_action,
+               fk.is_disabled, fk.is_not_trusted
+        FROM sys.foreign_keys AS fk
+        INNER JOIN sys.objects AS o ON o.object_id = fk.parent_object_id AND o.is_ms_shipped = 0;
+        """;
+
+    public const string ForeignKeyColumns = """
+        SELECT fkc.constraint_object_id, fkc.constraint_column_id,
+               fkc.parent_object_id, fkc.parent_column_id,
+               fkc.referenced_object_id, fkc.referenced_column_id
+        FROM sys.foreign_key_columns AS fkc
+        INNER JOIN sys.objects AS o ON o.object_id = fkc.parent_object_id AND o.is_ms_shipped = 0;
+        """;
+
+    public const string CheckConstraints = """
+        SELECT cc.parent_object_id, cc.name, cc.is_system_named,
+               cc.definition, cc.is_disabled, cc.is_not_trusted
+        FROM sys.check_constraints AS cc
+        INNER JOIN sys.objects AS o ON o.object_id = cc.parent_object_id AND o.is_ms_shipped = 0;
+        """;
+
+    public const string Synonyms = """
+        SELECT sn.object_id, sn.base_object_name
+        FROM sys.synonyms AS sn
+        INNER JOIN sys.objects AS o ON o.object_id = sn.object_id AND o.is_ms_shipped = 0;
+        """;
+
+    // current_value KASITLI olarak dışarıda: her kullanımda değişir, şema farkı değildir.
+    public const string Sequences = """
+        SELECT sq.object_id, TYPE_NAME(sq.user_type_id), sq.precision, sq.scale,
+               sq.start_value, sq.increment, sq.minimum_value, sq.maximum_value,
+               sq.is_cycling, sq.is_cached, sq.cache_size
+        FROM sys.sequences AS sq
+        INNER JOIN sys.objects AS o ON o.object_id = sq.object_id AND o.is_ms_shipped = 0;
+        """;
+
+    // Yaklaşık satır sayısı — tabloyu TARAMAZ, metadata'dan okur (milisaniyeler).
+    // Deployment öncesi "bu tablo dolu, değişiklik bloklanır" uyarısı için.
+    // VIEW DATABASE STATE yetkisi ister; yoksa çekim bu sorgu olmadan devam eder.
+    public const string RowCounts = """
+        SELECT ps.object_id, SUM(ps.row_count)
+        FROM sys.dm_db_partition_stats AS ps
+        INNER JOIN sys.objects AS o
+            ON o.object_id = ps.object_id AND o.is_ms_shipped = 0 AND o.type = 'U'
+        WHERE ps.index_id IN (0, 1)
+        GROUP BY ps.object_id;
+        """;
+
+    // Modüller arası referanslar. Script üretiminde yeni objelerin doğru sırada
+    // oluşturulması için gerekli. referenced_id NULL olanlar (çözülemeyen ya da
+    // veritabanı dışı referanslar) sıralamaya katkı sağlamaz, dışarıda bırakılır.
+    public const string Dependencies = """
+        SELECT DISTINCT d.referencing_id, d.referenced_id
+        FROM sys.sql_expression_dependencies AS d
+        INNER JOIN sys.objects AS o
+            ON o.object_id = d.referencing_id AND o.is_ms_shipped = 0
+        WHERE d.referenced_id IS NOT NULL
+          AND d.referenced_id <> d.referencing_id;
+        """;
+
+    // Dış (cross-database ya da linked server) referanslar. Bu objeler ancak dış kaynak
+    // hedefte de varsa deploy edilebilir; deployment öncesi uyarı için.
+    public const string ExternalReferences = """
+        SELECT DISTINCT SCHEMA_NAME(o.schema_id), o.name,
+               ISNULL(d.referenced_server_name, N''), ISNULL(d.referenced_database_name, N''),
+               ISNULL(d.referenced_schema_name, N''), ISNULL(d.referenced_entity_name, N'')
+        FROM sys.sql_expression_dependencies AS d
+        INNER JOIN sys.objects AS o ON o.object_id = d.referencing_id AND o.is_ms_shipped = 0
+        WHERE d.referenced_database_name IS NOT NULL OR d.referenced_server_name IS NOT NULL;
+        """;
+
+    // parent_class = 1 → tablo/view üzerindeki DML trigger'ları (DDL trigger'lar kapsam dışı).
+    public const string Triggers = """
+        SELECT tr.object_id, tr.is_disabled, tr.is_instead_of_trigger
+        FROM sys.triggers AS tr
+        INNER JOIN sys.objects AS o ON o.object_id = tr.object_id AND o.is_ms_shipped = 0
+        WHERE tr.parent_class = 1;
+        """;
+
+    // Veritabanı seviyesi DDL trigger'ları (parent_class = 0). sys.objects'te DEĞİLler;
+    // tanımları sys.sql_modules'ta. Şema yok. Audit/uyum için yaygın (banka EDW'lerinde).
+    public const string DdlTriggers = """
+        SELECT tr.name, tr.is_disabled, m.definition, m.uses_ansi_nulls, m.uses_quoted_identifier
+        FROM sys.triggers AS tr
+        LEFT JOIN sys.sql_modules AS m ON m.object_id = tr.object_id
+        WHERE tr.parent_class = 0 AND tr.is_ms_shipped = 0;
+        """;
+
+    // Kullanıcı tanımlı alias tipler (CREATE TYPE dbo.Money FROM decimal(19,4)).
+    // CLR assembly tipleri ve table type'lar hariç. Baz sistem tipi adıyla tutulur.
+    public const string UserDefinedTypes = """
+        SELECT t.user_type_id, SCHEMA_NAME(t.schema_id), t.name,
+               TYPE_NAME(t.system_type_id), t.max_length, t.precision, t.scale,
+               t.is_nullable, t.collation_name
+        FROM sys.types AS t
+        WHERE t.is_user_defined = 1 AND t.is_table_type = 0 AND t.is_assembly_type = 0;
+        """;
+
+    // Partition function'lar: aralık yönü (LEFT/RIGHT) + girdi tipi. Sınır değerleri ayrı sorguda.
+    public const string PartitionFunctions = """
+        SELECT pf.function_id, pf.name, pf.boundary_value_on_right, TYPE_NAME(pp.system_type_id)
+        FROM sys.partition_functions AS pf
+        LEFT JOIN sys.partition_parameters AS pp ON pp.function_id = pf.function_id;
+        """;
+
+    // Partition function sınır değerleri, sıralı. value sql_variant → nvarchar.
+    public const string PartitionRangeValues = """
+        SELECT prv.function_id, prv.boundary_id, CONVERT(nvarchar(4000), prv.value)
+        FROM sys.partition_range_values AS prv
+        ORDER BY prv.function_id, prv.boundary_id;
+        """;
+
+    // Partition scheme'ler: hangi partition function'a bağlı.
+    public const string PartitionSchemes = """
+        SELECT ps.data_space_id, ps.name, pf.name
+        FROM sys.partition_schemes AS ps
+        INNER JOIN sys.partition_functions AS pf ON pf.function_id = ps.function_id;
+        """;
+
+    // Scheme'in partition → filegroup eşlemesi, sıralı.
+    public const string PartitionSchemeFiles = """
+        SELECT dds.partition_scheme_id, dds.destination_id, fg.name
+        FROM sys.destination_data_spaces AS dds
+        INNER JOIN sys.filegroups AS fg ON fg.data_space_id = dds.data_space_id
+        ORDER BY dds.partition_scheme_id, dds.destination_id;
+        """;
+
+    // Table type'lar (CREATE TYPE dbo.IdList AS TABLE(...)). Kolonları ayrı sorguda çekilir;
+    // type_table_object_id iç objeye (kolonların bağlı olduğu) işaret eder.
+    public const string TableTypes = """
+        SELECT tt.user_type_id, SCHEMA_NAME(tt.schema_id), tt.name, tt.type_table_object_id
+        FROM sys.table_types AS tt
+        WHERE tt.is_user_defined = 1;
+        """;
+
+    // Table type kolonları. object_id = table type'ın type_table_object_id'si.
+    public const string TableTypeColumns = """
+        SELECT c.object_id, c.column_id, c.name,
+               SCHEMA_NAME(tp.schema_id), tp.name,
+               c.max_length, c.precision, c.scale,
+               c.is_nullable, c.collation_name, c.is_identity, c.is_computed
+        FROM sys.columns AS c
+        INNER JOIN sys.table_types AS tt ON tt.type_table_object_id = c.object_id
+        INNER JOIN sys.types AS tp ON tp.user_type_id = c.user_type_id;
+        """;
+
+    // Kullanıcı tanımlı veritabanı rolleri. Sabit roller (db_owner vb.) ve public dışarıda —
+    // onlar her veritabanında aynıdır, şema farkı değildir. Owner adıyla (id değil) tutulur.
+    public const string Roles = """
+        SELECT dp.principal_id, dp.name, USER_NAME(dp.owning_principal_id)
+        FROM sys.database_principals AS dp
+        WHERE dp.type = 'R' AND dp.is_fixed_role = 0 AND dp.principal_id > 4 AND dp.name <> N'public';
+        """;
+
+    // Rol üyelikleri: yalnızca kullanıcı tanımlı rollerinki (builder id ile eşler).
+    // Üye adıyla tutulur — üye bir kullanıcı ya da başka bir rol olabilir.
+    public const string RoleMembers = """
+        SELECT rm.role_principal_id, USER_NAME(rm.member_principal_id)
+        FROM sys.database_role_members AS rm;
+        """;
+
+    // Obje/kolon (class 1) ve şema (class 3) seviyesi izinler. Grantee adıyla (id değil).
+    // state_desc: GRANT / GRANT_WITH_GRANT_OPTION / DENY. Sistem objelerininki dışarıda.
+    public const string Permissions = """
+        SELECT CAST(1 AS tinyint) AS class, p.major_id, p.minor_id,
+               p.permission_name, p.state_desc, USER_NAME(p.grantee_principal_id)
+        FROM sys.database_permissions AS p
+        INNER JOIN sys.objects AS o ON o.object_id = p.major_id AND o.is_ms_shipped = 0
+        WHERE p.class = 1
+        UNION ALL
+        SELECT CAST(3 AS tinyint), p.major_id, p.minor_id,
+               p.permission_name, p.state_desc, USER_NAME(p.grantee_principal_id)
+        FROM sys.database_permissions AS p
+        INNER JOIN sys.schemas AS s
+            ON s.schema_id = p.major_id AND s.schema_id > 4 AND s.schema_id < 16384
+        WHERE p.class = 3
+        UNION ALL
+        SELECT CAST(0 AS tinyint), 0, 0, p.permission_name, p.state_desc, USER_NAME(p.grantee_principal_id)
+        FROM sys.database_permissions AS p
+        WHERE p.class = 0;
+        """;
+
+    // Extended property'ler (MS_Description vb.). class 1 = obje/kolon (major=object_id,
+    // minor=0 obje kendisi, minor>0 kolon), class 3 = şema (major=schema_id). Host obje
+    // sınıfına göre filtrelenir; sistem objelerininki dışarıda kalır. value sql_variant
+    // olduğu için nvarchar'a çevrilir — karşılaştırma metin üzerinden yapılır.
+    public const string ExtendedProperties = """
+        SELECT CAST(1 AS tinyint) AS class, ep.major_id, ep.minor_id, ep.name,
+               CONVERT(nvarchar(4000), ep.value) AS value
+        FROM sys.extended_properties AS ep
+        INNER JOIN sys.objects AS o ON o.object_id = ep.major_id AND o.is_ms_shipped = 0
+        WHERE ep.class = 1
+        UNION ALL
+        SELECT CAST(3 AS tinyint), ep.major_id, ep.minor_id, ep.name,
+               CONVERT(nvarchar(4000), ep.value)
+        FROM sys.extended_properties AS ep
+        INNER JOIN sys.schemas AS s
+            ON s.schema_id = ep.major_id AND s.schema_id > 4 AND s.schema_id < 16384
+        WHERE ep.class = 3
+        UNION ALL
+        SELECT CAST(0 AS tinyint), 0, 0, ep.name, CONVERT(nvarchar(4000), ep.value)
+        FROM sys.extended_properties AS ep
+        WHERE ep.class = 0;
+        """;
+}
