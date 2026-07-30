@@ -7,5 +7,6 @@ Baglanti: Source ve Target kutularina sunucu + veritabani gir.
 Windows Authentication (AD kullanicin) veya SQL Server Authentication.
 Isimli instance: SRVDEV\PASIFIK  (olmazsa SRVDEV,54074 gibi port ile).
 
+Her obje satirinin sonunda ⇄ butonu: o obje icin TERS (geri alma) script'i uretir.
+
 Salt-okunur: yalnizca katalog view'lerine SELECT atar, hicbir sey degistirmez.
-Uretilen deployment script'i INER; uygulamak sana kalir.
