@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Schema Compare</title>
+<link rel="icon" href="favicon.png">
+<script>document.documentElement.dataset.theme = localStorage.getItem('theme') || 'light';</script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="endpoints">
+    <button class="endpoint unset" id="sourceBtn">
+      <span class="endpoint-tag" data-i18n="source">Source</span>
+      <span class="endpoint-value" id="sourceValue" data-i18n="selectConnection">select connection</span>
+    </button>
+    <button class="swap" id="swapBtn" data-i18n-title="swap" title="Source ↔ Target">⇄</button>
+    <button class="endpoint unset" id="targetBtn">
+      <span class="endpoint-tag" data-i18n="target">Target</span>
+      <span class="endpoint-value" id="targetValue" data-i18n="selectConnection">select connection</span>
+    </button>
+  </div>
+
+  <div class="actions">
+    <button class="btn ghost" id="newCompareBtn" data-i18n="newComparison" data-i18n-title="newComparisonTip" title="Open a new comparison in a separate tab">New comparison</button>
+    <button class="btn primary" id="compareBtn" disabled data-i18n="compare">Compare</button>
+    <button class="btn ghost" id="scriptBtn" disabled data-i18n="generateScript" data-i18n-title="generateScriptTip" title="Generate a deployment script from selected changes">Generate Script</button>
+    <button class="iconbtn" id="optionsBtn" data-i18n-title="options" title="Comparison options">⚙</button>
+    <span class="sep"></span>
+    <button class="iconbtn" id="themeBtn" data-i18n-title="toggleTheme" title="Toggle theme">☾</button>
+    <button class="iconbtn" id="langBtn" data-i18n-title="toggleLang" title="Language"><span class="lang" id="langLabel">TR</span></button>
+  </div>
+</header>
+
+<div class="statusbar" id="statusbar" data-i18n="pickTwo">Select two connections to compare.</div>
+
+<main class="split">
+  <section class="upper">
+    <div class="toolbar">
+      <div class="filters">
+        <label class="pill add"><input type="checkbox" id="fAdd" checked> Add <b id="cAdd">0</b></label>
+        <label class="pill chg"><input type="checkbox" id="fChange" checked> Change <b id="cChange">0</b></label>
+        <label class="pill del"><input type="checkbox" id="fDelete" checked> Delete <b id="cDelete">0</b></label>
+      </div>
+      <select id="typeFilter" class="select sm"><option value="" data-i18n="allTypes">All types</option></select>
+      <input type="search" id="search" class="input sm" data-i18n-ph="searchPh" placeholder="search schema or object…">
+      <span class="picked" id="pickedInfo" hidden></span>
+      <button class="btn ghost sm" id="copyPicked" hidden data-i18n="copySelected">Copy selected</button>
+      <div class="grow"></div>
+      <div class="viewtabs">
+        <button class="vtab active" data-view="tree" data-i18n="tabDiff">Differences</button>
+        <button class="vtab" data-view="risk" hidden><span data-i18n="tabRisk">Deployment risk</span> <b class="hot" id="cBlock">0</b></button>
+        <button class="vtab" data-view="triggers" data-i18n="tabTriggers">Triggers</button>
+      </div>
+    </div>
+
+    <div class="gridhead" id="gridhead">
+      <span class="c-type" data-i18n="type">Type</span>
+      <span class="c-name" data-i18n="source">Source</span>
+      <span class="c-mid"></span>
+      <span class="c-name" data-i18n="target">Target</span>
+    </div>
+
+    <div class="scroll" id="treeWrap"><div id="tree"></div></div>
+    <div class="scroll" id="riskWrap" hidden></div>
+    <div class="scroll" id="triggerWrap" hidden></div>
+  </section>
+
+  <div class="splitter" id="splitter"></div>
+
+  <section class="lower">
+    <div class="lower-head">
+      <span class="lower-title" id="defTitle" data-i18n="objectDefinitions">Object Definitions</span>
+      <div class="lower-actions">
+        <button class="btn ghost sm" id="prevDiff" data-i18n-title="prevDiff" title="Previous difference" disabled>▲</button>
+        <span class="diffcount" id="diffCount">—</span>
+        <button class="btn ghost sm" id="nextDiff" data-i18n-title="nextDiff" title="Next difference" disabled>▼</button>
+        <label class="check inline"><input type="checkbox" id="showCanonical"> <span data-i18n="canonicalText">canonical text</span></label>
+      </div>
+    </div>
+    <div class="diff" id="defBody">
+      <p class="missing" data-i18n="selectRow">Select a row above.</p>
+    </div>
+  </section>
+</main>
+
+<!-- ---------- Connection dialog ---------- -->
+<div class="scrim" id="connScrim" hidden></div>
+<div class="dialog" id="connDialog" hidden>
+  <div class="dialog-head">
+    <h2 id="connTitle" data-i18n="connect">Connect</h2>
+    <button class="x" id="connClose">✕</button>
+  </div>
+
+  <div class="dialog-body">
+    <div class="recent">
+      <h3 data-i18n="recentConnections">Recent connections</h3>
+      <div id="recentList" class="recent-list"><p class="hint" data-i18n="none">None.</p></div>
+    </div>
+
+    <div class="props">
+      <h3 data-i18n="connectionProperties">Connection properties</h3>
+
+      <label class="row"><span data-i18n="serverName">Server name</span>
+        <input type="text" id="cServer" placeholder="SRVDEV\PASIFIK" autocomplete="off"></label>
+
+      <label class="row"><span data-i18n="authentication">Authentication</span>
+        <select id="cAuth" class="select">
+          <option value="Windows">Windows Authentication</option>
+          <option value="SqlLogin">SQL Server Authentication</option>
+        </select></label>
+
+      <label class="row" id="rowUser"><span data-i18n="username">Username</span>
+        <input type="text" id="cUser" autocomplete="off"></label>
+
+      <label class="row" id="rowPass"><span data-i18n="password">Password</span>
+        <input type="password" id="cPass" autocomplete="new-password"></label>
+
+      <label class="row check-row" id="rowRemember">
+        <span></span>
+        <span class="check"><input type="checkbox" id="cRemember"> <span data-i18n="rememberPassword">Remember password</span></span></label>
+
+      <label class="row"><span data-i18n="database">Database</span>
+        <span class="combo">
+          <select id="cDatabase" class="select"><option value="" data-i18n="listFirst">— list first —</option></select>
+          <button class="btn ghost sm" id="cLoadDbs" data-i18n="list">List</button>
+        </span></label>
+
+      <label class="row"><span>Encrypt</span>
+        <select id="cEncrypt" class="select">
+          <option value="false">Optional (False)</option>
+          <option value="true">Mandatory (True)</option>
+        </select></label>
+
+      <label class="row"><span data-i18n="trustCert">Trust server certificate</span>
+        <select id="cTrust" class="select">
+          <option value="true">True</option>
+          <option value="false">False</option>
+        </select></label>
+
+      <p class="conn-status" id="connStatus"></p>
+    </div>
+  </div>
+
+  <div class="dialog-foot">
+    <button class="btn ghost" id="connTest" data-i18n="testConnection">Test connection</button>
+    <div class="grow"></div>
+    <button class="btn ghost" id="connCancel" data-i18n="cancel">Cancel</button>
+    <button class="btn primary" id="connOk" data-i18n="connect">Connect</button>
+  </div>
+</div>
+
+<!-- ---------- Options dialog ---------- -->
+<div class="scrim" id="optScrim" hidden></div>
+<div class="dialog narrow" id="optDialog" hidden>
+  <div class="dialog-head">
+    <h2 data-i18n="comparisonOptions">Comparison options</h2>
+    <button class="x" id="optClose">✕</button>
+  </div>
+  <div class="dialog-body single">
+    <div id="optList" class="opt-list"></div>
+  </div>
+  <div class="dialog-foot">
+    <button class="btn ghost" id="optReset" data-i18n="resetDefaults">Reset to defaults</button>
+    <div class="grow"></div>
+    <button class="btn primary" id="optOk" data-i18n="ok">OK</button>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
