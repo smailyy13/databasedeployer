@@ -14,6 +14,8 @@ const I18N = {
     source: 'Source', target: 'Target', selectConnection: 'select connection',
     swap: 'Source ↔ Target', compare: 'Compare', generateScript: 'Generate Script',
     newComparison: 'New comparison', newComparisonTip: 'Open a new comparison in a separate tab',
+    reverseTip: 'Reverse script for this object (target → source)',
+    generatingReverse: 'Generating reverse script…', reverseReady: 'Reverse (rollback) script',
     generateScriptTip: 'Generate a deployment script from selected changes',
     options: 'Comparison options', toggleTheme: 'Toggle theme', toggleLang: 'Language',
     pickTwo: 'Select two connections to compare.', allTypes: 'All types',
@@ -82,6 +84,8 @@ const I18N = {
     source: 'Kaynak', target: 'Hedef', selectConnection: 'bağlantı seçin',
     swap: 'Kaynak ↔ Hedef', compare: 'Karşılaştır', generateScript: 'Script Üret',
     newComparison: 'Yeni karşılaştırma', newComparisonTip: 'Yeni karşılaştırmayı ayrı sekmede aç',
+    reverseTip: 'Bu obje için ters (geri alma) script\'i (hedef → kaynak)',
+    generatingReverse: 'Ters script üretiliyor…', reverseReady: 'Ters (geri alma) script\'i',
     generateScriptTip: 'Seçili değişikliklerden dağıtım script\'i üret',
     options: 'Karşılaştırma seçenekleri', toggleTheme: 'Temayı değiştir', toggleLang: 'Dil',
     pickTwo: 'Karşılaştırmak için iki bağlantı seçin.', allTypes: 'Tüm türler',
@@ -653,6 +657,7 @@ function objectRow(change, objKey) {
       <span class="act ${change.action}">${ACTION_ICON[change.action]}</span>
     </span>
     <span class="c-name">${change.action === 'Add' ? '' : esc(full)}${flag}</span>
+    <button class="rev" data-rev="${esc(objKey)}" title="${esc(t('reverseTip'))}" aria-label="${esc(t('reverseTip'))}">⇄</button>
   </div>`;
 }
 
@@ -713,6 +718,14 @@ function bindTree(tree) {
 
       state.lastPick = key;
       renderPickInfo();
+    });
+
+  // Reverse: o obje için YALNIZCA geri-alma (target→source) script'i üret ve indir.
+  for (const btn of tree.querySelectorAll('.rev'))
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const row = btn.closest('.row-obj');
+      downloadScript([{ objectType: row.dataset.kind, schema: row.dataset.schema, name: row.dataset.name }], true);
     });
 
   for (const el of tree.querySelectorAll('.row-obj, .row-child'))
@@ -1041,18 +1054,17 @@ function selectedObjectItems() {
   return [...seen.values()];
 }
 
-$('scriptBtn').addEventListener('click', async () => {
+// Script üret + tarayıcıdan indir. selection boşsa tümü; reverse=true ise geri-alma yönü.
+async function downloadScript(selection, reverse = false) {
   if (!state.runId) return;
   $('scriptBtn').disabled = true;
-  setStatus(t('generatingScript'), 'busy');
-
-  const selection = selectedObjectItems();
+  setStatus(t(reverse ? 'generatingReverse' : 'generatingScript'), 'busy');
 
   try {
     const response = await fetch(`/api/runs/${state.runId}/script`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scope: 'all', dataLoss: true, selection }),
+      body: JSON.stringify({ scope: 'all', dataLoss: true, selection, reverse }),
     });
     if (!response.ok) throw new Error(t('scriptFailed'));
     const data = await response.json();
@@ -1068,6 +1080,7 @@ $('scriptBtn').addEventListener('click', async () => {
 
     // Veri kaybı adımları ŞU AN script'e DAHİL (güvenlik modu kapalı) — açıkça uyar.
     const dataLoss = (data.dataLossActions || []).length;
+    const head = reverse ? t('reverseReady') + ' · ' : '';
     const parts = [selection.length > 0
       ? t('scriptIncluded', { n: num(data.included), sel: num(selection.length) })
       : t('scriptIncludedAll', { n: num(data.included) })];
@@ -1075,13 +1088,15 @@ $('scriptBtn').addEventListener('click', async () => {
     if (dataLoss > 0) parts.push(t('stillGated', { n: num(dataLoss) }));
     if (data.outOfScope > 0) parts.push(t('outOfScopeN', { n: num(data.outOfScope) }));
     if (data.skipped.length > 0) parts.push(t('skippedN', { n: num(data.skipped.length) }));
-    setStatus(t('downloaded', { file: data.fileName, parts: parts.join(' · ') }), 'error');
+    setStatus(head + t('downloaded', { file: data.fileName, parts: parts.join(' · ') }), 'error');
   } catch (error) {
     setStatus(error.message, 'error');
   } finally {
     $('scriptBtn').disabled = false;
   }
-});
+}
+
+$('scriptBtn').addEventListener('click', () => downloadScript(selectedObjectItems(), false));
 
 $('copyPicked').addEventListener('click', async () => {
   const list = [...state.checked].map((k) => k.split('|').slice(1).join('.').replaceAll('›', ' → ')).sort();
