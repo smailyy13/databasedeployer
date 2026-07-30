@@ -14,8 +14,8 @@ const I18N = {
     source: 'Source', target: 'Target', selectConnection: 'select connection',
     swap: 'Source ↔ Target', compare: 'Compare', generateScript: 'Generate Script',
     newComparison: 'New comparison', newComparisonTip: 'Open a new comparison in a separate tab',
-    reverseTip: 'Reverse script for this object (target → source)',
-    generatingReverse: 'Generating reverse script…', reverseReady: 'Reverse (rollback) script',
+    reverseTip: 'Mark for reverse (rollback) — included when you Generate Script',
+    reverseIncluded: '{n} reversed in the reverse section',
     generateScriptTip: 'Generate a deployment script from selected changes',
     options: 'Comparison options', toggleTheme: 'Toggle theme', toggleLang: 'Language',
     pickTwo: 'Select two connections to compare.', allTypes: 'All types',
@@ -84,8 +84,8 @@ const I18N = {
     source: 'Kaynak', target: 'Hedef', selectConnection: 'bağlantı seçin',
     swap: 'Kaynak ↔ Hedef', compare: 'Karşılaştır', generateScript: 'Script Üret',
     newComparison: 'Yeni karşılaştırma', newComparisonTip: 'Yeni karşılaştırmayı ayrı sekmede aç',
-    reverseTip: 'Bu obje için ters (geri alma) script\'i (hedef → kaynak)',
-    generatingReverse: 'Ters script üretiliyor…', reverseReady: 'Ters (geri alma) script\'i',
+    reverseTip: 'Ters (geri alma) için işaretle — Generate Script\'te dahil edilir',
+    reverseIncluded: '{n} obje ters bölümde',
     generateScriptTip: 'Seçili değişikliklerden dağıtım script\'i üret',
     options: 'Karşılaştırma seçenekleri', toggleTheme: 'Temayı değiştir', toggleLang: 'Dil',
     pickTwo: 'Karşılaştırmak için iki bağlantı seçin.', allTypes: 'Tüm türler',
@@ -283,7 +283,8 @@ const state = {
   expanded: new Set(),      // açılmış objeler
   collapsed: new Set(),     // kapatılmış üst gruplar
   collapsedCats: new Set(), // kapatılmış kategori klasörleri (varsayılan açık)
-  checked: new Set(),       // işaretlenmiş satırlar
+  checked: new Set(),       // işaretlenmiş satırlar (ileri yön)
+  reversed: new Set(),      // ⇄ ile işaretlenen objeler (geri alma / ters yön)
   lastPick: null,           // shift+tık aralık seçimi için son tıklanan kutu (çapa)
   eventSource: null,
   hunks: [],                // fark bloklarının başladığı satır indeksleri
@@ -488,6 +489,7 @@ async function compare() {
   state.result = null;
   state.selected = null;
   state.checked.clear();
+  state.reversed.clear();
   state.lastPick = null;
   renderAll();
 
@@ -657,7 +659,7 @@ function objectRow(change, objKey) {
       <span class="act ${change.action}">${ACTION_ICON[change.action]}</span>
     </span>
     <span class="c-name">${change.action === 'Add' ? '' : esc(full)}${flag}</span>
-    <button class="rev" data-rev="${esc(objKey)}" title="${esc(t('reverseTip'))}" aria-label="${esc(t('reverseTip'))}">⇄</button>
+    <button class="rev${state.reversed.has(objKey) ? ' on' : ''}" data-rev="${esc(objKey)}" aria-pressed="${state.reversed.has(objKey)}" title="${esc(t('reverseTip'))}" aria-label="${esc(t('reverseTip'))}">⇄</button>
   </div>`;
 }
 
@@ -720,12 +722,21 @@ function bindTree(tree) {
       renderPickInfo();
     });
 
-  // Reverse: o obje için YALNIZCA geri-alma (target→source) script'i üret ve indir.
+  // ⇄ toggle: objeyi geri-alma (ters yön) için işaretle/kaldır. İndirmez — sadece işaretler.
+  // İşaretlenince ileri seçimden çıkar (aynı obje hem ileri hem ters uygulanmasın).
+  // Generate Script'e basınca ileri seçim + ters işaretliler tek dosyada birlikte iner.
   for (const btn of tree.querySelectorAll('.rev'))
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const row = btn.closest('.row-obj');
-      downloadScript([{ objectType: row.dataset.kind, schema: row.dataset.schema, name: row.dataset.name }], true);
+      const key = btn.dataset.rev;
+      if (state.reversed.has(key)) {
+        state.reversed.delete(key);
+      } else {
+        state.reversed.add(key);
+        state.checked.delete(key);   // ileri seçimden çıkar
+      }
+      renderTree();
+      renderPickInfo();
     });
 
   for (const el of tree.querySelectorAll('.row-obj, .row-child'))
@@ -1054,17 +1065,27 @@ function selectedObjectItems() {
   return [...seen.values()];
 }
 
-// Script üret + tarayıcıdan indir. selection boşsa tümü; reverse=true ise geri-alma yönü.
-async function downloadScript(selection, reverse = false) {
+// ⇄ ile işaretlenen objeler (ters yön) → seçim formatı.
+function reversedObjectItems() {
+  return [...state.reversed].map((key) => {
+    const parts = key.split('|');
+    return { objectType: parts[0], schema: parts[1] ?? '', name: parts.slice(2).join('|') };
+  });
+}
+
+// Script üret + tarayıcıdan indir. selection = ileri yön; reverseSelection = ⇄ ile
+// işaretlenen objeler (ters yön). İkisi de aynı dosyaya, ileri bölüm sonra ters bölüm olarak yazılır.
+async function downloadScript(selection, reverseSelection = []) {
   if (!state.runId) return;
   $('scriptBtn').disabled = true;
-  setStatus(t(reverse ? 'generatingReverse' : 'generatingScript'), 'busy');
+  const hasRev = reverseSelection.length > 0;
+  setStatus(t('generatingScript'), 'busy');
 
   try {
     const response = await fetch(`/api/runs/${state.runId}/script`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scope: 'all', dataLoss: true, selection, reverse }),
+      body: JSON.stringify({ scope: 'all', dataLoss: true, selection, reverseSelection }),
     });
     if (!response.ok) throw new Error(t('scriptFailed'));
     const data = await response.json();
@@ -1080,15 +1101,15 @@ async function downloadScript(selection, reverse = false) {
 
     // Veri kaybı adımları ŞU AN script'e DAHİL (güvenlik modu kapalı) — açıkça uyar.
     const dataLoss = (data.dataLossActions || []).length;
-    const head = reverse ? t('reverseReady') + ' · ' : '';
     const parts = [selection.length > 0
       ? t('scriptIncluded', { n: num(data.included), sel: num(selection.length) })
       : t('scriptIncludedAll', { n: num(data.included) })];
+    if (hasRev) parts.push(t('reverseIncluded', { n: num(reverseSelection.length) }));
     parts.push(t('dataLossIncluded'));
     if (dataLoss > 0) parts.push(t('stillGated', { n: num(dataLoss) }));
     if (data.outOfScope > 0) parts.push(t('outOfScopeN', { n: num(data.outOfScope) }));
     if (data.skipped.length > 0) parts.push(t('skippedN', { n: num(data.skipped.length) }));
-    setStatus(head + t('downloaded', { file: data.fileName, parts: parts.join(' · ') }), 'error');
+    setStatus(t('downloaded', { file: data.fileName, parts: parts.join(' · ') }), 'error');
   } catch (error) {
     setStatus(error.message, 'error');
   } finally {
@@ -1096,7 +1117,7 @@ async function downloadScript(selection, reverse = false) {
   }
 }
 
-$('scriptBtn').addEventListener('click', () => downloadScript(selectedObjectItems(), false));
+$('scriptBtn').addEventListener('click', () => downloadScript(selectedObjectItems(), reversedObjectItems()));
 
 $('copyPicked').addEventListener('click', async () => {
   const list = [...state.checked].map((k) => k.split('|').slice(1).join('.').replaceAll('›', ' → ')).sort();
