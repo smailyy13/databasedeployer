@@ -3,15 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SchemaDiff</title>
+<title>Schema Compare</title>
+<link rel="icon" href="favicon.png">
 <script>document.documentElement.dataset.theme = localStorage.getItem('theme') || 'light';</script>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
 <header class="topbar">
-  <div class="brand"><span class="logo">◧</span><h1>SchemaDiff</h1></div>
-
   <div class="endpoints">
     <button class="endpoint unset" id="sourceBtn">
       <span class="endpoint-tag" data-i18n="source">Source</span>
@@ -25,6 +24,7 @@
   </div>
 
   <div class="actions">
+    <button class="btn ghost" id="newCompareBtn" data-i18n="newComparison" data-i18n-title="newComparisonTip" title="Open a new comparison in a separate tab">New comparison</button>
     <button class="btn primary" id="compareBtn" disabled data-i18n="compare">Compare</button>
     <button class="btn ghost" id="scriptBtn" disabled data-i18n="generateScript" data-i18n-title="generateScriptTip" title="Generate a deployment script from selected changes">Generate Script</button>
     <button class="iconbtn" id="optionsBtn" data-i18n-title="options" title="Comparison options">⚙</button>
@@ -51,7 +51,7 @@
       <div class="grow"></div>
       <div class="viewtabs">
         <button class="vtab active" data-view="tree" data-i18n="tabDiff">Differences</button>
-        <button class="vtab" data-view="risk"><span data-i18n="tabRisk">Deployment risk</span> <b class="hot" id="cBlock">0</b></button>
+        <button class="vtab" data-view="risk" hidden><span data-i18n="tabRisk">Deployment risk</span> <b class="hot" id="cBlock">0</b></button>
         <button class="vtab" data-view="triggers" data-i18n="tabTriggers">Triggers</button>
       </div>
     </div>

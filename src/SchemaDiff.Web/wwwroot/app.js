@@ -13,6 +13,7 @@ const I18N = {
   en: {
     source: 'Source', target: 'Target', selectConnection: 'select connection',
     swap: 'Source ↔ Target', compare: 'Compare', generateScript: 'Generate Script',
+    newComparison: 'New comparison', newComparisonTip: 'Open a new comparison in a separate tab',
     generateScriptTip: 'Generate a deployment script from selected changes',
     options: 'Comparison options', toggleTheme: 'Toggle theme', toggleLang: 'Language',
     pickTwo: 'Select two connections to compare.', allTypes: 'All types',
@@ -80,6 +81,7 @@ const I18N = {
   tr: {
     source: 'Kaynak', target: 'Hedef', selectConnection: 'bağlantı seçin',
     swap: 'Kaynak ↔ Hedef', compare: 'Karşılaştır', generateScript: 'Script Üret',
+    newComparison: 'Yeni karşılaştırma', newComparisonTip: 'Yeni karşılaştırmayı ayrı sekmede aç',
     generateScriptTip: 'Seçili değişikliklerden dağıtım script\'i üret',
     options: 'Karşılaştırma seçenekleri', toggleTheme: 'Temayı değiştir', toggleLang: 'Dil',
     pickTwo: 'Karşılaştırmak için iki bağlantı seçin.', allTypes: 'Tüm türler',
@@ -1122,6 +1124,9 @@ document.addEventListener('keydown', (e) => {
     document.querySelector('.lower').style.flex = `1 1 ${(1 - ratio) * 100}%`;
   });
 })();
+
+// Yeni karşılaştırma: aynı adresi yeni sekmede açar. Her sekme bağımsız oturumdur.
+$('newCompareBtn').addEventListener('click', () => window.open(location.href, '_blank'));
 
 // ---- tema / dil geçişi ----
 $('themeBtn').addEventListener('click', () => {
