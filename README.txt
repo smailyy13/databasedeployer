@@ -7,6 +7,8 @@ Baglanti: Source ve Target kutularina sunucu + veritabani gir.
 Windows Authentication (AD kullanicin) veya SQL Server Authentication.
 Isimli instance: SRVDEV\PASIFIK  (olmazsa SRVDEV,54074 gibi port ile).
 
-Her obje satirinin sonunda ⇄ butonu: o obje icin TERS (geri alma) script'i uretir.
+Her obje satirinin sonunda ⇄ butonu: o objeyi GERI ALMA (ters yon) icin isaretler.
+Isaretlince parlak yanar ve ileri secimden cikar. Generate Script dediginde
+ileri secim + ters isaretliler TEK dosyada birlikte iner.
 
 Salt-okunur: yalnizca katalog view'lerine SELECT atar, hicbir sey degistirmez.
