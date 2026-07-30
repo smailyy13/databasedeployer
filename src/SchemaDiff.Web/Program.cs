@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Connections;
 using SchemaDiff.Core.Connections;
+using SchemaDiff.Core.Diff;
 using SchemaDiff.Core.Model;
 using SchemaDiff.Core.Scripting;
 using SchemaDiff.Web;
@@ -150,7 +151,11 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
     var session = compare.Get(id);
     if (session?.Comparison is null) return Results.NotFound();
 
-    var comparison = session.Comparison;
+    // Reverse=true: yönü ters çevir. Aynı obje seçimi (schema/ad/tür yönden bağımsız)
+    // ters karşılaştırmaya uygulanır; böylece ileri script'i GERİ ALAN kod çıkar.
+    var comparison = request.Reverse
+        ? SchemaComparer.Compare(session.Comparison.Target, session.Comparison.Source)
+        : session.Comparison;
     var generatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
     var scope = request.Scope;
     var wantModules = scope is null or "all" or "modules";
@@ -266,6 +271,7 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
     }
 
     var tag = selection is null ? scope ?? "all" : "secili";
+    if (request.Reverse) tag = $"reverse-{tag}";
     var fileName = $"{comparison.Target.Database}_{tag}_{DateTime.Now:yyyyMMdd-HHmm}.sql";
 
     return Results.Ok(new

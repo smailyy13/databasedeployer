@@ -48,11 +48,14 @@ public sealed record CompareRequest(
     ConnectionDto Target,
     CompareOptionsDto? Options);
 
-/// <summary>Script üretimi isteği. Selection boş/null ise TÜM değişiklikler yazılır.</summary>
+/// <summary>Script üretimi isteği. Selection boş/null ise TÜM değişiklikler yazılır.
+/// Reverse=true ise yön ters çevrilir: kaynak↔hedef takas edilir, yani hedefi kaynağa
+/// değil KAYNAĞI HEDEFE eşitleyen (geri alma) script üretilir.</summary>
 public sealed record ScriptRequest(
     string? Scope = null,
     bool DataLoss = false,
-    SelectionItemDto[]? Selection = null);
+    SelectionItemDto[]? Selection = null,
+    bool Reverse = false);
 
 /// <summary>Kullanıcının işaretlediği bir obje. ObjectType arayüzdeki görünen türdür
 /// ("Table", "Scalar Function", "Role", "Schema" …), sunucuda ObjectKind'e çevrilir.</summary>
