@@ -151,24 +151,22 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
     var session = compare.Get(id);
     if (session?.Comparison is null) return Results.NotFound();
 
-    // Reverse=true: yönü ters çevir. Aynı obje seçimi (schema/ad/tür yönden bağımsız)
-    // ters karşılaştırmaya uygulanır; böylece ileri script'i GERİ ALAN kod çıkar.
-    var comparison = request.Reverse
-        ? SchemaComparer.Compare(session.Comparison.Target, session.Comparison.Source)
-        : session.Comparison;
+    var forwardCmp = session.Comparison;
+    var reverseCmp = SchemaComparer.Compare(session.Comparison.Target, session.Comparison.Source);
     var generatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
     var scope = request.Scope;
     var wantModules = scope is null or "all" or "modules";
     var wantTables = scope is null or "all" or "tables";
     var allowDataLoss = request.DataLoss;
 
-    // İşaretlenen objeler → ObjectKey kümesi. Boşsa null = tümü.
-    ISet<ObjectKey>? selection = null;
-    if (request.Selection is { Length: > 0 } picks)
+    // İşaretlenen objeler → ObjectKey kümesi. Boş/yoksa null.
+    ISet<ObjectKey>? Parse(SelectionItemDto[]? items)
     {
-        selection = new HashSet<ObjectKey>(ObjectKeyComparer.CaseInsensitive);
-        foreach (var pick in picks)
-            selection.Add(new ObjectKey(pick.Schema, pick.Name, CompareService.ResolveKind(pick.ObjectType)));
+        if (items is not { Length: > 0 }) return null;
+        var set = new HashSet<ObjectKey>(ObjectKeyComparer.CaseInsensitive);
+        foreach (var pick in items)
+            set.Add(new ObjectKey(pick.Schema, pick.Name, CompareService.ResolveKind(pick.ObjectType)));
+        return set;
     }
 
     var sb = new System.Text.StringBuilder(16384);
@@ -178,101 +176,103 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
     var dataLossActions = new List<object>();
     var hadCycle = false;
 
-    // Kullanıcı tanımlı tipler EN BAŞTA: tablo ve modüller onlara bağlı olabilir.
-    if (wantTables || wantModules)
+    // Bir yön için tüm dilimleri (tip → tablo → modül → rol → EP/izin) doğru sırada yazar.
+    void BuildBody(CompareResult comparison, ISet<ObjectKey>? selection)
     {
-        var types = TypeScriptGenerator.Generate(comparison, selection, new TypeScriptOptions
+        // Kullanıcı tanımlı tipler EN BAŞTA: tablo ve modüller onlara bağlı olabilir.
+        if (wantTables || wantModules)
         {
-            GeneratedAt = generatedAt,
-        });
-        if (!types.IsEmpty)
-        {
-            sb.AppendLine(types.Sql);
-            sb.AppendLine();
-            included += types.Included.Count;
+            var types = TypeScriptGenerator.Generate(comparison, selection, new TypeScriptOptions { GeneratedAt = generatedAt });
+            if (!types.IsEmpty) { sb.AppendLine(types.Sql); sb.AppendLine(); included += types.Included.Count; }
+            skipped.AddRange(types.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
         }
-        skipped.AddRange(types.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
-    }
 
-    // Tablolar: yeni view/prosedürler yeni tablolara bağlı olabilir.
-    if (wantTables)
-    {
-        var table = TableScriptGenerator.Generate(comparison, selection, new TableScriptOptions
+        if (wantTables)
         {
-            GeneratedAt = generatedAt,
-            AllowDataLoss = allowDataLoss,
-        });
-        sb.AppendLine(table.Sql);
-        sb.AppendLine();
-        included += table.Included.Count;
-        hadCycle |= table.HadDependencyCycle;
-        skipped.AddRange(table.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
-        dataLossActions.AddRange(table.DataLossActions.Select(a =>
-            (object)new { table = a.Table.ToString(), a.Column, a.Description, a.Sql }));
-    }
-
-    if (wantModules)
-    {
-        var module = ModuleScriptGenerator.Generate(comparison, selection, new ScriptOptions
-        {
-            GeneratedAt = generatedAt,
-            TablesHandledElsewhere = wantTables,
-            HandledElsewhere = new HashSet<ObjectKind>
+            var table = TableScriptGenerator.Generate(comparison, selection, new TableScriptOptions
             {
-                ObjectKind.Role, ObjectKind.UserDefinedType, ObjectKind.TableType,
-                ObjectKind.Sequence, ObjectKind.Synonym,
-                ObjectKind.PartitionFunction, ObjectKind.PartitionScheme,
-            },
-        });
-        sb.AppendLine(module.Sql);
-        included += module.Included.Count;
-        outOfScope += module.OutOfScope.Count;
-        hadCycle |= module.HadDependencyCycle;
-        skipped.AddRange(module.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
+                GeneratedAt = generatedAt,
+                AllowDataLoss = allowDataLoss,
+            });
+            sb.AppendLine(table.Sql);
+            sb.AppendLine();
+            included += table.Included.Count;
+            hadCycle |= table.HadDependencyCycle;
+            skipped.AddRange(table.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
+            dataLossActions.AddRange(table.DataLossActions.Select(a =>
+                (object)new { table = a.Table.ToString(), a.Column, a.Description, a.Sql }));
+        }
+
+        if (wantModules)
+        {
+            var module = ModuleScriptGenerator.Generate(comparison, selection, new ScriptOptions
+            {
+                GeneratedAt = generatedAt,
+                TablesHandledElsewhere = wantTables,
+                HandledElsewhere = new HashSet<ObjectKind>
+                {
+                    ObjectKind.Role, ObjectKind.UserDefinedType, ObjectKind.TableType,
+                    ObjectKind.Sequence, ObjectKind.Synonym,
+                    ObjectKind.PartitionFunction, ObjectKind.PartitionScheme,
+                },
+            });
+            sb.AppendLine(module.Sql);
+            included += module.Included.Count;
+            outOfScope += module.OutOfScope.Count;
+            hadCycle |= module.HadDependencyCycle;
+            skipped.AddRange(module.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
+        }
+
+        if (wantModules)
+        {
+            var roles = RoleScriptGenerator.Generate(comparison, selection, new RoleScriptOptions { GeneratedAt = generatedAt });
+            if (!roles.IsEmpty) { sb.AppendLine(); sb.AppendLine(roles.Sql); included += roles.Included.Count; }
+            skipped.AddRange(roles.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
+        }
+
+        if (wantModules && wantTables)
+        {
+            var ep = ExtendedPropertyScriptGenerator.Generate(comparison, selection, generatedAt);
+            if (!ep.IsEmpty) { sb.AppendLine(); sb.AppendLine(ep.Sql); included += ep.Included.Count; }
+            skipped.AddRange(ep.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
+
+            var perms = PermissionScriptGenerator.Generate(comparison, selection, generatedAt);
+            if (!perms.IsEmpty) { sb.AppendLine(); sb.AppendLine(perms.Sql); included += perms.Included.Count; }
+            skipped.AddRange(perms.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
+        }
     }
 
-    // Roller: her zaman (güvenli, veri kaybı yok). Modüllerden sonra, bağımsız.
-    if (wantModules)
+    var fwd = Parse(request.Selection);
+    var rev = Parse(request.ReverseSelection);
+
+    // Eski tam-ters davranış (Reverse=true): tüm ileri seçimi ters karşılaştırmadan üret.
+    if (request.Reverse)
     {
-        var roles = RoleScriptGenerator.Generate(comparison, selection, new RoleScriptOptions
-        {
-            GeneratedAt = generatedAt,
-        });
-        if (!roles.IsEmpty)
-        {
-            sb.AppendLine();
-            sb.AppendLine(roles.Sql);
-            included += roles.Included.Count;
-        }
-        skipped.AddRange(roles.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
+        BuildBody(reverseCmp, fwd);
     }
-
-    // Extended property'ler: tüm host objeler oluştuktan sonra, en sonda. Yalnızca birleşik
-    // ("all") kapsamda — eklenen bir tablonun EP'si tablo diliminin de koşmasını gerektirir.
-    if (wantModules && wantTables)
+    else
     {
-        var ep = ExtendedPropertyScriptGenerator.Generate(comparison, selection, generatedAt);
-        if (!ep.IsEmpty)
-        {
-            sb.AppendLine();
-            sb.AppendLine(ep.Sql);
-            included += ep.Included.Count;
-        }
-        skipped.AddRange(ep.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
+        // İLERİ bölüm: seçili objeler (⇄ ile işaretlenenler UI'da zaten forward'dan çıkarılır).
+        // fwd null ve ters seçim de yoksa → tümü. Ters seçim varsa boş forward = "hiçbiri".
+        var forwardAll = fwd is null && rev is null;
+        if (forwardAll || fwd is not null)
+            BuildBody(forwardCmp, fwd);
 
-        var perms = PermissionScriptGenerator.Generate(comparison, selection, generatedAt);
-        if (!perms.IsEmpty)
+        // GERİ ALMA bölümü: ⇄ ile işaretlenen objeler, ters yönde, aynı dosyaya eklenir.
+        if (rev is not null)
         {
             sb.AppendLine();
-            sb.AppendLine(perms.Sql);
-            included += perms.Included.Count;
+            sb.AppendLine("/* ====================================================================");
+            sb.AppendLine("   GERİ ALMA (REVERSE) BÖLÜMÜ — aşağıdaki objeler TERS yönde uygulanır");
+            sb.AppendLine($"   (hedef → kaynak). Kaynak: {reverseCmp.Source.Database}  Hedef: {reverseCmp.Target.Database}");
+            sb.AppendLine("   ==================================================================== */");
+            sb.AppendLine();
+            BuildBody(reverseCmp, rev);
         }
-        skipped.AddRange(perms.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
     }
 
-    var tag = selection is null ? scope ?? "all" : "secili";
-    if (request.Reverse) tag = $"reverse-{tag}";
-    var fileName = $"{comparison.Target.Database}_{tag}_{DateTime.Now:yyyyMMdd-HHmm}.sql";
+    var tag = request.Reverse ? "reverse" : (rev is not null ? "ileri+reverse" : (fwd is null ? scope ?? "all" : "secili"));
+    var fileName = $"{forwardCmp.Target.Database}_{tag}_{DateTime.Now:yyyyMMdd-HHmm}.sql";
 
     return Results.Ok(new
     {
@@ -283,7 +283,8 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
         skipped,
         dataLossActions,
         hadDependencyCycle = hadCycle,
-        selectedCount = selection?.Count ?? 0,
+        selectedCount = (fwd?.Count ?? 0) + (rev?.Count ?? 0),
+        reverseCount = rev?.Count ?? 0,
     });
 });
 

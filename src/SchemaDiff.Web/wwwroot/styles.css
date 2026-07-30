@@ -227,6 +227,16 @@ p { margin: 0; }
 .rev:hover { color: var(--accent); border-color: var(--accent); }
 .rev:focus-visible { opacity: 1; outline: 2px solid var(--accent); outline-offset: 1px; }
 
+/* Ters (geri alma) için işaretli: her zaman görünür ve PARLAK. */
+.rev.on {
+  opacity: 1; color: #fff; background: var(--accent); border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent), 0 0 8px color-mix(in srgb, var(--accent) 55%, transparent);
+  font-weight: 700;
+}
+.rev.on:hover { color: #fff; filter: brightness(1.12); }
+/* İşaretli objenin satırını da hafifçe belli et. */
+.row-obj:has(.rev.on) { box-shadow: inset 2px 0 0 var(--accent); }
+
 .c-type { color: var(--ink-2); display: flex; align-items: center; gap: 6px; }
 .c-type .caret { width: 10px; color: var(--ink-3); font-size: 10px; }
 .c-name {
