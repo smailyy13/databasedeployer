@@ -630,4 +630,66 @@ public class DeploymentRiskAnalyzerTests
         Assert.False(risk.WillBlock);        // boş tabloda constraint sorunsuz eklenir
         Assert.False(risk.ConditionalOnly);  // WillBlock değilse ConditionalOnly de değil
     }
+
+    // --- güvenli sayılması gereken ama daha önce test edilmemiş senaryolar ---
+
+    [Fact]
+    public void Adding_not_null_column_WITH_default_is_Safe()
+    {
+        var risk = RiskFor(
+            sourceCols: [Column("Id"), Column("Flag", nullable: false, defaultDefinition: "((0))")],
+            targetCols: [Column("Id")],
+            targetRows: 5000);
+
+        Assert.Equal(DeploymentRisk.Safe, risk.Risk);
+        Assert.False(risk.WillBlock);
+    }
+
+    [Fact]
+    public void Adding_computed_column_is_Safe()
+    {
+        var risk = RiskFor(
+            sourceCols: [Column("Id"), Column("Total", computed: true, nullable: false)],
+            targetCols: [Column("Id")],
+            targetRows: 5000);
+
+        Assert.Equal(DeploymentRisk.Safe, risk.Risk);
+    }
+
+    [Fact]
+    public void Relaxing_not_null_to_nullable_is_Safe()
+    {
+        // NOT NULL -> NULL gevşetmesi asla başarısız olmaz, veri kaybettirmez.
+        var risk = RiskFor(
+            sourceCols: [Column("C", nullable: true)],
+            targetCols: [Column("C", nullable: false)],
+            targetRows: 5000);
+
+        Assert.Equal(DeploymentRisk.Safe, risk.Risk);
+        Assert.False(risk.WillBlock);
+    }
+
+    [Fact]
+    public void Dropped_check_constraint_is_Safe()
+    {
+        var risk = ConstraintRisk(
+            targetRows: 5000,
+            srcChecks: null,
+            tgtChecks: "chk|CK_Age|([Age]>(0))|disabled=0|notTrusted=0");
+
+        Assert.False(risk.WillBlock);
+        Assert.Contains(risk.Findings, f => f.Column == "CK_Age" && f.Risk == DeploymentRisk.Safe);
+    }
+
+    [Fact]
+    public void Dropped_foreign_key_is_Safe()
+    {
+        var risk = ConstraintRisk(
+            targetRows: 5000,
+            srcFks: null,
+            tgtFks: "fk|FK_T_P|ref=[dbo].[P]|cols=PId>Id|onDelete=0|onUpdate=0|disabled=0|notTrusted=0");
+
+        Assert.False(risk.WillBlock);
+        Assert.Contains(risk.Findings, f => f.Column == "FK_T_P" && f.Risk == DeploymentRisk.Safe);
+    }
 }
