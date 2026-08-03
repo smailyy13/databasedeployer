@@ -51,7 +51,7 @@ const I18N = {
     riskS3: '<b>{n}</b> are risky but empty in target → apply cleanly.',
     riskS4: '<b>{n}</b> are low risk → applied in place.',
     riskS5: '<b>{n}</b> have an unreadable row count → check manually.',
-    rLabelDataLoss: 'DATA LOSS', rLabelBlock: 'WILL BLOCK', rLabelEmpty: 'empty table',
+    rLabelDataLoss: 'DATA LOSS', rLabelBlock: 'WILL BLOCK', rLabelCheck: 'CHECK DATA', rLabelEmpty: 'empty table',
     rLabelRisky: 'RISKY (row count unreadable)', rLabelInPlace: 'in place', rLabelSafe: 'safe',
     rowsN: '{n} rows', rowsUnknown: '? rows',
     noTriggers: 'No triggers found.',
@@ -64,6 +64,7 @@ const I18N = {
     scriptIncluded: '{n} objects written ({sel} of selected)',
     scriptIncludedAll: '{n} objects written (ALL — nothing selected)',
     dataLossIncluded: '⚠ DATA-LOSS steps (drop column/table, narrowing) INCLUDED',
+    blockingWarned: '⚠ {n} full table(s) will block — see the warning header at the top of the script',
     stillGated: '{n} steps still gated', outOfScopeN: '{n} objects out of scope (sequence/synonym etc.)',
     skippedN: '{n} objects skipped', downloaded: '{file} downloaded · {parts}',
     copiedN: '{n} rows copied to clipboard.',
@@ -121,7 +122,7 @@ const I18N = {
     riskS3: '<b>{n}</b> tanesi riskli ama hedefte boş → sorunsuz uygulanır.',
     riskS4: '<b>{n}</b> tanesi düşük riskli → yerinde uygulanır.',
     riskS5: '<b>{n}</b> tanesinin satır sayısı okunamadı → elle kontrol edin.',
-    rLabelDataLoss: 'VERİ KAYBI', rLabelBlock: 'BLOKLANIR', rLabelEmpty: 'boş tablo',
+    rLabelDataLoss: 'VERİ KAYBI', rLabelBlock: 'BLOKLANIR', rLabelCheck: 'KONTROL ET', rLabelEmpty: 'boş tablo',
     rLabelRisky: 'RİSKLİ (satır sayısı okunamadı)', rLabelInPlace: 'yerinde', rLabelSafe: 'güvenli',
     rowsN: '{n} satır', rowsUnknown: '? satır',
     noTriggers: 'Trigger bulunamadı.',
@@ -134,6 +135,7 @@ const I18N = {
     scriptIncluded: '{n} obje script\'e girdi ({sel} seçiliden)',
     scriptIncludedAll: '{n} obje script\'e girdi (TÜMÜ — hiçbir şey seçilmedi)',
     dataLossIncluded: '⚠ VERİ KAYBI adımları (kolon/tablo silme, tip daraltma) DAHİL',
+    blockingWarned: '⚠ {n} dolu tablo bloklanacak — script başındaki uyarı bloğuna bakın',
     stillGated: '{n} adım yine de gated', outOfScopeN: '{n} obje kapsam dışı (sequence/synonym vb.)',
     skippedN: '{n} obje atlandı', downloaded: '{file} indirildi · {parts}',
     copiedN: '{n} satır panoya kopyalandı.',
@@ -644,7 +646,8 @@ function objectRow(change, objKey) {
   const expandable = change.children.length > 0;
   const selected = state.selected === objKey ? ' selected' : '';
 
-  const flag = change.willBlock ? `<span class="flag">${esc(t('flagBlock'))}</span>`
+  const flag = change.willBlock && change.conditionalOnly ? `<span class="flag warn">${esc(t('rLabelCheck'))}</span>`
+    : change.willBlock ? `<span class="flag">${esc(t('flagBlock'))}</span>`
     : change.indeterminate ? `<span class="flag warn">${esc(t('flagIndeterminate'))}</span>` : '';
 
   return `<div class="row-obj${selected}" data-key="${esc(objKey)}"
@@ -803,7 +806,8 @@ function renderRisk() {
       ${unknown.length ? `<div>${t('riskS5', { n: num(unknown.length) })}</div>` : ''}
     </div>` + risks.map((r) => {
       let label = t('rLabelSafe'), tag = '';
-      if (r.willBlock && r.risk === 'DataLoss') { label = t('rLabelDataLoss'); tag = 'danger'; }
+      if (r.willBlock && r.conditionalOnly) { label = t('rLabelCheck'); tag = 'warn'; }
+      else if (r.willBlock && r.risk === 'DataLoss') { label = t('rLabelDataLoss'); tag = 'danger'; }
       else if (r.willBlock) { label = t('rLabelBlock'); tag = 'danger'; }
       else if (r.rows === 0 && rank[r.risk] >= 2) label = t('rLabelEmpty');
       else if (r.rows === null && rank[r.risk] >= 2) { label = t('rLabelRisky'); tag = 'warn'; }
@@ -1106,6 +1110,7 @@ async function downloadScript(selection, reverseSelection = []) {
       : t('scriptIncludedAll', { n: num(data.included) })];
     if (hasRev) parts.push(t('reverseIncluded', { n: num(reverseSelection.length) }));
     parts.push(t('dataLossIncluded'));
+    if (data.blockingCount > 0) parts.push(t('blockingWarned', { n: num(data.blockingCount) }));
     if (dataLoss > 0) parts.push(t('stillGated', { n: num(dataLoss) }));
     if (data.outOfScope > 0) parts.push(t('outOfScopeN', { n: num(data.outOfScope) }));
     if (data.skipped.length > 0) parts.push(t('skippedN', { n: num(data.skipped.length) }));

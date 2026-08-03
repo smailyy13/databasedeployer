@@ -160,14 +160,14 @@ public sealed class CompareService
                 c.Action.ToString(), c.ObjectType, c.Schema, c.Name,
                 [.. c.Children.Select(ch => new ChildChangeDto(
                     ch.Action.ToString(), ch.Category, ch.ItemType, ch.Name, ch.QualifiedName, ch.Detail))],
-                c.Risk.ToString(), c.TargetRowCount, c.WillBlock, c.Indeterminate, c.Note))
+                c.Risk.ToString(), c.TargetRowCount, c.WillBlock, c.ConditionalOnly, c.Indeterminate, c.Note))
             .ToArray();
 
         var risks = DeploymentRiskAnalyzer.Analyze(comparison)
             .Select(r => new TableRiskDto(
-                r.Table.Schema, r.Table.Name, r.Risk.ToString(), r.WillBlock, r.TargetRowCount,
+                r.Table.Schema, r.Table.Name, r.Risk.ToString(), r.WillBlock, r.ConditionalOnly, r.TargetRowCount,
                 [.. r.Findings.OrderByDescending(f => f.Risk)
-                    .Select(f => new RiskFindingDto(f.Column, f.Risk.ToString(), f.Description))]))
+                    .Select(f => new RiskFindingDto(f.Column, f.Risk.ToString(), f.Description, f.Conditional))]))
             .ToArray();
 
         var triggers = comparison.Target.Objects.Values

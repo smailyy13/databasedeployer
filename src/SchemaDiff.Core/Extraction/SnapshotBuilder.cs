@@ -403,6 +403,8 @@ internal static class SnapshotBuilder
             Objects = objects,
             Report = report,
             References = references,
+            IgnoredColumnOrder = options.IgnoreColumnOrder,
+            IgnoredCollation = options.IgnoreCollation,
         };
     }
 

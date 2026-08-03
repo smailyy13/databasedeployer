@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Connections;
+using SchemaDiff.Core.Analysis;
 using SchemaDiff.Core.Connections;
 using SchemaDiff.Core.Diff;
 using SchemaDiff.Core.Model;
@@ -245,6 +246,18 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
     var fwd = Parse(request.Selection);
     var rev = Parse(request.ReverseSelection);
 
+    // Script'e giren her gövdenin (ileri/ters) hedefinde DOLU olup bloklanacak tabloları
+    // en başa uyarı olarak yazar. Deploy'dan önce görülmesi gereken tek şey bu.
+    var warnSegments = new List<(CompareResult, ISet<ObjectKey>?)>();
+    if (request.Reverse)
+        warnSegments.Add((reverseCmp, fwd));
+    else
+    {
+        if (fwd is null && rev is null || fwd is not null) warnSegments.Add((forwardCmp, fwd));
+        if (rev is not null) warnSegments.Add((reverseCmp, rev));
+    }
+    var (blockingCount, warningText) = DeploymentWarning.Build(warnSegments);
+
     // Eski tam-ters davranış (Reverse=true): tüm ileri seçimi ters karşılaştırmadan üret.
     if (request.Reverse)
     {
@@ -271,6 +284,9 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
         }
     }
 
+    // Uyarı bloğu en başa: kullanıcı script'i açar açmaz görsün.
+    if (warningText.Length > 0) sb.Insert(0, warningText);
+
     var tag = request.Reverse ? "reverse" : (rev is not null ? "ileri+reverse" : (fwd is null ? scope ?? "all" : "secili"));
     var fileName = $"{forwardCmp.Target.Database}_{tag}_{DateTime.Now:yyyyMMdd-HHmm}.sql";
 
@@ -285,6 +301,7 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
         hadDependencyCycle = hadCycle,
         selectedCount = (fwd?.Count ?? 0) + (rev?.Count ?? 0),
         reverseCount = rev?.Count ?? 0,
+        blockingCount,
     });
 });
 

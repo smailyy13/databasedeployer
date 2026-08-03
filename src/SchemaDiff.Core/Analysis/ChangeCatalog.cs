@@ -27,6 +27,7 @@ public sealed record ObjectChange(
     DeploymentRisk Risk,
     long? TargetRowCount,
     bool WillBlock,
+    bool ConditionalOnly,
     bool Indeterminate,
     string? Note);
 
@@ -79,6 +80,7 @@ public static class ChangeCatalog
                 risk?.Risk ?? DeploymentRisk.Safe,
                 risk?.TargetRowCount ?? target?.RowCount,
                 risk?.WillBlock ?? false,
+                risk?.ConditionalOnly ?? false,
                 indeterminate,
                 note));
         }

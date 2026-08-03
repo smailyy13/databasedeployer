@@ -32,7 +32,10 @@ internal static class TestFactory
         bool incomparable = false,
         ObjectKey? parent = null,
         bool ansiNulls = true,
-        bool quotedIdentifier = true)
+        bool quotedIdentifier = true,
+        string? indexes = null,
+        string? checks = null,
+        string? foreignKeys = null)
     {
         var snapshot = new ObjectSnapshot
         {
@@ -48,6 +51,12 @@ internal static class TestFactory
             UsesAnsiNulls = ansiNulls,
             UsesQuotedIdentifier = quotedIdentifier,
         };
+
+        // Alt-parça kanonik metinleri: risk analizi constraint'leri buradan okur.
+        if (indexes is not null) snapshot.PartCanonical["indexes"] = indexes;
+        if (checks is not null) snapshot.PartCanonical["checks"] = checks;
+        if (foreignKeys is not null) snapshot.PartCanonical["foreignKeys"] = foreignKeys;
+
         return snapshot;
     }
 
@@ -55,7 +64,9 @@ internal static class TestFactory
         string database,
         IEnumerable<ObjectSnapshot> objects,
         Dictionary<ObjectKey, List<ObjectKey>>? references = null,
-        string server = "TESTSRV")
+        string server = "TESTSRV",
+        bool ignoredColumnOrder = false,
+        bool ignoredCollation = false)
     {
         var dict = new Dictionary<ObjectKey, ObjectSnapshot>(ObjectKeyComparer.CaseInsensitive);
         foreach (var o in objects) dict[o.Key] = o;
@@ -66,6 +77,8 @@ internal static class TestFactory
             Database = database,
             Objects = dict,
             References = references ?? [],
+            IgnoredColumnOrder = ignoredColumnOrder,
+            IgnoredCollation = ignoredCollation,
         };
     }
 

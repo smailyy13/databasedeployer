@@ -139,6 +139,16 @@ public sealed class DatabaseSnapshot
     public ExtractionReport Report { get; set; } = new();
 
     /// <summary>
+    /// Bu snapshot çıkarılırken kolon sırası hash'e girmedi mi (kullanıcı "kolon sırasını
+    /// yok say" dedi mi). Risk analizinin, kullanıcının bilerek yok saydığı bir farkı geri
+    /// gündeme getirmemesi için gerekir.
+    /// </summary>
+    public bool IgnoredColumnOrder { get; init; }
+
+    /// <summary>Bu snapshot çıkarılırken collation hash'e girmedi mi ("collation'ı yok say").</summary>
+    public bool IgnoredCollation { get; init; }
+
+    /// <summary>
     /// Obje → referans verdiği objeler. Script üretiminde yeni objeleri doğru sırada
     /// oluşturmak için kullanılır; karşılaştırmaya girmez.
     /// </summary>
