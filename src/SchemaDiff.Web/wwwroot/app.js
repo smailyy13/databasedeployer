@@ -68,14 +68,22 @@ const I18N = {
     stillGated: '{n} steps still gated', outOfScopeN: '{n} objects out of scope (sequence/synonym etc.)',
     skippedN: '{n} objects skipped', downloaded: '{file} downloaded · {parts}',
     copiedN: '{n} rows copied to clipboard.',
+    optgText: 'Text / normalization', optgColumn: 'Columns & types', optgIndex: 'Indexes',
+    optgObject: 'Objects & constraints', optgScope: 'Scope',
     opt_ignoreWhitespace: 'Ignore whitespace', optn_ignoreWhitespace: 'Indentation and line-break differences are not counted.',
     opt_ignoreComments: 'Ignore comments', optn_ignoreComments: 'An object that only differs in comments is treated as identical.',
     opt_ignoreKeywordCasing: 'Ignore keyword casing', optn_ignoreKeywordCasing: '"select" equals "SELECT"; identifiers and literals are unaffected.',
-    opt_ignoreSemicolons: 'Ignore semicolons', optn_ignoreSemicolons: 'Trailing ";" differences are not counted.',
+    opt_ignoreSemicolons: 'Ignore semicolon between statements', optn_ignoreSemicolons: 'Trailing ";" differences are not counted.',
+    opt_ignoreAnsiNulls: 'Ignore ANSI NULLS', optn_ignoreAnsiNulls: 'SET ANSI_NULLS differences on modules/triggers are not counted.',
+    opt_ignoreQuotedIdentifiers: 'Ignore quoted identifiers', optn_ignoreQuotedIdentifiers: 'SET QUOTED_IDENTIFIER differences are not counted.',
     opt_ignoreColumnOrder: 'Ignore column order', optn_ignoreColumnOrder: 'Columns are matched by name, not by position.',
-    opt_ignoreCollation: 'Ignore collation differences', optn_ignoreCollation: 'When the two servers have different default collations every text column looks changed; this suppresses that noise.',
-    opt_ignoreIdentitySeed: 'Ignore IDENTITY seed/increment', optn_ignoreIdentitySeed: 'Whether the column is an IDENTITY is still compared.',
-    opt_ignoreIndexPhysical: 'Ignore index fill factor / padding', optn_ignoreIndexPhysical: 'Physical storage options are not counted.',
+    opt_ignoreCollation: 'Ignore column collation', optn_ignoreCollation: 'When the two servers have different default collations every text column looks changed; this suppresses that noise.',
+    opt_ignoreIdentitySeed: 'Ignore identity seed', optn_ignoreIdentitySeed: 'IDENTITY seed (start) value is not counted; whether the column is an IDENTITY still is.',
+    opt_ignoreIdentityIncrement: 'Ignore increment', optn_ignoreIdentityIncrement: 'IDENTITY increment (step) value is not counted.',
+    opt_ignoreIndexPhysical: 'Ignore index options', optn_ignoreIndexPhysical: 'All physical storage options (fill factor, padding, ignore_dup_key) are not counted.',
+    opt_ignoreFillFactor: 'Ignore fill factor', optn_ignoreFillFactor: 'Index fill factor differences are not counted.',
+    opt_ignoreIndexPadding: 'Ignore index padding', optn_ignoreIndexPadding: 'Index PAD_INDEX differences are not counted.',
+    opt_ignoreDmlTriggerState: 'Ignore DML trigger state', optn_ignoreDmlTriggerState: 'Whether a DML trigger is enabled/disabled is not counted.',
     opt_ignoreSystemNamedConstraints: 'Ignore system-named constraints', optn_ignoreSystemNamedConstraints: 'Auto names like PK__Tbl__A1B2C3 differ between environments.',
     opt_ignoreExtendedProperties: 'Ignore extended properties', optn_ignoreExtendedProperties: 'Descriptions like MS_Description are not compared. Default: compared (SSDT does too).',
     opt_ignorePermissions: 'Ignore permissions and roles', optn_ignorePermissions: 'User-defined roles, memberships and object/schema permissions are not compared. Default: compared.',
@@ -139,14 +147,22 @@ const I18N = {
     stillGated: '{n} adım yine de gated', outOfScopeN: '{n} obje kapsam dışı (sequence/synonym vb.)',
     skippedN: '{n} obje atlandı', downloaded: '{file} indirildi · {parts}',
     copiedN: '{n} satır panoya kopyalandı.',
+    optgText: 'Metin / normalizasyon', optgColumn: 'Kolon ve tipler', optgIndex: 'Index\'ler',
+    optgObject: 'Nesne ve constraint\'ler', optgScope: 'Kapsam',
     opt_ignoreWhitespace: 'Boşlukları yok say', optn_ignoreWhitespace: 'Girinti ve satır sonu farkları fark sayılmaz.',
     opt_ignoreComments: 'Yorumları yok say', optn_ignoreComments: 'Yalnızca yorumu değişen obje "aynı" sayılır.',
     opt_ignoreKeywordCasing: 'Anahtar kelime büyük/küçük harfini yok say', optn_ignoreKeywordCasing: '"select" ile "SELECT" aynı sayılır; tanımlayıcılar ve literaller etkilenmez.',
-    opt_ignoreSemicolons: 'Noktalı virgülleri yok say', optn_ignoreSemicolons: 'İfade sonundaki ";" farkları fark sayılmaz.',
+    opt_ignoreSemicolons: 'İfadeler arası noktalı virgülü yok say', optn_ignoreSemicolons: 'İfade sonundaki ";" farkları fark sayılmaz.',
+    opt_ignoreAnsiNulls: 'ANSI NULLS\'u yok say', optn_ignoreAnsiNulls: 'Modül/trigger\'larda SET ANSI_NULLS farkı fark sayılmaz.',
+    opt_ignoreQuotedIdentifiers: 'Quoted identifier\'ları yok say', optn_ignoreQuotedIdentifiers: 'SET QUOTED_IDENTIFIER farkı fark sayılmaz.',
     opt_ignoreColumnOrder: 'Kolon sırasını yok say', optn_ignoreColumnOrder: 'Kolonlar tanım sırasına değil ada göre eşleştirilir.',
-    opt_ignoreCollation: 'Collation farklarını yok say', optn_ignoreCollation: 'İki sunucunun varsayılan collation\'ı farklıysa her metin kolonu fark görünür; bu gürültüyü bastırır.',
-    opt_ignoreIdentitySeed: 'IDENTITY seed/increment yok say', optn_ignoreIdentitySeed: 'Kolonun IDENTITY olup olmadığı yine karşılaştırılır.',
-    opt_ignoreIndexPhysical: 'Index fill factor / padding yok say', optn_ignoreIndexPhysical: 'Fiziksel depolama ayarları fark sayılmaz.',
+    opt_ignoreCollation: 'Kolon collation\'ını yok say', optn_ignoreCollation: 'İki sunucunun varsayılan collation\'ı farklıysa her metin kolonu fark görünür; bu gürültüyü bastırır.',
+    opt_ignoreIdentitySeed: 'IDENTITY seed\'ini yok say', optn_ignoreIdentitySeed: 'IDENTITY başlangıç değeri fark sayılmaz; kolonun IDENTITY olup olmadığı yine karşılaştırılır.',
+    opt_ignoreIdentityIncrement: 'IDENTITY increment\'ini yok say', optn_ignoreIdentityIncrement: 'IDENTITY artış (adım) değeri fark sayılmaz.',
+    opt_ignoreIndexPhysical: 'Index seçeneklerini yok say', optn_ignoreIndexPhysical: 'Tüm fiziksel depolama ayarları (fill factor, padding, ignore_dup_key) fark sayılmaz.',
+    opt_ignoreFillFactor: 'Fill factor\'ı yok say', optn_ignoreFillFactor: 'Index fill factor farkı fark sayılmaz.',
+    opt_ignoreIndexPadding: 'Index padding\'ini yok say', optn_ignoreIndexPadding: 'Index PAD_INDEX farkı fark sayılmaz.',
+    opt_ignoreDmlTriggerState: 'DML trigger durumunu yok say', optn_ignoreDmlTriggerState: 'DML trigger\'ın etkin/pasif olması fark sayılmaz.',
     opt_ignoreSystemNamedConstraints: 'Sistem üretimi constraint adlarını yok say', optn_ignoreSystemNamedConstraints: 'PK__Tbl__A1B2C3 gibi otomatik adlar ortamlar arasında farklıdır.',
     opt_ignoreExtendedProperties: 'Extended property\'leri yok say', optn_ignoreExtendedProperties: 'MS_Description gibi açıklamalar karşılaştırılmaz. Varsayılan: karşılaştırılır (SSDT de eder).',
     opt_ignorePermissions: 'İzin ve rolleri yok say', optn_ignorePermissions: 'Kullanıcı tanımlı roller, üyelikler ve obje/şema izinleri karşılaştırılmaz. Varsayılan: karşılaştırılır.',
@@ -259,18 +275,29 @@ const GROUPS = [
   { action: 'Add', label: 'Add', cls: 'add', mark: '+' },
 ];
 
-const OPTION_KEYS = [
-  'ignoreWhitespace', 'ignoreComments', 'ignoreKeywordCasing', 'ignoreSemicolons',
-  'ignoreColumnOrder', 'ignoreCollation', 'ignoreIdentitySeed', 'ignoreIndexPhysical',
-  'ignoreSystemNamedConstraints', 'ignoreExtendedProperties', 'ignorePermissions', 'caseSensitiveNames',
+// SSDT'nin "General" sekmesindeki seçenekleri gruplayarak yansıtır. Yalnızca bu araçta
+// GERÇEKTEN uygulanan seçenekler var — çalışmayan bir kutu göstermek yanıltıcı olur.
+const OPTION_GROUPS = [
+  { group: 'optgText', keys: ['ignoreWhitespace', 'ignoreComments', 'ignoreKeywordCasing',
+                              'ignoreSemicolons', 'ignoreAnsiNulls', 'ignoreQuotedIdentifiers'] },
+  { group: 'optgColumn', keys: ['ignoreColumnOrder', 'ignoreCollation',
+                                'ignoreIdentitySeed', 'ignoreIdentityIncrement'] },
+  { group: 'optgIndex', keys: ['ignoreIndexPhysical', 'ignoreFillFactor', 'ignoreIndexPadding'] },
+  { group: 'optgObject', keys: ['ignoreDmlTriggerState', 'ignoreSystemNamedConstraints'] },
+  { group: 'optgScope', keys: ['ignoreExtendedProperties', 'ignorePermissions', 'caseSensitiveNames'] },
 ];
+
+const OPTION_KEYS = OPTION_GROUPS.flatMap((g) => g.keys);
 
 const DEFAULT_OPTIONS = {
   ignoreWhitespace: true, ignoreComments: true, ignoreKeywordCasing: false,
-  ignoreSemicolons: false, ignoreColumnOrder: false, ignoreCollation: false,
-  ignoreIdentitySeed: false, ignoreIndexPhysical: false,
-  ignoreSystemNamedConstraints: true, ignoreExtendedProperties: false,
-  ignorePermissions: false, caseSensitiveNames: false, maxQueries: 16,
+  ignoreSemicolons: false, ignoreAnsiNulls: true, ignoreQuotedIdentifiers: true,
+  ignoreColumnOrder: false, ignoreCollation: false,
+  ignoreIdentitySeed: false, ignoreIdentityIncrement: false,
+  ignoreIndexPhysical: false, ignoreFillFactor: true, ignoreIndexPadding: false,
+  ignoreDmlTriggerState: false, ignoreSystemNamedConstraints: true,
+  ignoreExtendedProperties: false, ignorePermissions: false, caseSensitiveNames: false,
+  maxQueries: 16,
 };
 
 const state = {
@@ -472,11 +499,13 @@ function renderEndpoints() {
 // ================= seçenekler =================
 
 function renderOptions() {
-  $('optList').innerHTML = OPTION_KEYS.map((key) => `
+  $('optList').innerHTML = OPTION_GROUPS.map((g) => `
+    <div class="opt-group">${esc(t(g.group))}</div>` +
+    g.keys.map((key) => `
     <label>
       <input type="checkbox" data-opt="${key}" ${state.options[key] ? 'checked' : ''}>
       <span class="opt-text"><span>${esc(t('opt_' + key))}</span><span class="opt-note">${esc(t('optn_' + key))}</span></span>
-    </label>`).join('');
+    </label>`).join('')).join('');
 
   for (const box of $('optList').querySelectorAll('[data-opt]'))
     box.addEventListener('change', () => { state.options[box.dataset.opt] = box.checked; });

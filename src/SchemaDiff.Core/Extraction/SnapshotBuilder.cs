@@ -18,8 +18,26 @@ public sealed record SnapshotOptions
     /// </summary>
     public bool IgnoreSystemNamedConstraints { get; init; } = true;
 
-    /// <summary>Index fill factor / padding gibi fiziksel ayarları yok say.</summary>
+    /// <summary>Index fiziksel ayarlarının tümünü (fill factor, padding, ignore_dup_key) yok say.</summary>
     public bool IgnoreIndexPhysicalOptions { get; init; }
+
+    /// <summary>Yalnızca index fill factor'ı yok say (SSDT: "Ignore fill factor").</summary>
+    public bool IgnoreFillFactor { get; init; }
+
+    /// <summary>Yalnızca index padding'i yok say (SSDT: "Ignore index padding").</summary>
+    public bool IgnoreIndexPadding { get; init; }
+
+    /// <summary>SET ANSI_NULLS farkını yok say (SSDT: "Ignore ANSI NULLS").</summary>
+    public bool IgnoreAnsiNulls { get; init; }
+
+    /// <summary>SET QUOTED_IDENTIFIER farkını yok say (SSDT: "Ignore quoted identifiers").</summary>
+    public bool IgnoreQuotedIdentifiers { get; init; }
+
+    /// <summary>IDENTITY increment (artış) değerini yok say (SSDT: "Ignore increment").</summary>
+    public bool IgnoreIdentityIncrement { get; init; }
+
+    /// <summary>DML trigger'ın etkin/pasif durumunu yok say (SSDT: "Ignore DML trigger state").</summary>
+    public bool IgnoreDmlTriggerState { get; init; }
 
     /// <summary>Kolonları tanım sırasına göre değil ada göre karşılaştır.</summary>
     public bool IgnoreColumnOrder { get; init; }
@@ -31,7 +49,8 @@ public sealed record SnapshotOptions
     /// </summary>
     public bool IgnoreCollation { get; init; }
 
-    /// <summary>IDENTITY seed/increment değerlerini yok say (kolonun identity olması yine karşılaştırılır).</summary>
+    /// <summary>IDENTITY seed (başlangıç) değerini yok say. Increment için ayrı seçenek var;
+    /// kolonun identity olup olmadığı her hâlde karşılaştırılır.</summary>
     public bool IgnoreIdentitySeed { get; init; }
 
     public bool CaseSensitiveNames { get; init; }
@@ -273,8 +292,7 @@ internal static class SnapshotBuilder
             {
                 SetPart(snapshot, "body",
                     TSqlNormalizer.Normalize(dt.Definition, dt.UsesQuotedIdentifier, options.Normalization));
-                SetPart(snapshot, "setOptions",
-                    $"ansiNulls={Flag(dt.UsesAnsiNulls)}|quotedIdentifier={Flag(dt.UsesQuotedIdentifier)}");
+                SetPart(snapshot, "setOptions", SetOptions(dt.UsesAnsiNulls, dt.UsesQuotedIdentifier, options));
                 SetPart(snapshot, "attributes", $"disabled={Flag(dt.IsDisabled)}");
                 snapshot.UsesAnsiNulls = dt.UsesAnsiNulls;
                 snapshot.UsesQuotedIdentifier = dt.UsesQuotedIdentifier;
@@ -327,8 +345,10 @@ internal static class SnapshotBuilder
                         snapshot.IsDisabled = trigger.IsDisabled;
                         if (keyById.TryGetValue(obj.ParentObjectId, out var parentKey)) snapshot.Parent = parentKey;
                         var parent = keyById.TryGetValue(obj.ParentObjectId, out var p) ? p.ToString() : $"#{obj.ParentObjectId}";
+                        // "Ignore DML trigger state" açıksa etkin/pasif farkı karşılaştırmaya girmez.
+                        var disabled = options.IgnoreDmlTriggerState ? string.Empty : $"|disabled={Flag(trigger.IsDisabled)}";
                         SetPart(snapshot, "attributes",
-                            $"parent={parent}|disabled={Flag(trigger.IsDisabled)}|insteadOf={Flag(trigger.IsInsteadOf)}");
+                            $"parent={parent}{disabled}|insteadOf={Flag(trigger.IsInsteadOf)}");
                     }
                     break;
 
@@ -410,6 +430,18 @@ internal static class SnapshotBuilder
 
     // --- Parça inşası ---
 
+    /// <summary>
+    /// SET seçenekleri kanoniği. ANSI_NULLS ve QUOTED_IDENTIFIER ayrı ayrı yok sayılabilir;
+    /// ikisi de yok sayılırsa boş string döner (iki tarafta da boş → fark üretmez).
+    /// </summary>
+    private static string SetOptions(bool ansiNulls, bool quotedIdentifier, SnapshotOptions options)
+    {
+        var parts = new List<string>(2);
+        if (!options.IgnoreAnsiNulls) parts.Add($"ansiNulls={Flag(ansiNulls)}");
+        if (!options.IgnoreQuotedIdentifiers) parts.Add($"quotedIdentifier={Flag(quotedIdentifier)}");
+        return string.Join('|', parts);
+    }
+
     private static void ApplyModule(
         ObjectSnapshot snapshot, int objectId,
         Dictionary<int, ModuleRow> modules, ConcurrentDictionary<int, string> bodies,
@@ -433,8 +465,7 @@ internal static class SnapshotBuilder
         snapshot.UsesAnsiNulls = module.UsesAnsiNulls;
         snapshot.UsesQuotedIdentifier = module.UsesQuotedIdentifier;
 
-        SetPart(snapshot, "setOptions",
-            $"ansiNulls={Flag(module.UsesAnsiNulls)}|quotedIdentifier={Flag(module.UsesQuotedIdentifier)}");
+        SetPart(snapshot, "setOptions", SetOptions(module.UsesAnsiNulls, module.UsesQuotedIdentifier, options));
         SetPart(snapshot, "body", bodies.GetValueOrDefault(objectId, string.Empty));
     }
 
@@ -468,8 +499,11 @@ internal static class SnapshotBuilder
 
             if (c.IsIdentity)
             {
-                sb.Append("|identity=");
-                if (!options.IgnoreIdentitySeed) sb.Append(c.IdentitySeed).Append(',').Append(c.IdentityIncrement);
+                // "identity" token'ı her zaman: kolonun identity olup olmadığı daima karşılaştırılır.
+                // seed ve increment ayrı ayrı yok sayılabilir.
+                sb.Append("|identity");
+                if (!options.IgnoreIdentitySeed) sb.Append(";seed=").Append(c.IdentitySeed);
+                if (!options.IgnoreIdentityIncrement) sb.Append(";inc=").Append(c.IdentityIncrement);
             }
             if (c.IsComputed)
                 sb.Append("|computed=").Append(c.ComputedDefinition)
@@ -518,12 +552,13 @@ internal static class SnapshotBuilder
               .Append("|pk=").Append(Flag(index.IsPrimaryKey))
               .Append("|uq=").Append(Flag(index.IsUniqueConstraint));
 
+            // Tümünü kapatan IgnoreIndexPhysicalOptions dışında fill ve padding ayrı ayrı da yok sayılabilir.
+            if (!options.IgnoreIndexPhysicalOptions && !options.IgnoreFillFactor)
+                sb.Append("|fill=").Append(index.FillFactor.ToString(CultureInfo.InvariantCulture));
+            if (!options.IgnoreIndexPhysicalOptions && !options.IgnoreIndexPadding)
+                sb.Append("|padded=").Append(Flag(index.IsPadded));
             if (!options.IgnoreIndexPhysicalOptions)
-            {
-                sb.Append("|fill=").Append(index.FillFactor.ToString(CultureInfo.InvariantCulture))
-                  .Append("|padded=").Append(Flag(index.IsPadded))
-                  .Append("|ignoreDupKey=").Append(Flag(index.IgnoreDupKey));
-            }
+                sb.Append("|ignoreDupKey=").Append(Flag(index.IgnoreDupKey));
 
             if (index.FilterDefinition is not null) sb.Append("|filter=").Append(index.FilterDefinition);
 
