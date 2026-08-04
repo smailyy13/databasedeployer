@@ -51,7 +51,7 @@ const I18N = {
     riskS3: '<b>{n}</b> are risky but empty in target → apply cleanly.',
     riskS4: '<b>{n}</b> are low risk → applied in place.',
     riskS5: '<b>{n}</b> have an unreadable row count → check manually.',
-    rLabelDataLoss: 'DATA LOSS', rLabelBlock: 'WILL BLOCK', rLabelEmpty: 'empty table',
+    rLabelDataLoss: 'DATA LOSS', rLabelBlock: 'WILL BLOCK', rLabelCheck: 'CHECK DATA', rLabelEmpty: 'empty table',
     rLabelRisky: 'RISKY (row count unreadable)', rLabelInPlace: 'in place', rLabelSafe: 'safe',
     rowsN: '{n} rows', rowsUnknown: '? rows',
     noTriggers: 'No triggers found.',
@@ -64,17 +64,29 @@ const I18N = {
     scriptIncluded: '{n} objects written ({sel} of selected)',
     scriptIncludedAll: '{n} objects written (ALL — nothing selected)',
     dataLossIncluded: '⚠ DATA-LOSS steps (drop column/table, narrowing) INCLUDED',
+    blockingWarned: '⚠ {n} full table(s) will block — see the warning header at the top of the script',
     stillGated: '{n} steps still gated', outOfScopeN: '{n} objects out of scope (sequence/synonym etc.)',
     skippedN: '{n} objects skipped', downloaded: '{file} downloaded · {parts}',
     copiedN: '{n} rows copied to clipboard.',
+    optgText: 'Text / normalization', optgColumn: 'Columns & types', optgIndex: 'Indexes',
+    optgObject: 'Objects & constraints', optgScope: 'Scope', optgScript: 'Script / deployment (affects generated SQL)',
+    opt_blockDataLoss: 'Block on possible data loss', optn_blockDataLoss: 'Data-loss steps (drop column/table, narrowing) are left out of the generated script and only reported.',
+    opt_dropNotInSource: 'Drop objects not in source', optn_dropNotInSource: 'Objects, indexes and constraints that exist in target but not in source get DROP statements.',
+    opt_scriptValidateConstraints: 'Script validation for new constraints', optn_scriptValidateConstraints: 'New CHECK/FK use WITH CHECK (validate existing rows). Uncheck for WITH NOCHECK so they can be added to a populated table without validation.',
     opt_ignoreWhitespace: 'Ignore whitespace', optn_ignoreWhitespace: 'Indentation and line-break differences are not counted.',
     opt_ignoreComments: 'Ignore comments', optn_ignoreComments: 'An object that only differs in comments is treated as identical.',
     opt_ignoreKeywordCasing: 'Ignore keyword casing', optn_ignoreKeywordCasing: '"select" equals "SELECT"; identifiers and literals are unaffected.',
-    opt_ignoreSemicolons: 'Ignore semicolons', optn_ignoreSemicolons: 'Trailing ";" differences are not counted.',
+    opt_ignoreSemicolons: 'Ignore semicolon between statements', optn_ignoreSemicolons: 'Trailing ";" differences are not counted.',
+    opt_ignoreAnsiNulls: 'Ignore ANSI NULLS', optn_ignoreAnsiNulls: 'SET ANSI_NULLS differences on modules/triggers are not counted.',
+    opt_ignoreQuotedIdentifiers: 'Ignore quoted identifiers', optn_ignoreQuotedIdentifiers: 'SET QUOTED_IDENTIFIER differences are not counted.',
     opt_ignoreColumnOrder: 'Ignore column order', optn_ignoreColumnOrder: 'Columns are matched by name, not by position.',
-    opt_ignoreCollation: 'Ignore collation differences', optn_ignoreCollation: 'When the two servers have different default collations every text column looks changed; this suppresses that noise.',
-    opt_ignoreIdentitySeed: 'Ignore IDENTITY seed/increment', optn_ignoreIdentitySeed: 'Whether the column is an IDENTITY is still compared.',
-    opt_ignoreIndexPhysical: 'Ignore index fill factor / padding', optn_ignoreIndexPhysical: 'Physical storage options are not counted.',
+    opt_ignoreCollation: 'Ignore column collation', optn_ignoreCollation: 'When the two servers have different default collations every text column looks changed; this suppresses that noise.',
+    opt_ignoreIdentitySeed: 'Ignore identity seed', optn_ignoreIdentitySeed: 'IDENTITY seed (start) value is not counted; whether the column is an IDENTITY still is.',
+    opt_ignoreIdentityIncrement: 'Ignore increment', optn_ignoreIdentityIncrement: 'IDENTITY increment (step) value is not counted.',
+    opt_ignoreIndexPhysical: 'Ignore index options', optn_ignoreIndexPhysical: 'All physical storage options (fill factor, padding, ignore_dup_key) are not counted.',
+    opt_ignoreFillFactor: 'Ignore fill factor', optn_ignoreFillFactor: 'Index fill factor differences are not counted.',
+    opt_ignoreIndexPadding: 'Ignore index padding', optn_ignoreIndexPadding: 'Index PAD_INDEX differences are not counted.',
+    opt_ignoreDmlTriggerState: 'Ignore DML trigger state', optn_ignoreDmlTriggerState: 'Whether a DML trigger is enabled/disabled is not counted.',
     opt_ignoreSystemNamedConstraints: 'Ignore system-named constraints', optn_ignoreSystemNamedConstraints: 'Auto names like PK__Tbl__A1B2C3 differ between environments.',
     opt_ignoreExtendedProperties: 'Ignore extended properties', optn_ignoreExtendedProperties: 'Descriptions like MS_Description are not compared. Default: compared (SSDT does too).',
     opt_ignorePermissions: 'Ignore permissions and roles', optn_ignorePermissions: 'User-defined roles, memberships and object/schema permissions are not compared. Default: compared.',
@@ -121,7 +133,7 @@ const I18N = {
     riskS3: '<b>{n}</b> tanesi riskli ama hedefte boş → sorunsuz uygulanır.',
     riskS4: '<b>{n}</b> tanesi düşük riskli → yerinde uygulanır.',
     riskS5: '<b>{n}</b> tanesinin satır sayısı okunamadı → elle kontrol edin.',
-    rLabelDataLoss: 'VERİ KAYBI', rLabelBlock: 'BLOKLANIR', rLabelEmpty: 'boş tablo',
+    rLabelDataLoss: 'VERİ KAYBI', rLabelBlock: 'BLOKLANIR', rLabelCheck: 'KONTROL ET', rLabelEmpty: 'boş tablo',
     rLabelRisky: 'RİSKLİ (satır sayısı okunamadı)', rLabelInPlace: 'yerinde', rLabelSafe: 'güvenli',
     rowsN: '{n} satır', rowsUnknown: '? satır',
     noTriggers: 'Trigger bulunamadı.',
@@ -134,17 +146,29 @@ const I18N = {
     scriptIncluded: '{n} obje script\'e girdi ({sel} seçiliden)',
     scriptIncludedAll: '{n} obje script\'e girdi (TÜMÜ — hiçbir şey seçilmedi)',
     dataLossIncluded: '⚠ VERİ KAYBI adımları (kolon/tablo silme, tip daraltma) DAHİL',
+    blockingWarned: '⚠ {n} dolu tablo bloklanacak — script başındaki uyarı bloğuna bakın',
     stillGated: '{n} adım yine de gated', outOfScopeN: '{n} obje kapsam dışı (sequence/synonym vb.)',
     skippedN: '{n} obje atlandı', downloaded: '{file} indirildi · {parts}',
     copiedN: '{n} satır panoya kopyalandı.',
+    optgText: 'Metin / normalizasyon', optgColumn: 'Kolon ve tipler', optgIndex: 'Index\'ler',
+    optgObject: 'Nesne ve constraint\'ler', optgScope: 'Kapsam', optgScript: 'Script / dağıtım (üretilen SQL\'e etki eder)',
+    opt_blockDataLoss: 'Olası veri kaybında durdur', optn_blockDataLoss: 'Veri kaybı adımları (kolon/tablo silme, tip daraltma) üretilen script\'e girmez, yalnızca raporlanır.',
+    opt_dropNotInSource: 'Kaynakta olmayan nesneleri sil', optn_dropNotInSource: 'Hedefte olup kaynakta olmayan nesne, index ve constraint\'ler için DROP üretilir.',
+    opt_scriptValidateConstraints: 'Yeni constraint\'leri doğrula', optn_scriptValidateConstraints: 'Yeni CHECK/FK WITH CHECK ile üretilir (mevcut satırları doğrular). Kapatınca WITH NOCHECK — dolu tabloya doğrulamadan eklenebilir.',
     opt_ignoreWhitespace: 'Boşlukları yok say', optn_ignoreWhitespace: 'Girinti ve satır sonu farkları fark sayılmaz.',
     opt_ignoreComments: 'Yorumları yok say', optn_ignoreComments: 'Yalnızca yorumu değişen obje "aynı" sayılır.',
     opt_ignoreKeywordCasing: 'Anahtar kelime büyük/küçük harfini yok say', optn_ignoreKeywordCasing: '"select" ile "SELECT" aynı sayılır; tanımlayıcılar ve literaller etkilenmez.',
-    opt_ignoreSemicolons: 'Noktalı virgülleri yok say', optn_ignoreSemicolons: 'İfade sonundaki ";" farkları fark sayılmaz.',
+    opt_ignoreSemicolons: 'İfadeler arası noktalı virgülü yok say', optn_ignoreSemicolons: 'İfade sonundaki ";" farkları fark sayılmaz.',
+    opt_ignoreAnsiNulls: 'ANSI NULLS\'u yok say', optn_ignoreAnsiNulls: 'Modül/trigger\'larda SET ANSI_NULLS farkı fark sayılmaz.',
+    opt_ignoreQuotedIdentifiers: 'Quoted identifier\'ları yok say', optn_ignoreQuotedIdentifiers: 'SET QUOTED_IDENTIFIER farkı fark sayılmaz.',
     opt_ignoreColumnOrder: 'Kolon sırasını yok say', optn_ignoreColumnOrder: 'Kolonlar tanım sırasına değil ada göre eşleştirilir.',
-    opt_ignoreCollation: 'Collation farklarını yok say', optn_ignoreCollation: 'İki sunucunun varsayılan collation\'ı farklıysa her metin kolonu fark görünür; bu gürültüyü bastırır.',
-    opt_ignoreIdentitySeed: 'IDENTITY seed/increment yok say', optn_ignoreIdentitySeed: 'Kolonun IDENTITY olup olmadığı yine karşılaştırılır.',
-    opt_ignoreIndexPhysical: 'Index fill factor / padding yok say', optn_ignoreIndexPhysical: 'Fiziksel depolama ayarları fark sayılmaz.',
+    opt_ignoreCollation: 'Kolon collation\'ını yok say', optn_ignoreCollation: 'İki sunucunun varsayılan collation\'ı farklıysa her metin kolonu fark görünür; bu gürültüyü bastırır.',
+    opt_ignoreIdentitySeed: 'IDENTITY seed\'ini yok say', optn_ignoreIdentitySeed: 'IDENTITY başlangıç değeri fark sayılmaz; kolonun IDENTITY olup olmadığı yine karşılaştırılır.',
+    opt_ignoreIdentityIncrement: 'IDENTITY increment\'ini yok say', optn_ignoreIdentityIncrement: 'IDENTITY artış (adım) değeri fark sayılmaz.',
+    opt_ignoreIndexPhysical: 'Index seçeneklerini yok say', optn_ignoreIndexPhysical: 'Tüm fiziksel depolama ayarları (fill factor, padding, ignore_dup_key) fark sayılmaz.',
+    opt_ignoreFillFactor: 'Fill factor\'ı yok say', optn_ignoreFillFactor: 'Index fill factor farkı fark sayılmaz.',
+    opt_ignoreIndexPadding: 'Index padding\'ini yok say', optn_ignoreIndexPadding: 'Index PAD_INDEX farkı fark sayılmaz.',
+    opt_ignoreDmlTriggerState: 'DML trigger durumunu yok say', optn_ignoreDmlTriggerState: 'DML trigger\'ın etkin/pasif olması fark sayılmaz.',
     opt_ignoreSystemNamedConstraints: 'Sistem üretimi constraint adlarını yok say', optn_ignoreSystemNamedConstraints: 'PK__Tbl__A1B2C3 gibi otomatik adlar ortamlar arasında farklıdır.',
     opt_ignoreExtendedProperties: 'Extended property\'leri yok say', optn_ignoreExtendedProperties: 'MS_Description gibi açıklamalar karşılaştırılmaz. Varsayılan: karşılaştırılır (SSDT de eder).',
     opt_ignorePermissions: 'İzin ve rolleri yok say', optn_ignorePermissions: 'Kullanıcı tanımlı roller, üyelikler ve obje/şema izinleri karşılaştırılmaz. Varsayılan: karşılaştırılır.',
@@ -257,18 +281,31 @@ const GROUPS = [
   { action: 'Add', label: 'Add', cls: 'add', mark: '+' },
 ];
 
-const OPTION_KEYS = [
-  'ignoreWhitespace', 'ignoreComments', 'ignoreKeywordCasing', 'ignoreSemicolons',
-  'ignoreColumnOrder', 'ignoreCollation', 'ignoreIdentitySeed', 'ignoreIndexPhysical',
-  'ignoreSystemNamedConstraints', 'ignoreExtendedProperties', 'ignorePermissions', 'caseSensitiveNames',
+// SSDT'nin "General" sekmesindeki seçenekleri gruplayarak yansıtır. Yalnızca bu araçta
+// GERÇEKTEN uygulanan seçenekler var — çalışmayan bir kutu göstermek yanıltıcı olur.
+const OPTION_GROUPS = [
+  { group: 'optgText', keys: ['ignoreWhitespace', 'ignoreComments', 'ignoreKeywordCasing',
+                              'ignoreSemicolons', 'ignoreAnsiNulls', 'ignoreQuotedIdentifiers'] },
+  { group: 'optgColumn', keys: ['ignoreColumnOrder', 'ignoreCollation',
+                                'ignoreIdentitySeed', 'ignoreIdentityIncrement'] },
+  { group: 'optgIndex', keys: ['ignoreIndexPhysical', 'ignoreFillFactor', 'ignoreIndexPadding'] },
+  { group: 'optgObject', keys: ['ignoreDmlTriggerState', 'ignoreSystemNamedConstraints'] },
+  { group: 'optgScope', keys: ['ignoreExtendedProperties', 'ignorePermissions', 'caseSensitiveNames'] },
+  { group: 'optgScript', keys: ['blockDataLoss', 'dropNotInSource', 'scriptValidateConstraints'] },
 ];
+
+const OPTION_KEYS = OPTION_GROUPS.flatMap((g) => g.keys);
 
 const DEFAULT_OPTIONS = {
   ignoreWhitespace: true, ignoreComments: true, ignoreKeywordCasing: false,
-  ignoreSemicolons: false, ignoreColumnOrder: false, ignoreCollation: false,
-  ignoreIdentitySeed: false, ignoreIndexPhysical: false,
-  ignoreSystemNamedConstraints: true, ignoreExtendedProperties: false,
-  ignorePermissions: false, caseSensitiveNames: false, maxQueries: 16,
+  ignoreSemicolons: false, ignoreAnsiNulls: true, ignoreQuotedIdentifiers: true,
+  ignoreColumnOrder: false, ignoreCollation: false,
+  ignoreIdentitySeed: false, ignoreIdentityIncrement: false,
+  ignoreIndexPhysical: false, ignoreFillFactor: true, ignoreIndexPadding: false,
+  ignoreDmlTriggerState: false, ignoreSystemNamedConstraints: true,
+  ignoreExtendedProperties: false, ignorePermissions: false, caseSensitiveNames: false,
+  blockDataLoss: true, dropNotInSource: true, scriptValidateConstraints: true,
+  maxQueries: 16,
 };
 
 const state = {
@@ -470,11 +507,13 @@ function renderEndpoints() {
 // ================= seçenekler =================
 
 function renderOptions() {
-  $('optList').innerHTML = OPTION_KEYS.map((key) => `
+  $('optList').innerHTML = OPTION_GROUPS.map((g) => `
+    <div class="opt-group">${esc(t(g.group))}</div>` +
+    g.keys.map((key) => `
     <label>
       <input type="checkbox" data-opt="${key}" ${state.options[key] ? 'checked' : ''}>
       <span class="opt-text"><span>${esc(t('opt_' + key))}</span><span class="opt-note">${esc(t('optn_' + key))}</span></span>
-    </label>`).join('');
+    </label>`).join('')).join('');
 
   for (const box of $('optList').querySelectorAll('[data-opt]'))
     box.addEventListener('change', () => { state.options[box.dataset.opt] = box.checked; });
@@ -644,7 +683,8 @@ function objectRow(change, objKey) {
   const expandable = change.children.length > 0;
   const selected = state.selected === objKey ? ' selected' : '';
 
-  const flag = change.willBlock ? `<span class="flag">${esc(t('flagBlock'))}</span>`
+  const flag = change.willBlock && change.conditionalOnly ? `<span class="flag warn">${esc(t('rLabelCheck'))}</span>`
+    : change.willBlock ? `<span class="flag">${esc(t('flagBlock'))}</span>`
     : change.indeterminate ? `<span class="flag warn">${esc(t('flagIndeterminate'))}</span>` : '';
 
   return `<div class="row-obj${selected}" data-key="${esc(objKey)}"
@@ -803,7 +843,8 @@ function renderRisk() {
       ${unknown.length ? `<div>${t('riskS5', { n: num(unknown.length) })}</div>` : ''}
     </div>` + risks.map((r) => {
       let label = t('rLabelSafe'), tag = '';
-      if (r.willBlock && r.risk === 'DataLoss') { label = t('rLabelDataLoss'); tag = 'danger'; }
+      if (r.willBlock && r.conditionalOnly) { label = t('rLabelCheck'); tag = 'warn'; }
+      else if (r.willBlock && r.risk === 'DataLoss') { label = t('rLabelDataLoss'); tag = 'danger'; }
       else if (r.willBlock) { label = t('rLabelBlock'); tag = 'danger'; }
       else if (r.rows === 0 && rank[r.risk] >= 2) label = t('rLabelEmpty');
       else if (r.rows === null && rank[r.risk] >= 2) { label = t('rLabelRisky'); tag = 'warn'; }
@@ -1085,7 +1126,13 @@ async function downloadScript(selection, reverseSelection = []) {
     const response = await fetch(`/api/runs/${state.runId}/script`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scope: 'all', dataLoss: true, selection, reverseSelection }),
+      body: JSON.stringify({
+        scope: 'all',
+        dataLoss: !state.options.blockDataLoss,
+        dropNotInSource: state.options.dropNotInSource,
+        scriptValidateNewConstraints: state.options.scriptValidateConstraints,
+        selection, reverseSelection,
+      }),
     });
     if (!response.ok) throw new Error(t('scriptFailed'));
     const data = await response.json();
@@ -1105,7 +1152,8 @@ async function downloadScript(selection, reverseSelection = []) {
       ? t('scriptIncluded', { n: num(data.included), sel: num(selection.length) })
       : t('scriptIncludedAll', { n: num(data.included) })];
     if (hasRev) parts.push(t('reverseIncluded', { n: num(reverseSelection.length) }));
-    parts.push(t('dataLossIncluded'));
+    if (!state.options.blockDataLoss) parts.push(t('dataLossIncluded'));
+    if (data.blockingCount > 0) parts.push(t('blockingWarned', { n: num(data.blockingCount) }));
     if (dataLoss > 0) parts.push(t('stillGated', { n: num(dataLoss) }));
     if (data.outOfScope > 0) parts.push(t('outOfScopeN', { n: num(data.outOfScope) }));
     if (data.skipped.length > 0) parts.push(t('skippedN', { n: num(data.skipped.length) }));

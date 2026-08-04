@@ -410,3 +410,6 @@ tr.mismatch { background: var(--chg-bg); }
 .opt-list input { accent-color: var(--accent); }
 .opt-list .opt-text { display: flex; flex-direction: column; }
 .opt-list .opt-note { font-size: 11px; color: var(--ink-3); }
+.opt-list .opt-group { margin: 12px 0 2px; padding: 0 2px; font-size: 11px; font-weight: 700;
+                       text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3); }
+.opt-list .opt-group:first-child { margin-top: 0; }
