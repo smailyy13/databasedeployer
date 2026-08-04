@@ -63,7 +63,9 @@ public sealed record ScriptRequest(
     bool DataLoss = false,
     SelectionItemDto[]? Selection = null,
     bool Reverse = false,
-    SelectionItemDto[]? ReverseSelection = null);
+    SelectionItemDto[]? ReverseSelection = null,
+    bool DropNotInSource = true,
+    bool ScriptValidateNewConstraints = true);
 
 /// <summary>Kullanıcının işaretlediği bir obje. ObjectType arayüzdeki görünen türdür
 /// ("Table", "Scalar Function", "Role", "Schema" …), sunucuda ObjectKind'e çevrilir.</summary>

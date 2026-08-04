@@ -183,7 +183,8 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
         // Kullanıcı tanımlı tipler EN BAŞTA: tablo ve modüller onlara bağlı olabilir.
         if (wantTables || wantModules)
         {
-            var types = TypeScriptGenerator.Generate(comparison, selection, new TypeScriptOptions { GeneratedAt = generatedAt });
+            var types = TypeScriptGenerator.Generate(comparison, selection,
+                new TypeScriptOptions { GeneratedAt = generatedAt, IncludeDrops = request.DropNotInSource });
             if (!types.IsEmpty) { sb.AppendLine(types.Sql); sb.AppendLine(); included += types.Included.Count; }
             skipped.AddRange(types.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
         }
@@ -194,6 +195,8 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
             {
                 GeneratedAt = generatedAt,
                 AllowDataLoss = allowDataLoss,
+                IncludeDrops = request.DropNotInSource,
+                ValidateNewConstraints = request.ScriptValidateNewConstraints,
             });
             sb.AppendLine(table.Sql);
             sb.AppendLine();
@@ -210,6 +213,7 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
             {
                 GeneratedAt = generatedAt,
                 TablesHandledElsewhere = wantTables,
+                IncludeDrops = request.DropNotInSource,
                 HandledElsewhere = new HashSet<ObjectKind>
                 {
                     ObjectKind.Role, ObjectKind.UserDefinedType, ObjectKind.TableType,
@@ -226,7 +230,7 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
 
         if (wantModules)
         {
-            var roles = RoleScriptGenerator.Generate(comparison, selection, new RoleScriptOptions { GeneratedAt = generatedAt });
+            var roles = RoleScriptGenerator.Generate(comparison, selection, new RoleScriptOptions { GeneratedAt = generatedAt, IncludeDrops = request.DropNotInSource });
             if (!roles.IsEmpty) { sb.AppendLine(); sb.AppendLine(roles.Sql); included += roles.Included.Count; }
             skipped.AddRange(roles.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
         }

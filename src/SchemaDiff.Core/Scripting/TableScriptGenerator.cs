@@ -19,6 +19,14 @@ public sealed record TableScriptOptions
     /// <summary>Tümünü tek transaction'a sar.</summary>
     public bool WrapInTransaction { get; init; } = true;
 
+    /// <summary>
+    /// Yeni CHECK/FOREIGN KEY constraint'leri mevcut veriye karşı doğrula (WITH CHECK).
+    /// Kapalıysa WITH NOCHECK üretilir: constraint dolu tabloya eklenebilir ama mevcut
+    /// satırlar doğrulanmaz (constraint "not trusted" olur). SSDT: "Script validation for
+    /// new constraints".
+    /// </summary>
+    public bool ValidateNewConstraints { get; init; } = true;
+
     /// <summary>Başlığa yazılacak zaman damgası. Çağıran verir; üretim deterministik kalsın.</summary>
     public string? GeneratedAt { get; init; }
 
@@ -286,7 +294,7 @@ public static class TableScriptGenerator
         // (kolonu kilitleyen index önce düşmeli), add'ler SONRA.
         var pre = new List<string>();
         var post = new List<string>();
-        AppendIndexConstraintDiff(qualified, source, target, pre, post, fkDrops, fkAdds);
+        AppendIndexConstraintDiff(qualified, source, target, pre, post, fkDrops, fkAdds, options.ValidateNewConstraints);
         AppendDefaultDiff(qualified, sourceByName, targetByName, pre, post);
 
         foreach (var skip in localSkips)
@@ -327,8 +335,12 @@ public static class TableScriptGenerator
     /// </summary>
     private static void AppendIndexConstraintDiff(
         string qualified, ObjectSnapshot source, ObjectSnapshot target,
-        List<string> pre, List<string> post, List<string> fkDrops, List<string> fkAdds)
+        List<string> pre, List<string> post, List<string> fkDrops, List<string> fkAdds,
+        bool validateConstraints)
     {
+        // WITH CHECK: mevcut veri doğrulanır (SSDT varsayılanı). WITH NOCHECK: doğrulama
+        // atlanır — dolu tabloya constraint eklenebilir ama "not trusted" olur.
+        var checkClause = validateConstraints ? "WITH CHECK" : "WITH NOCHECK";
         // NOT: record eşitliği liste üyelerini referansla karşılaştırır, değerle değil —
         // bu yüzden yapısal İMZA üzerinden karşılaştırıyoruz. Aksi hâlde özdeş bir PK bile
         // "değişti" sanılıp gereksiz DROP+ADD üretilir (FK referansı varsa deploy patlar).
@@ -342,7 +354,7 @@ public static class TableScriptGenerator
                 fkDrops.Add($"ALTER TABLE {qualified} DROP CONSTRAINT [{name}];");
         foreach (var (name, fk) in srcFk)
             if (!tgtFk.TryGetValue(name, out var t) || Sig(t) != Sig(fk))
-                fkAdds.Add(AddForeignKey(qualified, fk));
+                fkAdds.Add(AddForeignKey(qualified, fk, checkClause));
 
         // Check constraint'ler.
         var srcChk = ByName(source.CheckDefinitions, c => c.Name);
@@ -353,7 +365,7 @@ public static class TableScriptGenerator
         var chkAdds = new List<string>();
         foreach (var (name, chk) in srcChk)
             if (!tgtChk.TryGetValue(name, out var t) || t.Definition != chk.Definition)
-                chkAdds.Add($"ALTER TABLE {qualified} WITH CHECK ADD CONSTRAINT [{chk.Name}] CHECK {chk.Definition};");
+                chkAdds.Add($"ALTER TABLE {qualified} {checkClause} ADD CONSTRAINT [{chk.Name}] CHECK {chk.Definition};");
 
         // Index'ler (PK/UQ dahil).
         var srcIdx = ByName(source.IndexDefinitions, i => i.Name);
@@ -424,12 +436,12 @@ public static class TableScriptGenerator
         return sb.ToString();
     }
 
-    private static string AddForeignKey(string qualified, ForeignKeyDefinition fk)
+    private static string AddForeignKey(string qualified, ForeignKeyDefinition fk, string checkClause)
     {
         var parent = string.Join(", ", fk.Columns.Select(c => $"[{c.Parent}]"));
         var referenced = string.Join(", ", fk.Columns.Select(c => $"[{c.Referenced}]"));
         var sb = new StringBuilder(
-            $"ALTER TABLE {qualified} WITH CHECK ADD CONSTRAINT [{fk.Name}] FOREIGN KEY ({parent}) " +
+            $"ALTER TABLE {qualified} {checkClause} ADD CONSTRAINT [{fk.Name}] FOREIGN KEY ({parent}) " +
             $"REFERENCES [{fk.ReferencedSchema}].[{fk.ReferencedName}] ({referenced})");
         if (fk.DeleteAction != 0) sb.Append(" ON DELETE ").Append(ReferentialAction(fk.DeleteAction));
         if (fk.UpdateAction != 0) sb.Append(" ON UPDATE ").Append(ReferentialAction(fk.UpdateAction));

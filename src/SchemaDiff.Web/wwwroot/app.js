@@ -69,7 +69,10 @@ const I18N = {
     skippedN: '{n} objects skipped', downloaded: '{file} downloaded · {parts}',
     copiedN: '{n} rows copied to clipboard.',
     optgText: 'Text / normalization', optgColumn: 'Columns & types', optgIndex: 'Indexes',
-    optgObject: 'Objects & constraints', optgScope: 'Scope',
+    optgObject: 'Objects & constraints', optgScope: 'Scope', optgScript: 'Script / deployment (affects generated SQL)',
+    opt_blockDataLoss: 'Block on possible data loss', optn_blockDataLoss: 'Data-loss steps (drop column/table, narrowing) are left out of the generated script and only reported.',
+    opt_dropNotInSource: 'Drop objects not in source', optn_dropNotInSource: 'Objects, indexes and constraints that exist in target but not in source get DROP statements.',
+    opt_scriptValidateConstraints: 'Script validation for new constraints', optn_scriptValidateConstraints: 'New CHECK/FK use WITH CHECK (validate existing rows). Uncheck for WITH NOCHECK so they can be added to a populated table without validation.',
     opt_ignoreWhitespace: 'Ignore whitespace', optn_ignoreWhitespace: 'Indentation and line-break differences are not counted.',
     opt_ignoreComments: 'Ignore comments', optn_ignoreComments: 'An object that only differs in comments is treated as identical.',
     opt_ignoreKeywordCasing: 'Ignore keyword casing', optn_ignoreKeywordCasing: '"select" equals "SELECT"; identifiers and literals are unaffected.',
@@ -148,7 +151,10 @@ const I18N = {
     skippedN: '{n} obje atlandı', downloaded: '{file} indirildi · {parts}',
     copiedN: '{n} satır panoya kopyalandı.',
     optgText: 'Metin / normalizasyon', optgColumn: 'Kolon ve tipler', optgIndex: 'Index\'ler',
-    optgObject: 'Nesne ve constraint\'ler', optgScope: 'Kapsam',
+    optgObject: 'Nesne ve constraint\'ler', optgScope: 'Kapsam', optgScript: 'Script / dağıtım (üretilen SQL\'e etki eder)',
+    opt_blockDataLoss: 'Olası veri kaybında durdur', optn_blockDataLoss: 'Veri kaybı adımları (kolon/tablo silme, tip daraltma) üretilen script\'e girmez, yalnızca raporlanır.',
+    opt_dropNotInSource: 'Kaynakta olmayan nesneleri sil', optn_dropNotInSource: 'Hedefte olup kaynakta olmayan nesne, index ve constraint\'ler için DROP üretilir.',
+    opt_scriptValidateConstraints: 'Yeni constraint\'leri doğrula', optn_scriptValidateConstraints: 'Yeni CHECK/FK WITH CHECK ile üretilir (mevcut satırları doğrular). Kapatınca WITH NOCHECK — dolu tabloya doğrulamadan eklenebilir.',
     opt_ignoreWhitespace: 'Boşlukları yok say', optn_ignoreWhitespace: 'Girinti ve satır sonu farkları fark sayılmaz.',
     opt_ignoreComments: 'Yorumları yok say', optn_ignoreComments: 'Yalnızca yorumu değişen obje "aynı" sayılır.',
     opt_ignoreKeywordCasing: 'Anahtar kelime büyük/küçük harfini yok say', optn_ignoreKeywordCasing: '"select" ile "SELECT" aynı sayılır; tanımlayıcılar ve literaller etkilenmez.',
@@ -285,6 +291,7 @@ const OPTION_GROUPS = [
   { group: 'optgIndex', keys: ['ignoreIndexPhysical', 'ignoreFillFactor', 'ignoreIndexPadding'] },
   { group: 'optgObject', keys: ['ignoreDmlTriggerState', 'ignoreSystemNamedConstraints'] },
   { group: 'optgScope', keys: ['ignoreExtendedProperties', 'ignorePermissions', 'caseSensitiveNames'] },
+  { group: 'optgScript', keys: ['blockDataLoss', 'dropNotInSource', 'scriptValidateConstraints'] },
 ];
 
 const OPTION_KEYS = OPTION_GROUPS.flatMap((g) => g.keys);
@@ -297,6 +304,7 @@ const DEFAULT_OPTIONS = {
   ignoreIndexPhysical: false, ignoreFillFactor: true, ignoreIndexPadding: false,
   ignoreDmlTriggerState: false, ignoreSystemNamedConstraints: true,
   ignoreExtendedProperties: false, ignorePermissions: false, caseSensitiveNames: false,
+  blockDataLoss: true, dropNotInSource: true, scriptValidateConstraints: true,
   maxQueries: 16,
 };
 
@@ -1118,7 +1126,13 @@ async function downloadScript(selection, reverseSelection = []) {
     const response = await fetch(`/api/runs/${state.runId}/script`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scope: 'all', dataLoss: true, selection, reverseSelection }),
+      body: JSON.stringify({
+        scope: 'all',
+        dataLoss: !state.options.blockDataLoss,
+        dropNotInSource: state.options.dropNotInSource,
+        scriptValidateNewConstraints: state.options.scriptValidateConstraints,
+        selection, reverseSelection,
+      }),
     });
     if (!response.ok) throw new Error(t('scriptFailed'));
     const data = await response.json();
@@ -1138,7 +1152,7 @@ async function downloadScript(selection, reverseSelection = []) {
       ? t('scriptIncluded', { n: num(data.included), sel: num(selection.length) })
       : t('scriptIncludedAll', { n: num(data.included) })];
     if (hasRev) parts.push(t('reverseIncluded', { n: num(reverseSelection.length) }));
-    parts.push(t('dataLossIncluded'));
+    if (!state.options.blockDataLoss) parts.push(t('dataLossIncluded'));
     if (data.blockingCount > 0) parts.push(t('blockingWarned', { n: num(data.blockingCount) }));
     if (dataLoss > 0) parts.push(t('stillGated', { n: num(dataLoss) }));
     if (data.outOfScope > 0) parts.push(t('outOfScopeN', { n: num(data.outOfScope) }));
