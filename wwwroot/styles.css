@@ -191,12 +191,14 @@ p { margin: 0; }
 
 /* ---------- tree ---------- */
 .group {
-  display: flex; align-items: center; gap: 9px; padding: 7px 14px;
+  display: grid; grid-template-columns: 148px 1fr 46px 1fr; align-items: center;
+  padding: 7px 14px;
   background: var(--panel-2); border-bottom: 1px solid var(--line);
   position: sticky; top: 0; z-index: 2; cursor: pointer; user-select: none;
 }
 .group:hover { background: var(--panel-3); }
 .group .caret { color: var(--ink-3); width: 10px; }
+.group .gpick { accent-color: var(--accent); cursor: pointer; margin: 0; }
 .group .gname { font-weight: 600; }
 .group.add .gname { color: var(--add); }
 .group.change .gname { color: var(--chg); }
@@ -251,6 +253,14 @@ p { margin: 0; }
 }
 .row-cat:hover { background: var(--panel-3); }
 .row-cat .folder { font-weight: 600; color: var(--ink-2); }
+
+/* Seçim modunda script'e girmeyecek satırlar soluk; tamamen tik-dışı kategori üstü çizili.
+   İşaret kutusu ve ⇄ tam görünür kalır ki geri seçilebilsin. */
+.row-obj.dim, .row-child.dim { opacity: .4; }
+.row-obj.dim:hover, .row-child.dim:hover { opacity: .7; }
+.row-obj.dim .pick, .row-obj.dim .rev, .row-child.dim .pick { opacity: 1; }
+.row-cat.struck { opacity: .55; }
+.row-cat.struck .folder { text-decoration: line-through; }
 .row-cat .catcount { color: var(--ink-3); font-size: 11px; margin-left: 6px; }
 .otype { color: var(--ink-2); font-weight: 500; }
 
@@ -356,6 +366,40 @@ tr.mismatch { background: var(--chg-bg); }
   box-shadow: 0 24px 60px rgba(31, 35, 40, .24);
 }
 .dialog.narrow { width: min(540px, 94vw); }
+.dialog.wide { width: 96vw; max-width: 1600px; height: 92vh; }
+.dialog.wide .dialog-body.single { padding: 0; flex: 1 1 auto; min-height: 0; display: flex; }
+
+/* Renkli + düzenlenebilir SQL editörü: altta boyalı <pre>, üstte şeffaf <textarea>. */
+.code-editor {
+  position: relative; flex: 1 1 auto; width: 100%; min-height: 0; overflow: hidden;
+  font: 12.5px/1.55 ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+  background: var(--panel-2); border-bottom: 1px solid var(--line);
+}
+.code-hl, .code-input {
+  position: absolute; inset: 0; margin: 0; padding: 12px 14px;
+  font: inherit; white-space: pre; tab-size: 4; border: 0;
+}
+.code-hl { pointer-events: none; overflow: hidden; color: var(--ink); }
+.code-input {
+  color: transparent; background: transparent; caret-color: var(--ink);
+  resize: none; outline: none; overflow: auto;
+}
+.code-input::selection { background: rgba(80, 140, 255, .28); }
+.muted.sm { color: var(--ink-3); font-size: 12px; }
+
+/* Şema-farkında otomatik tamamlama (yerel, AI yok) açılır listesi. */
+.ac-popup {
+  position: fixed; z-index: 50; min-width: 170px; max-width: 340px; max-height: 244px; overflow: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(31, 35, 40, .28); padding: 4px;
+  font: 12.5px/1.5 ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+}
+.ac-item {
+  display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 5px;
+  cursor: pointer; white-space: nowrap; color: var(--ink);
+}
+.ac-item.active, .ac-item:hover { background: var(--sel); }
+.ac-item .ac-kind { font-size: 10px; color: var(--ink-3); margin-left: auto; text-transform: uppercase; }
 .dialog-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 18px; border-bottom: 1px solid var(--line);
