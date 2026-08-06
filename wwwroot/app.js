@@ -1244,11 +1244,21 @@ $('scriptBtn').addEventListener('click', () => downloadScript(selectedObjectItem
 
 // ---- üretilen script editörü (renkli + düzenlenebilir + indir + yerel oto-tamamlama) ----
 let scriptFileName = 'script.sql';
+let gutterLines = -1;
 
 function highlightEditor() {
   const ta = $('codeInput'), hl = $('codeHl');
-  hl.innerHTML = highlightLines(ta.value.split('\n')).join('\n');
+  const arr = ta.value.split('\n');
+  hl.innerHTML = highlightLines(arr).join('\n');
   hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft;
+  // Satır numaraları — yalnızca satır sayısı değişince yeniden kur (büyük script'te hızlı).
+  if (arr.length !== gutterLines) {
+    gutterLines = arr.length;
+    let nums = '';
+    for (let i = 1; i <= arr.length; i++) nums += i + '\n';
+    $('codeGutter').textContent = nums;
+  }
+  $('codeGutter').scrollTop = ta.scrollTop;
 }
 
 function openScriptEditor(sql, fileName, info) {
@@ -1353,6 +1363,7 @@ $('codeInput').addEventListener('input', () => { highlightEditor(); updateAutoco
 $('codeInput').addEventListener('scroll', () => {
   $('codeHl').scrollTop = $('codeInput').scrollTop;
   $('codeHl').scrollLeft = $('codeInput').scrollLeft;
+  $('codeGutter').scrollTop = $('codeInput').scrollTop;
   closeAutocomplete();
 });
 $('codeInput').addEventListener('blur', () => setTimeout(closeAutocomplete, 120));
