@@ -369,12 +369,20 @@ tr.mismatch { background: var(--chg-bg); }
 .dialog.wide { width: 96vw; max-width: 1600px; height: 92vh; }
 .dialog.wide .dialog-body.single { padding: 0; flex: 1 1 auto; min-height: 0; display: flex; }
 
-/* Renkli + düzenlenebilir SQL editörü: altta boyalı <pre>, üstte şeffaf <textarea>. */
+/* Renkli + düzenlenebilir SQL editörü: solda satır-no gutter'ı, sağda boyalı <pre> +
+   üstte şeffaf <textarea>. Gutter/pre/textarea aynı font+line-height → satırlar hizalı. */
 .code-editor {
-  position: relative; flex: 1 1 auto; width: 100%; min-height: 0; overflow: hidden;
+  display: flex; flex: 1 1 auto; width: 100%; min-height: 0; overflow: hidden;
   font: 12.5px/1.55 ui-monospace, 'Cascadia Code', 'Consolas', monospace;
   background: var(--panel-2); border-bottom: 1px solid var(--line);
 }
+.code-gutter {
+  flex: 0 0 auto; padding: 12px 8px 12px 12px; margin: 0;
+  font: inherit; white-space: pre; text-align: right; tab-size: 4;
+  color: var(--ink-3); background: var(--panel-3); border-right: 1px solid var(--line);
+  overflow: hidden; user-select: none;
+}
+.code-area { position: relative; flex: 1 1 auto; min-width: 0; }
 .code-hl, .code-input {
   position: absolute; inset: 0; margin: 0; padding: 12px 14px;
   font: inherit; white-space: pre; tab-size: 4; border: 0;
