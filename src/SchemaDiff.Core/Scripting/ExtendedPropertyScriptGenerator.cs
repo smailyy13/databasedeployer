@@ -86,13 +86,9 @@ public static class ExtendedPropertyScriptGenerator
         if (included.Count == 0) return new ExtendedPropertyScriptResult(string.Empty, included, skipped);
 
         var sb = new StringBuilder(body.Length + 512);
-        sb.AppendLine("/*");
-        sb.AppendLine("    SchemaDiff — extended property dağıtım script'i");
-        sb.AppendLine($"    Kaynak : {result.Source.Server} / {result.Source.Database}");
-        sb.AppendLine($"    Hedef  : {result.Target.Server} / {result.Target.Database}");
-        if (generatedAt is not null) sb.AppendLine($"    Üretim : {generatedAt}");
-        sb.AppendLine("    Not: modül ve tablo dilimlerinden SONRA çalışmalı (host objeler var olmalı).");
-        sb.AppendLine("*/");
+        sb.AppendLine("/* ---- 5a) Extended property ----------------------------------------------");
+        sb.AppendLine("   Modül ve tablolardan SONRA çalışır (host objeler var olmalı).");
+        sb.AppendLine("   ------------------------------------------------------------------------ */");
         sb.AppendLine();
         sb.Append(body);
 

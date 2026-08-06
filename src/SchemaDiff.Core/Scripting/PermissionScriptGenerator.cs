@@ -67,13 +67,9 @@ public static class PermissionScriptGenerator
         if (included.Count == 0) return new PermissionScriptResult(string.Empty, included, skipped);
 
         var sb = new StringBuilder(body.Length + 512);
-        sb.AppendLine("/*");
-        sb.AppendLine("    SchemaDiff — izin (GRANT/DENY) dağıtım script'i");
-        sb.AppendLine($"    Kaynak : {result.Source.Server} / {result.Source.Database}");
-        sb.AppendLine($"    Hedef  : {result.Target.Server} / {result.Target.Database}");
-        if (generatedAt is not null) sb.AppendLine($"    Üretim : {generatedAt}");
-        sb.AppendLine("    Not: modül ve tablo dilimlerinden SONRA çalışmalı. Eksik grantee atlanır.");
-        sb.AppendLine("*/");
+        sb.AppendLine("/* ---- 5b) İzinler (GRANT/DENY) -------------------------------------------");
+        sb.AppendLine("   Modül ve tablolardan SONRA çalışır. Eksik grantee atlanır.");
+        sb.AppendLine("   ------------------------------------------------------------------------ */");
         sb.AppendLine();
         sb.Append(body);
 

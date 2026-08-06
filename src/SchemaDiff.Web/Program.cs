@@ -288,8 +288,9 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
         }
     }
 
-    // Uyarı bloğu en başa: kullanıcı script'i açar açmaz görsün.
+    // Uyarı bloğu ve en üste tek master başlık (kaynak/hedef + çalışma sırası).
     if (warningText.Length > 0) sb.Insert(0, warningText);
+    if (sb.Length > 0) sb.Insert(0, DeploymentHeader.Master(forwardCmp, generatedAt, allowDataLoss));
 
     var tag = request.Reverse ? "reverse" : (rev is not null ? "ileri+reverse" : (fwd is null ? scope ?? "all" : "secili"));
     var fileName = $"{forwardCmp.Target.Database}_{tag}_{DateTime.Now:yyyyMMdd-HHmm}.sql";

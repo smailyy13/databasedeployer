@@ -161,7 +161,7 @@ public static class TableScriptGenerator
             sb.AppendLine();
         }
 
-        sb.AppendLine($"PRINT N'Tamamlandı: {included.Count} tablo işlendi.';");
+        sb.AppendLine($"PRINT N'Tamamlandı: {included.Count} tablo uygulandı.';");
         sb.AppendLine("GO");
 
         return new TableScriptResult(sb.ToString(), included, skipped, gated, hadCycle);
@@ -635,26 +635,16 @@ public static class TableScriptGenerator
     private static void WriteHeader(
         StringBuilder sb, CompareResult result, TableScriptOptions options, bool hadCycle)
     {
-        sb.AppendLine("/*");
-        sb.AppendLine("    SchemaDiff — tablo dağıtım script'i");
-        sb.AppendLine();
-        sb.AppendLine($"    Kaynak : {result.Source.Server} / {result.Source.Database}");
-        sb.AppendLine($"    Hedef  : {result.Target.Server} / {result.Target.Database}");
-        if (options.GeneratedAt is not null) sb.AppendLine($"    Üretim : {options.GeneratedAt}");
-        sb.AppendLine();
-        sb.AppendLine("    KAPSAM: yeni tablolar (CREATE), değişen tablolarda kolon ADD/ALTER/DROP COLUMN");
-        sb.AppendLine("    ve index/PK/UNIQUE/CHECK/FK değişiklikleri. Kolon sırası değişimi (tablo");
-        sb.AppendLine("    yeniden oluşturma) ve veri taşıma üretilmez.");
-        sb.AppendLine();
+        sb.AppendLine("/* ---- 2) Tablolar --------------------------------------------------------");
+        sb.AppendLine("   Yeni tablo CREATE · kolon ADD/ALTER/DROP · index & constraint (PK/UNIQUE/");
+        sb.AppendLine("   CHECK/FK). Kolon sırası değişimi (tablo yeniden oluşturma) ve veri taşıma");
+        sb.AppendLine("   üretilmez.");
         sb.AppendLine(options.AllowDataLoss
-            ? "    !! VERİ KAYBI ONAYLANDI — kolon/tablo silme ve tip daraltma script'e DAHİL."
-            : "    Veri kaybı riski taşıyan adımlar script'e ALINMADI; sonda ayrıca listelenir.");
+            ? "   Veri kaybı adımları (kolon/tablo silme, tip daraltma) DAHİL."
+            : "   Veri kaybı adımları ALINMADI; sonda ayrıca listelenir.");
         if (hadCycle)
-        {
-            sb.AppendLine();
-            sb.AppendLine("    !! Yeni tablolar arasında döngüsel referans bulundu; sıralama garanti edilemedi.");
-        }
-        sb.AppendLine("*/");
+            sb.AppendLine("   !! Yeni tablolar arasında döngüsel referans var; sıralama garanti edilemedi.");
+        sb.AppendLine("   ------------------------------------------------------------------------ */");
         sb.AppendLine();
     }
 

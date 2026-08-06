@@ -169,13 +169,10 @@ public static class RoleScriptGenerator
 
     private static void WriteHeader(StringBuilder sb, CompareResult result, RoleScriptOptions options)
     {
-        sb.AppendLine("/*");
-        sb.AppendLine("    SchemaDiff — rol ve üyelik dağıtım script'i");
-        sb.AppendLine($"    Kaynak : {result.Source.Server} / {result.Source.Database}");
-        sb.AppendLine($"    Hedef  : {result.Target.Server} / {result.Target.Database}");
-        if (options.GeneratedAt is not null) sb.AppendLine($"    Üretim : {options.GeneratedAt}");
-        sb.AppendLine("    Veri kaybı riski yoktur. Eksik üyeler (hedefte olmayan principal) atlanır.");
-        sb.AppendLine("*/");
+        sb.AppendLine("/* ---- 4) Roller ve üyelik ------------------------------------------------");
+        sb.AppendLine("   Rol oluşturma / değiştirme / silme ve üyelik. Eksik üyeler (hedefte olmayan");
+        sb.AppendLine("   principal) atlanır.");
+        sb.AppendLine("   ------------------------------------------------------------------------ */");
         sb.AppendLine();
     }
 

@@ -140,13 +140,9 @@ public static class TypeScriptGenerator
 
     private static void WriteHeader(StringBuilder sb, CompareResult result, TypeScriptOptions options)
     {
-        sb.AppendLine("/*");
-        sb.AppendLine("    SchemaDiff — tip / sequence / synonym dağıtım script'i");
-        sb.AppendLine($"    Kaynak : {result.Source.Server} / {result.Source.Database}");
-        sb.AppendLine($"    Hedef  : {result.Target.Server} / {result.Target.Database}");
-        if (options.GeneratedAt is not null) sb.AppendLine($"    Üretim : {options.GeneratedAt}");
-        sb.AppendLine("    Not: tablo ve modül dilimlerinden ÖNCE çalışmalı (bunlar önce var olmalı).");
-        sb.AppendLine("*/");
+        sb.AppendLine("/* ---- 1) Tipler / sequence / synonym / partition -------------------------");
+        sb.AppendLine("   Tablo ve modüllerden ÖNCE çalışır (bunlar bu tiplere bağlı olabilir).");
+        sb.AppendLine("   ------------------------------------------------------------------------ */");
         sb.AppendLine();
     }
 

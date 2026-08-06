@@ -172,6 +172,8 @@ internal static class SnapshotBuilder
             var key = new ObjectKey(schema.Name, schema.Name, ObjectKind.Schema);
             var snapshot = new ObjectSnapshot { Key = key, Hash = UInt128.Zero };
             SetPart(snapshot, "definition", $"schema|{schema.Name}");
+            // Detay panelinde ham "schema|RPT" yerine okunur script göster (tablo gibi).
+            if (options.KeepDisplayScripts) snapshot.DisplayScript = $"CREATE SCHEMA [{schema.Name}];";
             SetPart(snapshot, "extendedProperties", extendedByHost.GetValueOrDefault(key, string.Empty));
             SetPart(snapshot, "permissions", permissionsByHost.GetValueOrDefault(key, string.Empty));
             Finalize(snapshot);

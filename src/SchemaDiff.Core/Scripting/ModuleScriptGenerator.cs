@@ -219,7 +219,7 @@ public static class ModuleScriptGenerator
 
         // SET seçenekleri modülün oluşturulduğu andaki değerleriyle kurulmalı;
         // CREATE/ALTER kendi batch'inin ilk ifadesi olmak zorunda olduğu için ayrı batch.
-        sb.AppendLine($"PRINT N'{(isCreate ? "Oluşturuluyor" : "Güncelleniyor")}: {Describe(key)}';");
+        sb.AppendLine($"PRINT N'{(isCreate ? "Oluşturuluyor" : "Değiştiriliyor")}: {Describe(key)}';");
         sb.AppendLine("GO");
         sb.AppendLine($"SET ANSI_NULLS {OnOff(snapshot.UsesAnsiNulls)};");
         sb.AppendLine($"SET QUOTED_IDENTIFIER {OnOff(snapshot.UsesQuotedIdentifier)};");
@@ -297,21 +297,13 @@ public static class ModuleScriptGenerator
         StringBuilder sb, CompareResult result, ScriptOptions options,
         List<ObjectKey> outOfScope, bool hadCycle)
     {
-        sb.AppendLine("/*");
-        sb.AppendLine("    SchemaDiff — modül dağıtım script'i");
-        sb.AppendLine();
-        sb.AppendLine($"    Kaynak : {result.Source.Server} / {result.Source.Database}");
-        sb.AppendLine($"    Hedef  : {result.Target.Server} / {result.Target.Database}");
-        if (options.GeneratedAt is not null) sb.AppendLine($"    Üretim : {options.GeneratedAt}");
-        sb.AppendLine();
-        sb.AppendLine("    KAPSAM: yalnızca modüller (view, prosedür, fonksiyon, trigger) ve şemalar.");
-        sb.AppendLine("    Bu objelerde veri kaybı riski yoktur.");
-        sb.AppendLine();
+        sb.AppendLine("/* ---- 3) Modüller --------------------------------------------------------");
+        sb.AppendLine("   Şema (CREATE SCHEMA), view, prosedür, fonksiyon, trigger. Veri kaybı yoktur.");
 
         if (outOfScope.Count > 0)
         {
-            sb.AppendLine($"    !! KAPSAM DIŞI {outOfScope.Count} DEĞİŞİKLİK VAR — bu script bunları UYGULAMAZ.");
-            sb.AppendLine("    Tablo, kolon, index ve constraint değişiklikleri ayrıca ele alınmalıdır:");
+            sb.AppendLine($"   !! KAPSAM DIŞI {outOfScope.Count} DEĞİŞİKLİK VAR — bu script bunları UYGULAMAZ.");
+            sb.AppendLine("   Tablo/kolon/index/constraint değişiklikleri ayrıca ele alınmalıdır:");
             sb.AppendLine();
             foreach (var key in outOfScope
                          .OrderBy(k => k.Kind).ThenBy(k => k.Schema, StringComparer.OrdinalIgnoreCase)
@@ -321,13 +313,9 @@ public static class ModuleScriptGenerator
         }
 
         if (hadCycle)
-        {
-            sb.AppendLine("    !! Yeni objeler arasında döngüsel referans bulundu; sıralama tam");
-            sb.AppendLine("       garanti edilemedi. Script hata verirse ilgili objeyi elle uygulayın.");
-            sb.AppendLine();
-        }
-
-        sb.AppendLine("*/");
+            sb.AppendLine("   !! Yeni objeler arasında döngüsel referans var; sıralama tam garanti " +
+                          "edilemedi. Hata verirse ilgili objeyi elle uygulayın.");
+        sb.AppendLine("   ------------------------------------------------------------------------ */");
         sb.AppendLine();
     }
 

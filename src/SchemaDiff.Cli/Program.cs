@@ -275,6 +275,7 @@ static (string Sql, ScriptResult? Module, TableScriptResult? Table, RoleScriptRe
     BuildCombinedScript(CompareResult cmp, string generatedAt, bool wantTables, bool wantModules, bool allowDataLoss)
 {
     var sb = new StringBuilder(16384);
+    sb.Append(DeploymentHeader.Master(cmp, generatedAt, allowDataLoss));
 
     TypeScriptResult? typeScript = null;
     if (wantTables || wantModules)
