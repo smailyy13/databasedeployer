@@ -151,6 +151,14 @@ public class RoleScriptGeneratorTests
     }
 
     [Fact]
+    public void Create_user_guards_against_login_already_mapped()
+    {
+        // Kişisel kopyada login zaten dbo → SID guard'ı Msg 15063'ü önler.
+        var script = Generate(Build(UserCatalog(("KUVEYTTURK\\dcandan", "U", null))), Build(Empty()));
+        Assert.Contains("sid = SUSER_SID(N'KUVEYTTURK\\dcandan')", script.Sql);
+    }
+
+    [Fact]
     public void User_default_schema_change_emits_alter_user()
     {
         var script = Generate(Build(UserCatalog(("Alice", "S", "sales"))), Build(UserCatalog(("Alice", "S", "dbo"))));

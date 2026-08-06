@@ -96,7 +96,11 @@ public static class RoleScriptGenerator
             var login = type == "S" ? " WITHOUT LOGIN" : string.Empty;
             var sch = !schema.Equals("dbo", StringComparison.OrdinalIgnoreCase) ? $" WITH DEFAULT_SCHEMA=[{schema}]" : string.Empty;
             sb.AppendLine($"PRINT N'Kullanıcı oluşturuluyor: {Escape(key.Name)}';");
+            // Ad zaten varsa VEYA login'in SID'i başka bir kullanıcıya eşliyse (ör. hedef,
+            // aynı login'e ait kişisel kopya → login = dbo) atla. Aksi hâlde Msg 15063:
+            // "The login already has an account under a different user name".
             sb.AppendLine($"IF DATABASE_PRINCIPAL_ID(N'{Escape(key.Name)}') IS NULL");
+            sb.AppendLine($"   AND NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE sid = SUSER_SID(N'{Escape(key.Name)}'))");
             sb.AppendLine($"    CREATE USER [{key.Name}]{login}{sch};");
             sb.AppendLine("GO");
             sb.AppendLine();
