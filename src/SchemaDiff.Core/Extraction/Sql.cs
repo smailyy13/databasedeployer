@@ -30,7 +30,13 @@ internal static class Sql
         INNER JOIN sys.schemas AS s ON s.schema_id = o.schema_id
         WHERE o.is_ms_shipped = 0
           AND o.type IN ('U','V','P','FN','IF','TF','TR','SN','SO')
-          AND o.object_id NOT IN (SELECT ht.object_id FROM sys.tables AS ht WHERE ht.temporal_type = 1);
+          AND o.object_id NOT IN (SELECT ht.object_id FROM sys.tables AS ht WHERE ht.temporal_type = 1)
+          -- SSMS "database diagram" destek objeleri (sysdiagrams, fn_diagramobjects, sp_*diagram):
+          -- microsoft_database_tools_support extended property ile işaretli. SSDT gibi biz de atarız.
+          AND NOT EXISTS (
+              SELECT 1 FROM sys.extended_properties AS dtp
+              WHERE dtp.class = 1 AND dtp.major_id = o.object_id AND dtp.minor_id = 0
+                AND dtp.name = N'microsoft_database_tools_support');
         """;
 
     // System-versioned temporal tablolar (temporal_type=2): history tablosu + PERIOD kolonları.
