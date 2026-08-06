@@ -45,11 +45,25 @@ public static class RoleScriptGenerator
         var adds = new List<ObjectKey>();
         var drops = new List<ObjectKey>();
         var changes = new List<ObjectKey>();
+        var userAdds = new List<ObjectKey>();
+        var userDrops = new List<ObjectKey>();
+        var userChanges = new List<ObjectKey>();
 
         foreach (var diff in result.Differences)
         {
-            if (diff.Key.Kind != ObjectKind.Role) continue;
             if (selection is not null && !selection.Contains(diff.Key)) continue;
+
+            if (diff.Key.Kind == ObjectKind.User)
+            {
+                switch (diff.Kind)
+                {
+                    case DiffKind.Added: userAdds.Add(diff.Key); break;
+                    case DiffKind.Removed: userDrops.Add(diff.Key); break;
+                    case DiffKind.Changed: userChanges.Add(diff.Key); break;
+                }
+                continue;
+            }
+            if (diff.Key.Kind != ObjectKind.Role) continue;
 
             switch (diff.Kind)
             {
@@ -59,7 +73,8 @@ public static class RoleScriptGenerator
             }
         }
 
-        if (adds.Count == 0 && drops.Count == 0 && changes.Count == 0)
+        if (adds.Count == 0 && drops.Count == 0 && changes.Count == 0
+            && userAdds.Count == 0 && userDrops.Count == 0 && userChanges.Count == 0)
             return new RoleScriptResult(string.Empty, included, skipped);
 
         var sb = new StringBuilder(4096);
@@ -72,6 +87,31 @@ public static class RoleScriptGenerator
             sb.AppendLine("BEGIN TRANSACTION;");
             sb.AppendLine("GO");
             sb.AppendLine();
+        }
+
+        // Kullanıcılar ÖNCE oluşturulur (rol üyeliğine eklenmeden var olmalılar).
+        foreach (var key in userAdds.OrderBy(k => k.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            var (type, schema) = UserDef(result.Source, key);
+            var login = type == "S" ? " WITHOUT LOGIN" : string.Empty;
+            var sch = !schema.Equals("dbo", StringComparison.OrdinalIgnoreCase) ? $" WITH DEFAULT_SCHEMA=[{schema}]" : string.Empty;
+            sb.AppendLine($"PRINT N'Kullanıcı oluşturuluyor: {Escape(key.Name)}';");
+            sb.AppendLine($"IF DATABASE_PRINCIPAL_ID(N'{Escape(key.Name)}') IS NULL");
+            sb.AppendLine($"    CREATE USER [{key.Name}]{login}{sch};");
+            sb.AppendLine("GO");
+            sb.AppendLine();
+            included.Add(key);
+        }
+
+        foreach (var key in userChanges.OrderBy(k => k.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            var (_, schema) = UserDef(result.Source, key);
+            sb.AppendLine($"PRINT N'Kullanıcı güncelleniyor: {Escape(key.Name)}';");
+            sb.AppendLine($"IF DATABASE_PRINCIPAL_ID(N'{Escape(key.Name)}') IS NOT NULL");
+            sb.AppendLine($"    ALTER USER [{key.Name}] WITH DEFAULT_SCHEMA=[{schema}];");
+            sb.AppendLine("GO");
+            sb.AppendLine();
+            included.Add(key);
         }
 
         foreach (var key in adds.OrderBy(k => k.Name, StringComparer.OrdinalIgnoreCase))
@@ -131,6 +171,25 @@ public static class RoleScriptGenerator
                 skipped.Add(new SkippedObject(key, "DROP kapalı — rol hedefte kalacak"));
         }
 
+        // Kullanıcılar EN SON silinir (önce rol üyeliklerinden çıkarıldılar).
+        if (options.IncludeDrops)
+        {
+            foreach (var key in userDrops.OrderBy(k => k.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                sb.AppendLine($"PRINT N'Kullanıcı siliniyor: {Escape(key.Name)}';");
+                sb.AppendLine($"IF DATABASE_PRINCIPAL_ID(N'{Escape(key.Name)}') IS NOT NULL");
+                sb.AppendLine($"    DROP USER [{key.Name}];");
+                sb.AppendLine("GO");
+                sb.AppendLine();
+                included.Add(key);
+            }
+        }
+        else
+        {
+            foreach (var key in userDrops)
+                skipped.Add(new SkippedObject(key, "DROP kapalı — kullanıcı hedefte kalacak"));
+        }
+
         if (options.WrapInTransaction)
         {
             sb.AppendLine("COMMIT TRANSACTION;");
@@ -138,6 +197,18 @@ public static class RoleScriptGenerator
         }
 
         return new RoleScriptResult(sb.ToString(), included, skipped);
+    }
+
+    /// <summary>Kullanıcının "definition" parçasından tip ve default schema'yı okur.</summary>
+    private static (string Type, string Schema) UserDef(DatabaseSnapshot snapshot, ObjectKey key)
+    {
+        string type = "S", schema = "dbo";
+        if (snapshot.Objects.TryGetValue(key, out var obj)
+            && obj.PartCanonical.TryGetValue("definition", out var canonical))
+            foreach (var field in canonical.Split('|'))
+                if (field.StartsWith("type=", StringComparison.Ordinal)) type = field[5..];
+                else if (field.StartsWith("schema=", StringComparison.Ordinal)) schema = field[7..];
+        return (type, schema);
     }
 
     private static void WriteAddMember(StringBuilder sb, string role, string member)
@@ -169,9 +240,10 @@ public static class RoleScriptGenerator
 
     private static void WriteHeader(StringBuilder sb, CompareResult result, RoleScriptOptions options)
     {
-        sb.AppendLine("/* ---- 4) Roller ve üyelik ------------------------------------------------");
-        sb.AppendLine("   Rol oluşturma / değiştirme / silme ve üyelik. Eksik üyeler (hedefte olmayan");
-        sb.AppendLine("   principal) atlanır.");
+        sb.AppendLine("/* ---- 4) Kullanıcılar, roller ve üyelik ----------------------------------");
+        sb.AppendLine("   CREATE/ALTER/DROP USER; rol oluşturma/silme; üyelik (sabit roller dahil).");
+        sb.AppendLine("   Kullanıcılar önce oluşur, en son silinir. Eksik principal atlanır.");
+        sb.AppendLine("   Login/SID eşlemesi ortama özgü olduğundan karşılaştırılmaz.");
         sb.AppendLine("   ------------------------------------------------------------------------ */");
         sb.AppendLine();
     }

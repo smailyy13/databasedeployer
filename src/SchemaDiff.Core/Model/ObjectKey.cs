@@ -15,6 +15,7 @@ public enum ObjectKind
     Synonym,
     Sequence,
     Role,
+    User,
     UserDefinedType,
     TableType,
     PartitionFunction,
@@ -52,6 +53,7 @@ public readonly record struct ObjectKey(string Schema, string Name, ObjectKind K
     {
         ObjectKind.Schema => $"SCHEMA [{Name}]",
         ObjectKind.Role => $"ROLE [{Name}]",
+        ObjectKind.User => $"USER [{Name}]",
         ObjectKind.PartitionFunction => $"PARTITION FUNCTION [{Name}]",
         ObjectKind.PartitionScheme => $"PARTITION SCHEME [{Name}]",
         ObjectKind.DdlTrigger => $"DDL TRIGGER [{Name}]",

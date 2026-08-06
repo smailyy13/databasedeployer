@@ -50,7 +50,7 @@ public static class CoverageProbe
         ("Güvenlik", "Veritabanı seviyesi izinler", true, "SELECT COUNT(*) FROM sys.database_permissions WHERE class = 0"),
 
         // --- kapsanmayanlar: sayısı > 0 çıkanlar yapılacaklar listesidir ---
-        ("Güvenlik", "Veritabanı kullanıcıları", false, "SELECT COUNT(*) FROM sys.database_principals WHERE principal_id > 4 AND type NOT IN ('R')"),
+        ("Güvenlik", "Veritabanı kullanıcıları", true, "SELECT COUNT(*) FROM sys.database_principals WHERE principal_id > 4 AND type IN ('S','U','G','E','X')"),
         ("Metadata", "Extended property'ler (obje/kolon/şema/db)", true, "SELECT COUNT(*) FROM sys.extended_properties WHERE class IN (0, 1, 3)"),
         ("Metadata", "Extended property'ler (parametre/principal vb.)", false, "SELECT COUNT(*) FROM sys.extended_properties WHERE class NOT IN (0, 1, 3)"),
         ("Tip", "Kullanıcı tanımlı alias tipler", true, "SELECT COUNT(*) FROM sys.types WHERE is_user_defined = 1 AND is_table_type = 0 AND is_assembly_type = 0"),

@@ -520,6 +520,7 @@ public static class ChangeCatalog
         ObjectKind.Synonym => "Synonym",
         ObjectKind.Sequence => "Sequence",
         ObjectKind.Role => "Role",
+        ObjectKind.User => "User",
         ObjectKind.UserDefinedType => "User-Defined Type",
         ObjectKind.TableType => "Table Type",
         ObjectKind.PartitionFunction => "Partition Function",

@@ -32,7 +32,10 @@ internal sealed record PartitionSchemeRow(int SchemeId, string Name, string Func
 
 internal sealed record PartitionSchemeFileRow(int SchemeId, int DestinationId, string Filegroup);
 
-internal sealed record RoleRow(int PrincipalId, string Name, string? Owner);
+internal sealed record RoleRow(int PrincipalId, string Name, string? Owner, bool IsFixed = false);
+
+/// <summary>Veritabanı kullanıcısı. Tip: S=SQL, U=Windows kullanıcı, G=Windows grup, E/X=external.</summary>
+internal sealed record UserRow(string Name, string Type, string? DefaultSchema);
 
 internal sealed record RoleMemberRow(int RolePrincipalId, string? MemberName);
 

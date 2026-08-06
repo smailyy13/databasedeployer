@@ -305,7 +305,7 @@ static (string Sql, ScriptResult? Module, TableScriptResult? Table, RoleScriptRe
             TablesHandledElsewhere = wantTables,
             HandledElsewhere = new HashSet<ObjectKind>
             {
-                ObjectKind.Role, ObjectKind.UserDefinedType, ObjectKind.TableType,
+                ObjectKind.Role, ObjectKind.User, ObjectKind.UserDefinedType, ObjectKind.TableType,
                 ObjectKind.Sequence, ObjectKind.Synonym,
                 ObjectKind.PartitionFunction, ObjectKind.PartitionScheme,
             },

@@ -195,13 +195,26 @@ internal static class SnapshotBuilder
             {
                 var key = new ObjectKey(string.Empty, role.Name, ObjectKind.Role);
                 var snapshot = new ObjectSnapshot { Key = key, Hash = UInt128.Zero };
-                SetPart(snapshot, "owner", $"owner|{role.Owner ?? "-"}");
+                // Sabit rollerde owner değişmez — yalnızca ÜYELİK karşılaştırılır.
+                if (!role.IsFixed) SetPart(snapshot, "owner", $"owner|{role.Owner ?? "-"}");
 
                 var members = membersByRole.GetValueOrDefault(role.PrincipalId) ?? [];
                 members.Sort(StringComparer.OrdinalIgnoreCase);
                 if (members.Count > 0)
                     SetPart(snapshot, "members", string.Join('\n', members.Select(m => $"member|{m}")));
 
+                Finalize(snapshot);
+                objects[key] = snapshot;
+            }
+
+            // Veritabanı kullanıcıları: üst seviye principal'lar. Login/SID ortama özgü olduğu
+            // için karşılaştırmaya girmez; ad (key) + tip + default schema kıyaslanır.
+            foreach (var user in catalog.Users)
+            {
+                var key = new ObjectKey(string.Empty, user.Name, ObjectKind.User);
+                var snapshot = new ObjectSnapshot { Key = key, Hash = UInt128.Zero };
+                SetPart(snapshot, "definition", $"user|type={user.Type}|schema={user.DefaultSchema ?? "dbo"}");
+                if (options.KeepDisplayScripts) snapshot.DisplayScript = UserCreateScript(user);
                 Finalize(snapshot);
                 objects[key] = snapshot;
             }
@@ -965,6 +978,19 @@ internal static class SnapshotBuilder
         if (canonical.Length == 0) return;
         snapshot.PartCanonical[name] = canonical;
         snapshot.Parts[name] = Hash.Of(canonical);
+    }
+
+    /// <summary>
+    /// Kullanıcı için okunur CREATE USER (detay paneli + script). Windows/AD principal'ları
+    /// (U/G/E/X) ad ile eşleşir; SQL kullanıcısı (S) için login eşlemesi ortama özgü olduğundan
+    /// WITHOUT LOGIN üretilir (DBA sonradan login'e bağlar).
+    /// </summary>
+    internal static string UserCreateScript(UserRow user)
+    {
+        var login = user.Type == "S" ? " WITHOUT LOGIN" : string.Empty;
+        var schema = user.DefaultSchema is { Length: > 0 } s && !s.Equals("dbo", StringComparison.OrdinalIgnoreCase)
+            ? $" WITH DEFAULT_SCHEMA=[{s}]" : string.Empty;
+        return $"CREATE USER [{user.Name}]{login}{schema};";
     }
 
     private static void Finalize(ObjectSnapshot snapshot)

@@ -216,7 +216,7 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
                 IncludeDrops = request.DropNotInSource,
                 HandledElsewhere = new HashSet<ObjectKind>
                 {
-                    ObjectKind.Role, ObjectKind.UserDefinedType, ObjectKind.TableType,
+                    ObjectKind.Role, ObjectKind.User, ObjectKind.UserDefinedType, ObjectKind.TableType,
                     ObjectKind.Sequence, ObjectKind.Synonym,
                     ObjectKind.PartitionFunction, ObjectKind.PartitionScheme,
                 },

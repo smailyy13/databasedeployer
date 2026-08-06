@@ -249,17 +249,28 @@ internal static class Sql
 
     // Kullanıcı tanımlı veritabanı rolleri. Sabit roller (db_owner vb.) ve public dışarıda —
     // onlar her veritabanında aynıdır, şema farkı değildir. Owner adıyla (id değil) tutulur.
+    // Kullanıcı tanımlı roller VE sabit (fixed) roller. Sabit rollerin tanımı değişmez ama
+    // ÜYELİKLERİ değişir (ör. db_datareader'a kullanıcı eklenmesi) — SSDT de bunu yakalar.
     public const string Roles = """
-        SELECT dp.principal_id, dp.name, USER_NAME(dp.owning_principal_id)
+        SELECT dp.principal_id, dp.name, USER_NAME(dp.owning_principal_id), dp.is_fixed_role
         FROM sys.database_principals AS dp
-        WHERE dp.type = 'R' AND dp.is_fixed_role = 0 AND dp.principal_id > 4 AND dp.name <> N'public';
+        WHERE dp.type = 'R' AND dp.name <> N'public'
+          AND (dp.is_fixed_role = 1 OR dp.principal_id > 4);
         """;
 
-    // Rol üyelikleri: yalnızca kullanıcı tanımlı rollerinki (builder id ile eşler).
-    // Üye adıyla tutulur — üye bir kullanıcı ya da başka bir rol olabilir.
+    // Rol üyelikleri (kullanıcı tanımlı + sabit). Üye adıyla tutulur — kullanıcı ya da rol.
     public const string RoleMembers = """
         SELECT rm.role_principal_id, USER_NAME(rm.member_principal_id)
         FROM sys.database_role_members AS rm;
+        """;
+
+    // Veritabanı kullanıcıları: SQL (S), Windows kullanıcı (U) / grup (G), external (E/X).
+    // Login/SID eşlemesi ortama özgüdür — karşılaştırmaya girmez; ad + tip + default schema.
+    public const string Users = """
+        SELECT dp.name, dp.type, dp.default_schema_name
+        FROM sys.database_principals AS dp
+        WHERE dp.type IN ('S','U','G','E','X') AND dp.principal_id > 4
+          AND dp.name NOT IN (N'dbo', N'guest', N'INFORMATION_SCHEMA', N'sys');
         """;
 
     // Obje/kolon (class 1) ve şema (class 3) seviyesi izinler. Grantee adıyla (id değil).

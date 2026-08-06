@@ -112,4 +112,69 @@ public class RoleScriptGeneratorTests
         Assert.Contains("CREATE ROLE [Wanted];", script.Sql);
         Assert.DoesNotContain("Ignored", script.Sql);
     }
+
+    // --- kullanıcılar ve sabit-rol üyeliği (SSDT'nin yakaladığı boşluklar) ---
+
+    private static CatalogSet UserCatalog(params (string Name, string Type, string? Schema)[] users) => new()
+    {
+        DatabaseName = "test", ServerName = "TESTSRV",
+        Users = [.. users.Select(u => new UserRow(u.Name, u.Type, u.Schema))],
+    };
+
+    private static CatalogSet FixedRoleCatalog(int roleId, string name, params string[] members) => new()
+    {
+        DatabaseName = "test", ServerName = "TESTSRV",
+        Roles = [new RoleRow(roleId, name, null, IsFixed: true)],
+        RoleMembers = [.. members.Select(m => new RoleMemberRow(roleId, m))],
+    };
+
+    [Fact]
+    public void Added_sql_user_emits_create_user_without_login()
+    {
+        var script = Generate(Build(UserCatalog(("Alice", "S", null))), Build(Empty()));
+        Assert.Contains("CREATE USER [Alice] WITHOUT LOGIN;", script.Sql);
+    }
+
+    [Fact]
+    public void Added_windows_user_has_no_without_login()
+    {
+        var script = Generate(Build(UserCatalog(("KUVEYTTURK\\grp", "G", null))), Build(Empty()));
+        Assert.Contains("CREATE USER [KUVEYTTURK\\grp];", script.Sql);
+        Assert.DoesNotContain("WITHOUT LOGIN", script.Sql);
+    }
+
+    [Fact]
+    public void Removed_user_emits_drop_user()
+    {
+        var script = Generate(Build(Empty()), Build(UserCatalog(("Bob", "S", null))));
+        Assert.Contains("DROP USER [Bob];", script.Sql);
+    }
+
+    [Fact]
+    public void User_default_schema_change_emits_alter_user()
+    {
+        var script = Generate(Build(UserCatalog(("Alice", "S", "sales"))), Build(UserCatalog(("Alice", "S", "dbo"))));
+        Assert.Contains("ALTER USER [Alice] WITH DEFAULT_SCHEMA=[sales];", script.Sql);
+    }
+
+    [Fact]
+    public void Fixed_role_membership_change_is_detected()
+    {
+        // db_datareader (sabit) — hedefte Bob üye, kaynakta değil → üyelikten çıkar.
+        var script = Generate(
+            Build(FixedRoleCatalog(16384, "db_datareader")),
+            Build(FixedRoleCatalog(16384, "db_datareader", "Bob")));
+        Assert.Contains("ALTER ROLE [db_datareader] DROP MEMBER [Bob];", script.Sql);
+    }
+
+    [Fact]
+    public void Create_user_precedes_drop_user_in_output()
+    {
+        // Sıra: yeni kullanıcı önce, silinen en son.
+        var src = Build(UserCatalog(("Alice", "S", null)));
+        var tgt = Build(UserCatalog(("Bob", "S", null)));
+        var sql = Generate(src, tgt).Sql;
+        Assert.True(sql.IndexOf("CREATE USER [Alice]", StringComparison.Ordinal)
+                  < sql.IndexOf("DROP USER [Bob]", StringComparison.Ordinal));
+    }
 }
