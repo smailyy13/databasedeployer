@@ -48,6 +48,7 @@
       <input type="search" id="search" class="input sm" data-i18n-ph="searchPh" placeholder="search schema or object…">
       <span class="picked" id="pickedInfo" hidden></span>
       <button class="btn ghost sm" id="copyPicked" hidden data-i18n="copySelected">Copy selected</button>
+      <button class="btn ghost sm" id="collapseAll" data-i18n-title="collapseAllTip" title="Collapse/expand all sub-sections">⊟</button>
       <div class="grow"></div>
       <div class="viewtabs">
         <button class="vtab active" data-view="tree" data-i18n="tabDiff">Differences</button>
@@ -168,6 +169,29 @@
     <button class="btn primary" id="optOk" data-i18n="ok">OK</button>
   </div>
 </div>
+
+<!-- ---------- Generated script editor ---------- -->
+<div class="scrim" id="scriptScrim" hidden></div>
+<div class="dialog wide" id="scriptDialog" hidden>
+  <div class="dialog-head">
+    <h2 data-i18n="generatedScript">Generated script</h2>
+    <button class="x" id="scriptClose">✕</button>
+  </div>
+  <div class="dialog-body single">
+    <div class="code-editor" id="codeEditor">
+      <pre class="code-hl" id="codeHl" aria-hidden="true"></pre>
+      <textarea class="code-input" id="codeInput" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off"></textarea>
+    </div>
+  </div>
+  <div class="dialog-foot">
+    <span class="muted sm" id="scriptInfo"></span>
+    <div class="grow"></div>
+    <button class="btn ghost" id="scriptCopyBtn" data-i18n="copy">Copy</button>
+    <button class="btn primary" id="scriptDownloadBtn" data-i18n="downloadSql">Download .sql</button>
+  </div>
+</div>
+
+<div class="ac-popup" id="acPopup" hidden></div>
 
 <script src="app.js"></script>
 </body>

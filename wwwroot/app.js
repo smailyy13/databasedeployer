@@ -43,6 +43,11 @@ const I18N = {
     listLimited: 'List limited to {n} records — there are more.',
     flagBlock: 'WILL BLOCK', flagIndeterminate: 'INDETERMINATE',
     pickInfo: '{n} objects selected → Generate Script writes only these · Shift+click for range',
+    pickInfoAll: 'Nothing selected → Generate Script writes ALL changes',
+    collapseAllTip: 'Collapse / expand all sub-sections',
+    generatedScript: 'Generated script', downloadSql: 'Download .sql', copy: 'Copy',
+    scriptReady: 'Script ready — review/edit, then download', scriptCopied: 'Script copied to clipboard',
+    sqlDownloaded: 'Downloaded {file}', selectGroupTip: 'Select / clear all {g}',
     statResult: '{source} → {target} · {objects} objects · {equal} equal · +{add} ~{change} −{delete} · {ms} ms',
     renameWarn: ' · ⚠ {n} possible RENAME (consider sp_rename instead of drop+create)',
     noStructuralRisk: 'No structural change carries risk.',
@@ -125,6 +130,11 @@ const I18N = {
     listLimited: 'Liste {n} kayıtla sınırlandı — daha fazlası var.',
     flagBlock: 'BLOKLANIR', flagIndeterminate: 'BELİRSİZ',
     pickInfo: '{n} obje seçili → Script üret yalnızca bunları yazar · Shift+tık ile aralık seç',
+    pickInfoAll: 'Hiçbiri seçili değil → Script üret TÜMÜNÜ yazar',
+    collapseAllTip: 'Tüm alt bölümleri kapat / aç',
+    generatedScript: 'Üretilen script', downloadSql: '.sql indir', copy: 'Kopyala',
+    scriptReady: 'Script hazır — gözden geçir/düzenle, sonra indir', scriptCopied: 'Script panoya kopyalandı',
+    sqlDownloaded: 'İndirildi: {file}', selectGroupTip: 'Tüm {g} objelerini seç / kaldır',
     statResult: '{source} → {target} · {objects} obje · {equal} aynı · +{add} ~{change} −{delete} · {ms} ms',
     renameWarn: ' · ⚠ {n} olası YENİDEN ADLANDIRMA (drop+create yerine sp_rename düşünün)',
     noStructuralRisk: 'Tablo yapısında risk taşıyan değişiklik yok.',
@@ -197,21 +207,27 @@ function applyTheme() {
 
 // ================= T-SQL renklendirme =================
 
-const SQL_KEYWORDS = new Set(('ADD ALL ALTER AND APPLY AS ASC AFTER BEGIN BETWEEN BY CASCADE CASE CATCH CHECK ' +
-  'CLUSTERED COLLATE COLUMN COMMIT CONSTRAINT CREATE CROSS DECLARE DEFAULT DELETE DESC DISTINCT DROP ELSE END ' +
-  'EXEC EXECUTE EXISTS FILLFACTOR FOR FOREIGN FROM FULL FUNCTION GO GROUP HAVING IDENTITY IF IN INCLUDE INDEX ' +
-  'INNER INSERT INSTEAD INTO IS JOIN KEY LEFT LIKE NO NOCOUNT NONCLUSTERED NOT NULL OF ON OR ORDER OUTER OUTPUT ' +
-  'PERSISTED PRIMARY PRINT PROC PROCEDURE REFERENCES RETURN RETURNS RIGHT ROLLBACK SCHEMA SELECT SEQUENCE SET ' +
-  'SYNONYM TABLE THEN THROW TOP TRAN TRANSACTION TRIGGER TRY UNION UNIQUE UPDATE VALUES VIEW WHEN WHERE WHILE WITH')
-  .split(' '));
+const SQL_KEYWORDS = new Set(('ADD ALL ALTER AND ANY APPLY AS ASC AFTER AUTHORIZATION BEGIN BETWEEN BREAK BY ' +
+  'CASCADE CASE CATCH CHECK CLUSTERED COLLATE COLUMN COMMIT COMPUTED CONSTRAINT CONTINUE CREATE CROSS DATABASE ' +
+  'DECLARE DEFAULT DELETE DENY DESC DISABLE DISTINCT DROP ELSE ENABLE END EXCEPT EXEC EXECUTE EXISTS EXTERNAL ' +
+  'FILEGROUP FILLFACTOR FOR FOREIGN FROM FULL FUNCTION GENERATED GO GRANT GROUP HAVING HIDDEN IDENTITY IF IN ' +
+  'INCLUDE INDEX INNER INSERT INSTEAD INTERSECT INTO IS JOIN KEY LEFT LIKE MASKED MEMBER MERGE NO NOCHECK ' +
+  'NOCOUNT NOEXEC NONCLUSTERED NONE NOT NULL OF OFF ON ONLINE OR ORDER OUTER OUTPUT OVER PARTITION PERIOD ' +
+  'PERSISTED PIVOT PRIMARY PRINT PROC PROCEDURE RANGE REBUILD REFERENCES RESTRICT RETURN RETURNS REVOKE RIGHT ' +
+  'ROLE ROLLBACK ROWGUIDCOL SCHEMA SCHEME SELECT SEQUENCE SET SPARSE SYNONYM SYSTEM_VERSIONING TABLE THEN THROW ' +
+  'TO TOP TRAN TRANSACTION TRIGGER TRY TYPE UNION UNIQUE UNPIVOT UPDATE USE USING VALUES VIEW WHEN WHERE WHILE ' +
+  'WITH ANSI_NULLS ANSI_PADDING ANSI_WARNINGS ARITHABORT CONCAT_NULL_YIELDS_NULL NUMERIC_ROUNDABORT ' +
+  'QUOTED_IDENTIFIER XACT_ABORT PAD_INDEX DATA_COMPRESSION IGNORE_DUP_KEY').split(' '));
 
 const SQL_TYPES = new Set(('BIGINT BINARY BIT CHAR DATE DATETIME DATETIME2 DATETIMEOFFSET DECIMAL FLOAT GEOGRAPHY ' +
-  'GEOMETRY HIERARCHYID IMAGE INT MAX MONEY NCHAR NTEXT NUMERIC NVARCHAR REAL SMALLDATETIME SMALLINT SMALLMONEY ' +
-  'SQL_VARIANT TEXT TIME TINYINT UNIQUEIDENTIFIER VARBINARY VARCHAR XML').split(' '));
+  'GEOMETRY HIERARCHYID IMAGE INT MAX MONEY NCHAR NTEXT NUMERIC NVARCHAR REAL ROWVERSION SMALLDATETIME SMALLINT ' +
+  'SMALLMONEY SQL_VARIANT SYSNAME TEXT TIME TIMESTAMP TINYINT UNIQUEIDENTIFIER VARBINARY VARCHAR XML').split(' '));
 
-const SQL_FUNCTIONS = new Set(('ABS CAST CEILING COALESCE CONCAT CONVERT COUNT DATEADD DATEDIFF FLOOR FORMAT ' +
-  'GETDATE ISNULL LEN LOWER LTRIM NEWID REPLACE ROUND ROW_NUMBER RTRIM SUBSTRING SUM SYSDATETIME SYSUTCDATETIME ' +
-  'TRIM UPPER').split(' '));
+const SQL_FUNCTIONS = new Set(('ABS AVG CAST CEILING CHARINDEX CHECKSUM COALESCE COL_LENGTH CONCAT CONVERT COUNT ' +
+  'DATEADD DATEDIFF DATEPART DAY DB_ID DB_NAME FLOOR FORMAT GETDATE GETUTCDATE HASHBYTES IIF ISNULL LEN LOWER ' +
+  'LTRIM MIN MONTH NEWID NULLIF OBJECT_ID OBJECTPROPERTY PATINDEX REPLACE ROUND ROW_NUMBER RTRIM SCHEMA_ID ' +
+  'SERVERPROPERTY STR STUFF SUBSTRING SUM SUSER_NAME SUSER_SNAME SYSDATETIME SYSUTCDATETIME TRIM TRY_CAST ' +
+  'TRY_CONVERT UPPER USER_NAME YEAR').split(' '));
 
 const tag = (cls, text) => `<span class="t-${cls}">${esc(text)}</span>`;
 
@@ -631,10 +647,17 @@ function renderTree() {
     if (rows.length === 0) continue;
 
     const collapsed = state.collapsed.has(group.action);
+    const allChecked = rows.every((c) => objIncluded(`${c.objectType}|${c.schema}|${c.name}`));
     html += `<div class="group ${group.cls}" data-group="${group.action}">
-      <span class="caret">${collapsed ? '▸' : '▾'}</span>
-      <span class="gname">${group.label}</span>
-      <span class="gcount">${num(rows.length)}</span>
+      <span class="c-type">
+        <span class="caret">${collapsed ? '▸' : '▾'}</span>
+        <span class="gname">${group.label}</span>
+        <span class="gcount">${num(rows.length)}</span>
+      </span>
+      <span></span>
+      <span class="c-mid"><input type="checkbox" class="pick gpick" data-gpick="${group.action}"
+        ${allChecked ? 'checked' : ''} title="${esc(t('selectGroupTip', { g: group.label }))}"></span>
+      <span></span>
     </div>`;
     if (collapsed) continue;
 
@@ -648,8 +671,12 @@ function renderTree() {
         const items = change.children.filter((c) => c.category === category);
         const catKey = `${objKey}›${category}`;
         const catOpen = !state.collapsedCats.has(catKey);
+        // Kategori tamamen tik-dışıysa (obje de tikli değil) üstü çizili göster.
+        const catIn = state.checked.has(objKey) ||
+          items.some((it) => state.checked.has(`${catKey}›${it.name}`));
+        const struck = selectionActive() && !catIn ? ' struck' : '';
 
-        html += `<div class="row-cat" data-cat="${esc(catKey)}">
+        html += `<div class="row-cat${struck}" data-cat="${esc(catKey)}">
           <span class="c-type" style="padding-left:26px">
             <span class="caret">${catOpen ? '▾' : '▸'}</span>
             <span class="folder">${esc(category)}</span>
@@ -665,9 +692,13 @@ function renderTree() {
   if (state.result.truncated)
     html += `<p class="missing">${esc(t('listLimited', { n: num(state.result.changes.length) }))}</p>`;
 
+  // Tik değişiminde tam re-render yapıyoruz (dim/struck güncellensin); scroll'u koru.
+  const wrap = $('treeWrap');
+  const scroll = wrap ? wrap.scrollTop : 0;
   tree.innerHTML = html;
   bindTree(tree);
   renderPickInfo();
+  if (wrap) wrap.scrollTop = scroll;
 }
 
 function orderedCategories(children) {
@@ -677,8 +708,40 @@ function orderedCategories(children) {
   return [...known, ...extra];
 }
 
+// Seçim modu: en az bir tik varsa. Bu modda script'e GİRMEYECEK satırlar soluk gösterilir.
+function selectionActive() { return state.checked.size > 0; }
+
+// Obje script'e girecek mi: kendisi tikli ya da altındaki bir öğe tikli.
+function objIncluded(objKey) {
+  if (state.checked.has(objKey)) return true;
+  for (const k of state.checked) if (k.startsWith(objKey + '›')) return true;
+  return false;
+}
+
+// objKey ('Type|schema|name') → değişiklik objesi.
+function findChange(objKey) {
+  const p = objKey.split('|');
+  const type = p[0], schema = p[1], name = p.slice(2).join('|');
+  return (state.result?.changes ?? []).find((c) => c.objectType === type && c.schema === schema && c.name === name);
+}
+
+// Bir tiki ayarla. Obje-seviyesi tikse (içinde › yok) tüm alt öğelerini de aynı duruma getir.
+function setPick(key, on) {
+  on ? state.checked.add(key) : state.checked.delete(key);
+  if (!key.includes('›')) {
+    for (const ch of findChange(key)?.children ?? []) {
+      const ck = `${key}›${ch.category}›${ch.name}`;
+      on ? state.checked.add(ck) : state.checked.delete(ck);
+    }
+  }
+}
+
 function objectRow(change, objKey) {
-  const full = `${change.schema}.${change.name}`;
+  // Şema objelerinde schema=name (çift yazım olur); şemasız objelerde (rol, db-seviyesi)
+  // schema boştur. İkisinde de yalnızca adı göster.
+  const full = (!change.schema || change.objectType === 'Schema')
+    ? change.name : `${change.schema}.${change.name}`;
+  const dim = selectionActive() && !objIncluded(objKey) ? ' dim' : '';
   const open = state.expanded.has(objKey);
   const expandable = change.children.length > 0;
   const selected = state.selected === objKey ? ' selected' : '';
@@ -687,7 +750,7 @@ function objectRow(change, objKey) {
     : change.willBlock ? `<span class="flag">${esc(t('flagBlock'))}</span>`
     : change.indeterminate ? `<span class="flag warn">${esc(t('flagIndeterminate'))}</span>` : '';
 
-  return `<div class="row-obj${selected}" data-key="${esc(objKey)}"
+  return `<div class="row-obj${selected}${dim}" data-key="${esc(objKey)}"
       data-schema="${esc(change.schema)}" data-name="${esc(change.name)}" data-kind="${esc(change.objectType)}">
     <span class="c-type" style="padding-left:8px">
       <span class="caret" data-toggle="${esc(objKey)}">${expandable ? (open ? '▾' : '▸') : ''}</span>
@@ -707,8 +770,10 @@ function childRow(change, objKey, catKey, item) {
   const pickKey = `${catKey}›${item.name}`;
   const name = item.qualifiedName;
   const detail = item.detail ? `<span class="child-detail">${esc(item.detail)}</span>` : '';
+  // Ne kendisi ne parent obje tikli değilse soluk (obje tikliyse tüm alt öğeleri girer).
+  const dim = selectionActive() && !(state.checked.has(objKey) || state.checked.has(pickKey)) ? ' dim' : '';
 
-  return `<div class="row-child" data-key="${esc(objKey)}"
+  return `<div class="row-child${dim}" data-key="${esc(objKey)}"
       data-schema="${esc(change.schema)}" data-name="${esc(change.name)}" data-kind="${esc(change.objectType)}">
     <span class="c-type" style="padding-left:52px">${esc(item.itemType)}</span>
     <span class="c-name">${item.action === 'Delete' ? '' : esc(name)}</span>
@@ -725,6 +790,16 @@ function bindTree(tree) {
     el.addEventListener('click', () => {
       const action = el.dataset.group;
       state.collapsed.has(action) ? state.collapsed.delete(action) : state.collapsed.add(action);
+      renderTree();
+    });
+
+  // Grup başlığındaki kutu: o gruptaki (görünen) tüm objeleri seç/kaldır.
+  for (const box of tree.querySelectorAll('.gpick'))
+    box.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const on = box.checked;
+      for (const c of visibleChanges())
+        if (c.action === box.dataset.gpick) setPick(`${c.objectType}|${c.schema}|${c.name}`, on);
       renderTree();
     });
 
@@ -751,15 +826,15 @@ function bindTree(tree) {
           const [lo, hi] = from < to ? [from, to] : [to, from];
           for (let i = lo; i <= hi; i++) {
             boxes[i].checked = target;
-            target ? state.checked.add(boxes[i].dataset.pick) : state.checked.delete(boxes[i].dataset.pick);
+            setPick(boxes[i].dataset.pick, target);
           }
         }
       } else {
-        target ? state.checked.add(key) : state.checked.delete(key);
+        setPick(key, target);
       }
 
       state.lastPick = key;
-      renderPickInfo();
+      renderTree();   // dim/struck'ı güncelle (scroll korunur)
     });
 
   // ⇄ toggle: objeyi geri-alma (ters yön) için işaretle/kaldır. İndirmez — sadece işaretler.
@@ -798,9 +873,10 @@ function bindTree(tree) {
 function renderPickInfo() {
   const objectCount = selectedObjectItems().length;
   const count = state.checked.size;
-  $('pickedInfo').hidden = count === 0;
+  // 0 seçili durumunu gizlemek yerine açıkça söyle: boş seçim = TÜMÜ üretilir.
+  $('pickedInfo').hidden = false;
   $('copyPicked').hidden = count === 0;
-  $('pickedInfo').textContent = t('pickInfo', { n: num(objectCount) });
+  $('pickedInfo').textContent = count === 0 ? t('pickInfoAll') : t('pickInfo', { n: num(objectCount) });
 }
 
 function renderCounts() {
@@ -994,11 +1070,17 @@ function alignLines(a, b) {
   const A = a.split('\n'), B = b.split('\n');
   const LIMIT = 2000;
 
+  // Eşleştirme boşluk farklarını yok sayar: tablo CREATE'inde kolon hizalama boşluğu
+  // (en uzun ada göre PadRight) bir kolon eklenince tüm satırlarda kayar; bu, yalnızca
+  // gerçekten değişen satırın işaretlenmesini sağlar. Görüntülenen metin özgün hâlidir.
+  const norm = (s) => (s ?? '').replace(/\s+/g, ' ').trim();
+  const An = A.map(norm), Bn = B.map(norm);
+
   if (A.length > LIMIT || B.length > LIMIT) {
     const rows = [];
     for (let i = 0; i < Math.max(A.length, B.length); i++)
       rows.push({
-        type: A[i] === B[i] ? 'same' : 'diff',
+        type: An[i] === Bn[i] ? 'same' : 'diff',
         left: A[i] ?? null, right: B[i] ?? null,
         leftNo: i < A.length ? i + 1 : '', rightNo: i < B.length ? i + 1 : '',
       });
@@ -1008,12 +1090,12 @@ function alignLines(a, b) {
   const table = Array.from({ length: A.length + 1 }, () => new Uint32Array(B.length + 1));
   for (let i = A.length - 1; i >= 0; i--)
     for (let j = B.length - 1; j >= 0; j--)
-      table[i][j] = A[i] === B[j] ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1]);
+      table[i][j] = An[i] === Bn[j] ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1]);
 
   const ops = [];
   let i = 0, j = 0;
   while (i < A.length && j < B.length) {
-    if (A[i] === B[j]) { ops.push({ t: 'same', a: A[i], b: B[j] }); i++; j++; }
+    if (An[i] === Bn[j]) { ops.push({ t: 'same', a: A[i], b: B[j] }); i++; j++; }
     else if (table[i + 1][j] >= table[i][j + 1]) { ops.push({ t: 'del', a: A[i] }); i++; }
     else { ops.push({ t: 'add', b: B[j] }); j++; }
   }
@@ -1137,16 +1219,7 @@ async function downloadScript(selection, reverseSelection = []) {
     if (!response.ok) throw new Error(t('scriptFailed'));
     const data = await response.json();
 
-    // Tarayıcıdan indir — sunucuya dosya yazmıyoruz. Başa UTF-8 BOM: sqlcmd/SSMS
-    // dosyayı UTF-8 olarak tanısın, PRINT'teki Türkçe karakterler bozulmasın.
-    const url = URL.createObjectURL(new Blob(['﻿' + data.sql], { type: 'application/sql' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = data.fileName;
-    link.click();
-    URL.revokeObjectURL(url);
-
-    // Veri kaybı adımları ŞU AN script'e DAHİL (güvenlik modu kapalı) — açıkça uyar.
+    // Doğrudan indirmek yerine renkli + düzenlenebilir editörde göster; indirme editörde.
     const dataLoss = (data.dataLossActions || []).length;
     const parts = [selection.length > 0
       ? t('scriptIncluded', { n: num(data.included), sel: num(selection.length) })
@@ -1157,7 +1230,9 @@ async function downloadScript(selection, reverseSelection = []) {
     if (dataLoss > 0) parts.push(t('stillGated', { n: num(dataLoss) }));
     if (data.outOfScope > 0) parts.push(t('outOfScopeN', { n: num(data.outOfScope) }));
     if (data.skipped.length > 0) parts.push(t('skippedN', { n: num(data.skipped.length) }));
-    setStatus(t('downloaded', { file: data.fileName, parts: parts.join(' · ') }), 'error');
+
+    openScriptEditor(data.sql, data.fileName, parts.join(' · '));
+    setStatus(t('scriptReady'));
   } catch (error) {
     setStatus(error.message, 'error');
   } finally {
@@ -1166,6 +1241,166 @@ async function downloadScript(selection, reverseSelection = []) {
 }
 
 $('scriptBtn').addEventListener('click', () => downloadScript(selectedObjectItems(), reversedObjectItems()));
+
+// ---- üretilen script editörü (renkli + düzenlenebilir + indir + yerel oto-tamamlama) ----
+let scriptFileName = 'script.sql';
+
+function highlightEditor() {
+  const ta = $('codeInput'), hl = $('codeHl');
+  hl.innerHTML = highlightLines(ta.value.split('\n')).join('\n');
+  hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft;
+}
+
+function openScriptEditor(sql, fileName, info) {
+  scriptFileName = fileName || 'script.sql';
+  $('codeInput').value = sql;
+  $('scriptInfo').textContent = info || '';
+  $('scriptScrim').hidden = false;
+  $('scriptDialog').hidden = false;
+  $('codeInput').scrollTop = 0;
+  scriptVocab = buildVocab();
+  highlightEditor();
+}
+function closeScriptEditor() { closeAutocomplete(); $('scriptScrim').hidden = true; $('scriptDialog').hidden = true; }
+
+// ===== yerel (AI'sız) şema-farkında oto-tamamlama =====
+// Sözlük: T-SQL keyword/tip/fonksiyon + karşılaştırmadaki şema/tablo/kolon/obje adları
+// + script içindeki [köşeli] adlar. Hiçbir veri makineden çıkmaz.
+let scriptVocab = [];
+let ac = { open: false, items: [], index: 0, start: 0, bracket: false };
+
+function buildVocab() {
+  const map = new Map();
+  const add = (w, kind) => { if (w && !map.has(w)) map.set(w, { word: w, kind }); };
+  for (const k of SQL_KEYWORDS) add(k, 'kw');
+  for (const k of SQL_TYPES) add(k, 'type');
+  for (const k of SQL_FUNCTIONS) add(k, 'fn');
+  for (const c of state.result?.changes ?? []) {
+    if (c.schema) add(c.schema, 'schema');
+    if (c.name) add(c.name, c.objectType === 'Table' ? 'table' : 'obj');
+    for (const ch of c.children ?? []) add(ch.name, ch.category === 'Columns' ? 'col' : 'id');
+  }
+  for (const m of ($('codeInput').value || '').matchAll(/\[([^\]\r\n]+)\]/g)) add(m[1], 'id');
+  return [...map.values()];
+}
+
+// İmleçten geriye doğru yazılmakta olan kelimeyi ve köşeli-parantez bağlamını bulur.
+function currentToken() {
+  const ta = $('codeInput'), pos = ta.selectionStart, text = ta.value;
+  let i = pos;
+  while (i > 0 && /[A-Za-z0-9_@#$]/.test(text[i - 1])) i--;
+  return { token: text.slice(i, pos), start: i, bracket: i > 0 && text[i - 1] === '[' };
+}
+
+function updateAutocomplete() {
+  const ta = $('codeInput');
+  if (ta.selectionStart !== ta.selectionEnd) return closeAutocomplete();
+  const { token, start, bracket } = currentToken();
+  if (!bracket && token.length < 2) return closeAutocomplete();   // gürültüyü azalt
+  const q = token.toLowerCase();
+  const items = scriptVocab
+    .filter((v) => v.word.toLowerCase().startsWith(q) && v.word.toLowerCase() !== q)
+    .sort((a, b) => a.word.localeCompare(b.word))
+    .slice(0, 12);
+  if (items.length === 0) return closeAutocomplete();
+  ac = { open: true, items, index: 0, start, bracket };
+  renderAcPopup();
+}
+
+function renderAcPopup() {
+  const pop = $('acPopup');
+  pop.innerHTML = ac.items.map((v, i) =>
+    `<div class="ac-item${i === ac.index ? ' active' : ''}" data-i="${i}">${esc(v.word)}<span class="ac-kind">${v.kind}</span></div>`).join('');
+  const { x, y } = caretCoords($('codeInput'));
+  pop.style.left = Math.min(x, window.innerWidth - 350) + 'px';
+  pop.style.top = (y + 18) + 'px';
+  pop.hidden = false;
+  for (const el of pop.querySelectorAll('.ac-item'))
+    el.addEventListener('mousedown', (e) => { e.preventDefault(); ac.index = +el.dataset.i; acceptAutocomplete(); });
+}
+
+function closeAutocomplete() { ac.open = false; $('acPopup').hidden = true; }
+
+function acceptAutocomplete() {
+  if (!ac.open) return;
+  const ta = $('codeInput'), word = ac.items[ac.index].word, pos = ta.selectionStart;
+  const after = ta.value.slice(pos);
+  const insert = (ac.bracket && after[0] !== ']') ? word + ']' : word;
+  ta.value = ta.value.slice(0, ac.start) + insert + after;
+  ta.selectionStart = ta.selectionEnd = ac.start + word.length + (insert.length - word.length);
+  closeAutocomplete();
+  highlightEditor();
+}
+
+// İmlecin ekran koordinatı: textarea'yı birebir taklit eden gizli div + işaretçi span.
+function caretCoords(ta) {
+  const div = document.createElement('div'), style = getComputedStyle(ta);
+  for (const p of ['boxSizing', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+    'borderWidth', 'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'tabSize'])
+    div.style[p] = style[p];
+  Object.assign(div.style, { position: 'absolute', visibility: 'hidden', whiteSpace: 'pre', top: '0', left: '0' });
+  div.textContent = ta.value.slice(0, ta.selectionStart);
+  const span = document.createElement('span'); span.textContent = '​'; div.appendChild(span);
+  document.body.appendChild(div);
+  const rect = ta.getBoundingClientRect();
+  const x = rect.left + span.offsetLeft - ta.scrollLeft;
+  const y = rect.top + span.offsetTop - ta.scrollTop;
+  document.body.removeChild(div);
+  return { x, y };
+}
+
+$('codeInput').addEventListener('input', () => { highlightEditor(); updateAutocomplete(); });
+$('codeInput').addEventListener('scroll', () => {
+  $('codeHl').scrollTop = $('codeInput').scrollTop;
+  $('codeHl').scrollLeft = $('codeInput').scrollLeft;
+  closeAutocomplete();
+});
+$('codeInput').addEventListener('blur', () => setTimeout(closeAutocomplete, 120));
+$('codeInput').addEventListener('click', closeAutocomplete);
+$('codeInput').addEventListener('keydown', (e) => {
+  // Oto-tamamlama açıkken oklar/Enter/Tab/Esc listeyi yönetir.
+  if (ac.open) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); ac.index = (ac.index + 1) % ac.items.length; renderAcPopup(); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); ac.index = (ac.index - 1 + ac.items.length) % ac.items.length; renderAcPopup(); return; }
+    if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); acceptAutocomplete(); return; }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeAutocomplete(); return; }
+  }
+  // Ctrl+Space: öneriyi elle aç.
+  if (e.key === ' ' && e.ctrlKey) { e.preventDefault(); updateAutocomplete(); return; }
+  // Tab tuşu odağı kaydırmasın; SQL'e sekme eklesin.
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const ta = e.target, s = ta.selectionStart, en = ta.selectionEnd;
+    ta.value = ta.value.slice(0, s) + '\t' + ta.value.slice(en);
+    ta.selectionStart = ta.selectionEnd = s + 1;
+    highlightEditor();
+  }
+});
+$('scriptClose').addEventListener('click', closeScriptEditor);
+$('scriptScrim').addEventListener('click', closeScriptEditor);
+$('scriptDownloadBtn').addEventListener('click', () => {
+  // UTF-8 BOM: sqlcmd/SSMS Türkçe karakterleri doğru okusun.
+  const url = URL.createObjectURL(new Blob(['﻿' + $('codeInput').value], { type: 'application/sql' }));
+  const link = document.createElement('a');
+  link.href = url; link.download = scriptFileName; link.click();
+  URL.revokeObjectURL(url);
+  setStatus(t('sqlDownloaded', { file: scriptFileName }));
+});
+$('scriptCopyBtn').addEventListener('click', async () => {
+  await navigator.clipboard.writeText($('codeInput').value);
+  setStatus(t('scriptCopied'));
+});
+
+// Tümünü kapat/aç: bir şey açıksa tüm alt bölümleri kapat, hepsi kapalıysa görünen objeleri aç.
+$('collapseAll').addEventListener('click', () => {
+  if (state.expanded.size > 0) {
+    state.expanded.clear();
+  } else {
+    for (const c of visibleChanges())
+      if (c.children.length) state.expanded.add(`${c.objectType}|${c.schema}|${c.name}`);
+  }
+  renderTree();
+});
 
 $('copyPicked').addEventListener('click', async () => {
   const list = [...state.checked].map((k) => k.split('|').slice(1).join('.').replaceAll('›', ' → ')).sort();
@@ -1189,6 +1424,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (!$('connDialog').hidden) closeConnect();
   if (!$('optDialog').hidden) closeOptions();
+  if (!$('scriptDialog').hidden) closeScriptEditor();
 });
 
 // Üst/alt panel arasındaki sürüklenebilir ayırıcı.
