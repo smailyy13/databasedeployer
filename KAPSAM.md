@@ -1,6 +1,6 @@
 # KAPSAM — SchemaDiff neyi görür, neyi yazar, neyi görmez
 
-Son güncelleme: 2026-08-12 (Dalga 12 sonrası)
+Son güncelleme: 2026-08-12 (Dalga 13 sonrası)
 
 Bu belge tek soruyu cevaplar: **"Bu araca güvenip deploy edersem neyi kaçırırım?"**
 
@@ -45,6 +45,7 @@ En tehlikeli sonuç "fark yok" demektir; bu yüzden okunamayan her sınıf ayrı
 | Extended property'ler | obje / kolon / şema / **veritabanı** seviyesi |
 | Veritabanı kullanıcıları | `CREATE USER` (login/SID eşlemesi ortama özgü, kıyasa girmez) |
 | Temporal (system-versioned) | `CREATE TABLE` tam üretir; **kapatma** tam ve güvenli |
+| XML schema collection | `CREATE XML SCHEMA COLLECTION` (XSD okunabilirse); namespace'ler her hâlde kıyaslanır |
 | Full-text katalog | `CREATE FULLTEXT CATALOG` — accent sensitivity, `AS DEFAULT` |
 | XML index | `CREATE PRIMARY XML INDEX` / secondary `USING XML INDEX … FOR PATH\|VALUE\|PROPERTY` |
 | Spatial index | `CREATE SPATIAL INDEX … USING …` — `BOUNDING_BOX`, `GRIDS`, `CELLS_PER_OBJECT` |
@@ -66,6 +67,7 @@ Bunlar rapora düşer, script'e girmez. Girmedikleri her seferinde **sebebiyle b
 | Temporal **açma** / history değişimi | PERIOD kolonları + DEFAULT gerektirir; yarım SQL yerine uyarı |
 | View üzerindeki istatistikler | fark görünür; script view'ın kendi drop+create'inden gider |
 | Rol sahibi (owner) değişimi | üretilmiyor |
+| XML schema collection **değişimi** | `ALTER … ADD` yalnız EKLEYEBİLİR, çıkarma yoktur; fark görünür, uygulama elle |
 | Table type **değişimi** | tip ALTER edilemez; fark GÖRÜNÜR, script için bağımlılıkları düşürüp elle drop+recreate gerekir |
 
 ---
@@ -95,11 +97,10 @@ Sayılıyor (sayısı > 0 çıkarsa `--coverage` uyarır) ama görülmüyor ve y
 
 | # | Konu | Neden bu sırada |
 |---|---|---|
-| 1 | XML schema collection | Tipli XML kolonları artık ona başvuruyor; koleksiyonun kendisi hâlâ kapsam dışı |
-| 2 | Full-text stoplist objesi | Index artık stoplist'e ADIYLA başvuruyor; stoplist'in kendisi kapsam dışı |
-| 3 | Table type drop+recreate üretimi | Fark artık görünüyor; bağımlılık (prosedür parametreleri) düşürme sırası gerekir |
-| 4 | Plan guide · DB scoped configuration · legacy `RULE`/`DEFAULT` | Düz `CREATE`/`ALTER`, düşük risk, düşük sıklık |
-| 5 | Parametre / principal seviyesi extended property | Obje/kolon/şema/db kapsandı, kalan uçlar |
+| 1 | Full-text stoplist objesi | Index artık stoplist'e ADIYLA başvuruyor; stoplist'in kendisi kapsam dışı |
+| 2 | Table type drop+recreate üretimi | Fark artık görünüyor; bağımlılık (prosedür parametreleri) düşürme sırası gerekir |
+| 3 | Plan guide · DB scoped configuration · legacy `RULE`/`DEFAULT` | Düz `CREATE`/`ALTER`, düşük risk, düşük sıklık |
+| 4 | Parametre / principal seviyesi extended property | Obje/kolon/şema/db kapsandı, kalan uçlar |
 
 **Bilinçli ertelenen:** fiziksel yerleşim — `ON [filegroup]`, `TEXTIMAGE_ON`,
 `FILESTREAM_ON`, tablo/index'in partition scheme üzerine yerleşimi. Filegroup'ları biz

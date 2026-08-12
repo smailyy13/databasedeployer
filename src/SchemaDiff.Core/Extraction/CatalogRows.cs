@@ -74,6 +74,10 @@ internal sealed record ColumnRow(
 /// <summary>Tipli XML kolonlarının başvurduğu şema koleksiyonu — id'den ada çözüm için.</summary>
 internal sealed record XmlSchemaCollectionRow(int CollectionId, string SchemaName, string Name);
 
+internal sealed record XmlSchemaNamespaceRow(int CollectionId, string Namespace);
+
+internal sealed record XmlSchemaContentRow(int CollectionId, string? Content);
+
 internal sealed record FullTextCatalogRow(
     int CatalogId, string Name, bool AccentSensitive, bool IsDefault);
 

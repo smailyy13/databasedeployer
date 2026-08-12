@@ -32,6 +32,7 @@ public static class ObjectKindLabels
         ObjectKind.PartitionScheme => "Partition Scheme",
         ObjectKind.DdlTrigger => "DDL Trigger",
         ObjectKind.FullTextCatalog => "Full-Text Catalog",
+        ObjectKind.XmlSchemaCollection => "XML Schema Collection",
         ObjectKind.Database => "Database",
         _ => kind.ToString(),
     };

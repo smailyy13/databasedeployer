@@ -167,6 +167,11 @@ public static class ChangeCatalog
                     children.AddRange(CompareLines(key, source, target, part));
                     break;
 
+                case "content":
+                    children.Add(new ChildChange(ChangeAction.Change, "Properties", "Schema Content",
+                        "XSD içeriği", $"{key.Schema}.{key.Name}", "içerik değişti"));
+                    break;
+
                 case "body":
                     children.Add(new ChildChange(ChangeAction.Change, "Properties", "Body", "tanım",
                         $"{key.Schema}.{key.Name}", "Gövde metni değişti"));

@@ -1,12 +1,12 @@
 # DEVAM — Nerede Kaldık (kapsam genişletme çalışması)
 
 > Bu dosya, başka bir makinede kaldığın yerden devam edebilmen için yazıldı.
-> Son güncelleme: 2026-08-12 (Dalga 12 sonrası)
+> Son güncelleme: 2026-08-12 (Dalga 13 sonrası)
 
 ## Hızlı durum
 - **Repo:** `smailyy13/databasedeployer` (GitHub, private) — proje adı **SchemaDiff**
 - **Branch:** `main`
-- **Testler:** **736 (733 yeşil + 3 atlanan entegrasyon)**
+- **Testler:** **763 (760 yeşil + 3 atlanan entegrasyon)**
 - **Son release:** **v1.4** (portable, 4 parça). **v1.5 HENÜZ ÇIKARILMADI** — aşağıya bak.
 - **Gereken SDK:** .NET 10 (`dotnet-install.sh --channel 10.0`; macOS'ta `~/.dotnet`).
 
@@ -18,7 +18,7 @@ git pull                        # en güncel main
 
 # Derle + test
 dotnet build -c Release
-dotnet test  -c Release --no-build      # 733 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
+dotnet test  -c Release --no-build      # 760 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
 
 # Web arayüzünü çalıştır (yerel, sadece 127.0.0.1)
 dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
@@ -46,7 +46,7 @@ dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
    tam ve güvenli (SET OFF + DROP PERIOD); **AÇMA/yeniden kurulum** riskli olduğu için
    (PERIOD kolonu + DEFAULT gerektirir) elle uygulanmak üzere uyarıyla atlanıyor.
 
-## Bu oturumda tamamlananlar (Dalga 4–12)
+## Bu oturumda tamamlananlar (Dalga 4–13)
 
 Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi eklendi.
 
@@ -163,7 +163,19 @@ Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi ekle
     - İkisi de varsayılan KAPALI, yalnız açıkken yazılıyor → mevcut hash'ler ve script'ler
       değişmedi.
 
-14. **Test:** 276 → **736** (733 yeşil + 3 atlanan entegrasyon).
+14. **Dalga 13 — XML schema collection**: yeni obje sınıfı (`ObjectKind.XmlSchemaCollection`),
+    şemalı. Tipli XML kolonları (Dalga 6) buna ADIYLA başvuruyor — hedefte yoksa tablonun
+    CREATE'i patlar, dolayısıyla tespit tek başına değerli.
+    - Tip üretecinde **en önce** (öncelik -2): tipli XML kolonu ona bağlı.
+    - **İki katmanlı karşılaştırma:** namespace listesi (küme tabanlı, her zaman okunur) +
+      XSD içeriği (`XML_SCHEMA_NAMESPACE`, opsiyonel). İçerik okunamazsa ad + namespace
+      karşılaştırması SÜRER, yalnız CREATE üretilemez ve obje ismen "atlandı" listesine düşer.
+      Namespace'i aynı kalıp içeriği değişen koleksiyon ancak içerik katmanıyla yakalanır.
+    - XSD içindeki tek tırnaklar kaçırılıyor; kaçırılmazsa string literal kapanır ve SQL bozulur.
+    - Değişen koleksiyon script'lenmiyor: `ALTER XML SCHEMA COLLECTION` yalnız EKLEYEBİLİR,
+      çıkarma yoktur — fark görünür, uygulama elle.
+
+15. **Test:** 276 → **763** (760 yeşil + 3 atlanan entegrasyon).
    - `StatisticsTests` (33): karşılaştırma, sıra, filtre/NORECOMPUTE/INCREMENTAL,
      drop-önce/create-sonra sıralaması, yeni tablo script'i, okunamayan sorgu davranışı.
    - `CatalogQueryTests` (yeni): TÜM katalog sorgularının yapısal denetimi — en önemlisi
@@ -290,6 +302,14 @@ rm -f publish-portable/*.pdb
 - `src/SchemaDiff.Core/Extraction/SnapshotBuilder.cs` — okunamama koruması + kanonik
 - `src/SchemaDiff.Core/Scripting/{TableScriptWriter,TableScriptGenerator}.cs` — WITH listesi
 - Testler: `IndexExtraOptionTests` (yeni, 13)
+
+## Dalga 13'te değişen dosyalar (XML schema collection)
+- `src/SchemaDiff.Core/Extraction/Sql.cs` — `XmlSchemaNamespaces`, `XmlSchemaCollectionContent`
+- `src/SchemaDiff.Core/Extraction/{CatalogRows,CatalogExtractor}.cs` — satırlar + opsiyonel sorgular
+- `src/SchemaDiff.Core/Model/{ObjectKey,ObjectKindLabels}.cs` — yeni tür + etiketi
+- `src/SchemaDiff.Core/Extraction/SnapshotBuilder.cs` — koleksiyon objeleri (namespace + content)
+- `src/SchemaDiff.Core/Scripting/TypeScriptGenerator.cs` — CREATE/DROP/exists, öncelik -2
+- Testler: `XmlSchemaCollectionTests` (yeni, 16)
 
 ## Dalga 1–3'te değişen ana dosyalar (referans)
 - `src/SchemaDiff.Core/Analysis/CoverageProbe.cs` — sayaçlar (Probes internal)

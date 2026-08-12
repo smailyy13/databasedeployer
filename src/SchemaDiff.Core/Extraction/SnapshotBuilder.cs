@@ -384,6 +384,40 @@ internal static class SnapshotBuilder
             objects[key] = snapshot;
         }
 
+        // XML schema collection'lar: şemalı objeler. Tipli XML kolonları bunlara ADIYLA
+        // başvurur — hedefte yoksa tablonun CREATE'i patlar, bu yüzden tespit tek başına değerli.
+        var namespacesByCollection = GroupBy(catalog.XmlSchemaNamespaces, n => n.CollectionId);
+        var contentByCollection = catalog.XmlSchemaContents
+            .Where(c => c.Content is not null)
+            .ToDictionary(c => c.CollectionId, c => c.Content!);
+
+        foreach (var xsc in catalog.XmlSchemaCollections)
+        {
+            // sys şemasındaki yerleşik koleksiyon kullanıcı objesi değil.
+            if (xsc.SchemaName is "sys") continue;
+
+            var key = new ObjectKey(xsc.SchemaName, xsc.Name, ObjectKind.XmlSchemaCollection);
+            var snapshot = new ObjectSnapshot { Key = key, Hash = UInt128.Zero };
+
+            var namespaces = (namespacesByCollection.GetValueOrDefault(xsc.CollectionId) ?? [])
+                .Select(n => n.Namespace).Order(StringComparer.Ordinal).ToList();
+            SetPart(snapshot, "definition", $"xmlschema|namespaces={string.Join(',', namespaces)}");
+
+            // İçerik (XSD) okunabildiyse karşılaştırmaya girer: namespace listesi aynı kalıp
+            // içeriği değişen koleksiyon ancak böyle yakalanır.
+            if (contentByCollection.TryGetValue(xsc.CollectionId, out var content))
+            {
+                SetPart(snapshot, "content", content);
+                if (options.KeepDisplayScripts)
+                    snapshot.DisplayScript =
+                        $"CREATE XML SCHEMA COLLECTION [{xsc.SchemaName}].[{xsc.Name}] AS " +
+                        $"N'{content.Replace("'", "''")}';";
+            }
+
+            Finalize(snapshot);
+            objects[key] = snapshot;
+        }
+
         // Full-text kataloglar: veritabanı seviyesi, şemasız objeler (partition function gibi).
         foreach (var ftc in catalog.FullTextCatalogs)
         {

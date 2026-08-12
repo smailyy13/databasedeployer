@@ -22,6 +22,7 @@ public enum ObjectKind
     PartitionScheme,
     DdlTrigger,
     FullTextCatalog,
+    XmlSchemaCollection,
     Database,
 }
 

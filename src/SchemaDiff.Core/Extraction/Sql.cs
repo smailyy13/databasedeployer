@@ -80,6 +80,23 @@ internal static class Sql
             ON ic.object_id = c.object_id AND ic.column_id = c.column_id;
         """;
 
+    // Koleksiyonun içerdiği namespace'ler: içeriğin (XSD) okunamadığı durumda bile
+    // "koleksiyon değişti mi?" sorusuna küme tabanlı bir cevap verir.
+    public const string XmlSchemaNamespaces = """
+        SELECT xsn.xml_collection_id, xsn.name
+        FROM sys.xml_schema_namespaces AS xsn;
+        """;
+
+    // Koleksiyonun XSD içeriği. XML_SCHEMA_NAMESPACE tek yoldur; kolon argümanıyla
+    // çalışmazsa sorgu düşer ve içerik olmadan devam ederiz (ad + namespace karşılaştırması
+    // sürer, yalnız CREATE script'i üretilemez ve bu ismen bildirilir).
+    public const string XmlSchemaCollectionContent = """
+        SELECT xsc.xml_collection_id,
+               CONVERT(nvarchar(max), XML_SCHEMA_NAMESPACE(SCHEMA_NAME(xsc.schema_id), xsc.name))
+        FROM sys.xml_schema_collections AS xsc
+        WHERE xsc.schema_id <> 4;
+        """;
+
     // Tipli XML kolonlarının (xml(CONTENT [şema].[koleksiyon])) ad çözümü için.
     // Kolon yalnızca id tutar; ad olmadan script'te düz "xml" yazılır ve kolon YANLIŞ oluşur.
     public const string XmlSchemaCollections = """

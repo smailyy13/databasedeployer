@@ -86,7 +86,7 @@ public static class CoverageProbe
         ("Güvenlik", "Database scoped credential'lar", false, "SELECT COUNT(*) FROM sys.database_scoped_credentials"),
         ("Güvenlik", "Column Master/Encryption Key (Always Encrypted)", false, "SELECT (SELECT COUNT(*) FROM sys.column_master_keys) + (SELECT COUNT(*) FROM sys.column_encryption_keys)"),
         ("Programlanabilirlik", "Service Broker (queue/service/contract)", false, "SELECT (SELECT COUNT(*) FROM sys.service_queues WHERE is_ms_shipped = 0) + (SELECT COUNT(*) FROM sys.services WHERE service_id > 5) + (SELECT COUNT(*) FROM sys.service_contracts WHERE service_contract_id > 5)"),
-        ("Programlanabilirlik", "XML schema collection'lar", false, "SELECT COUNT(*) FROM sys.xml_schema_collections WHERE schema_id <> 4"),
+        ("Programlanabilirlik", "XML schema collection'lar", true, "SELECT COUNT(*) FROM sys.xml_schema_collections WHERE schema_id <> 4"),
         ("Programlanabilirlik", "Plan guide'lar", false, "SELECT COUNT(*) FROM sys.plan_guides"),
         ("Entegrasyon", "External data source/table (PolyBase)", false, "SELECT (SELECT COUNT(*) FROM sys.external_data_sources) + (SELECT COUNT(*) FROM sys.external_tables)"),
         ("Ayar", "Database scoped configuration'lar", false, "SELECT COUNT(*) FROM sys.database_scoped_configurations WHERE is_value_default = 0"),

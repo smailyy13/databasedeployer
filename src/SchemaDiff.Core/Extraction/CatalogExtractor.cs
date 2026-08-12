@@ -14,6 +14,8 @@ internal sealed class CatalogSet
     public List<IndexRow> Indexes { get; set; } = [];
     public List<IndexColumnRow> IndexColumns { get; set; } = [];
     public List<XmlSchemaCollectionRow> XmlSchemaCollections { get; set; } = [];
+    public List<XmlSchemaNamespaceRow> XmlSchemaNamespaces { get; set; } = [];
+    public List<XmlSchemaContentRow> XmlSchemaContents { get; set; } = [];
     public List<IndexExtraRow> IndexExtras { get; set; } = [];
     public List<XmlIndexRow> XmlIndexes { get; set; } = [];
     public List<SpatialIndexRow> SpatialIndexes { get; set; } = [];
@@ -100,6 +102,13 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
             // Tipli XML kolonlarının koleksiyon adı; yoksa kolon düz "xml" script'lenirdi.
             Run("xmlSchemaCollections", Sql.XmlSchemaCollections, MapXmlSchemaCollection,
                 rows => catalog.XmlSchemaCollections = rows, optional: true),
+
+            // XML schema collection içeriği: XML_SCHEMA_NAMESPACE kolon argümanıyla
+            // çalışmazsa düşer; ad + namespace karşılaştırması yine de sürer.
+            Run("xmlSchemaNamespaces", Sql.XmlSchemaNamespaces, MapXmlSchemaNamespace,
+                rows => catalog.XmlSchemaNamespaces = rows, optional: true),
+            Run("xmlSchemaContent", Sql.XmlSchemaCollectionContent, MapXmlSchemaContent,
+                rows => catalog.XmlSchemaContents = rows, optional: true),
 
             // optimize_for_sequential_key SQL 2019+; eski sunucuda bu sorgu düşer,
             // karşılaştırma yalnız bu iki ayar olmadan sürer.
@@ -288,6 +297,12 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
     private static IndexColumnRow MapIndexColumn(SqlDataReader r) => new(
         Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.Int(r, 2), Rdr.Int(r, 3),
         Rdr.Byte(r, 4), Rdr.Bool(r, 5), Rdr.Bool(r, 6));
+
+    private static XmlSchemaNamespaceRow MapXmlSchemaNamespace(SqlDataReader r) => new(
+        Rdr.Int(r, 0), Rdr.Str(r, 1));
+
+    private static XmlSchemaContentRow MapXmlSchemaContent(SqlDataReader r) => new(
+        Rdr.Int(r, 0), Rdr.NStr(r, 1));
 
     private static IndexExtraRow MapIndexExtra(SqlDataReader r) => new(
         Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.NBool(r, 2) == true, Rdr.NBool(r, 3) == true);

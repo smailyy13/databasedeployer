@@ -49,6 +49,7 @@ public static class TypeScriptGenerator
         ObjectKind.Sequence, ObjectKind.Synonym,
         ObjectKind.PartitionFunction, ObjectKind.PartitionScheme,
         ObjectKind.FullTextCatalog,
+        ObjectKind.XmlSchemaCollection,
     };
 
     public static TypeScriptResult Generate(
@@ -161,7 +162,9 @@ public static class TypeScriptGenerator
     // Scheme function'a, tablolar scheme'e bağlı olduğundan partition objeler en önce.
     private static int CreatePriority(ObjectKey key) => key.Kind switch
     {
-        // Full-text katalog en önce: tabloların full-text index'i ona bağlı.
+        // XML schema collection en önce: TİPLİ XML KOLONLARI ona bağlı, yani tablo
+        // CREATE'i onsuz patlar. Sonra full-text katalog (index'i ona bağlı).
+        ObjectKind.XmlSchemaCollection => -2,
         ObjectKind.FullTextCatalog => -1,
         ObjectKind.PartitionFunction => 0,
         ObjectKind.PartitionScheme => 1,
@@ -179,6 +182,7 @@ public static class TypeScriptGenerator
         ObjectKind.PartitionFunction => $"NOT EXISTS (SELECT 1 FROM sys.partition_functions WHERE name = N'{Escape(key.Name)}')",
         ObjectKind.PartitionScheme => $"NOT EXISTS (SELECT 1 FROM sys.partition_schemes WHERE name = N'{Escape(key.Name)}')",
         ObjectKind.FullTextCatalog => $"NOT EXISTS (SELECT 1 FROM sys.fulltext_catalogs WHERE name = N'{Escape(key.Name)}')",
+        ObjectKind.XmlSchemaCollection => $"NOT EXISTS (SELECT 1 FROM sys.xml_schema_collections AS c INNER JOIN sys.schemas AS s ON s.schema_id = c.schema_id WHERE s.name = N'{Escape(key.Schema)}' AND c.name = N'{Escape(key.Name)}')",
         _ => $"TYPE_ID(N'[{key.Schema}].[{key.Name}]') IS NULL",
     };
 
@@ -189,6 +193,7 @@ public static class TypeScriptGenerator
         ObjectKind.PartitionFunction => $"EXISTS (SELECT 1 FROM sys.partition_functions WHERE name = N'{Escape(key.Name)}')",
         ObjectKind.PartitionScheme => $"EXISTS (SELECT 1 FROM sys.partition_schemes WHERE name = N'{Escape(key.Name)}')",
         ObjectKind.FullTextCatalog => $"EXISTS (SELECT 1 FROM sys.fulltext_catalogs WHERE name = N'{Escape(key.Name)}')",
+        ObjectKind.XmlSchemaCollection => $"EXISTS (SELECT 1 FROM sys.xml_schema_collections AS c INNER JOIN sys.schemas AS s ON s.schema_id = c.schema_id WHERE s.name = N'{Escape(key.Schema)}' AND c.name = N'{Escape(key.Name)}')",
         _ => $"TYPE_ID(N'[{key.Schema}].[{key.Name}]') IS NOT NULL",
     };
 
@@ -199,6 +204,7 @@ public static class TypeScriptGenerator
         ObjectKind.PartitionFunction => $"DROP PARTITION FUNCTION [{key.Name}];",
         ObjectKind.PartitionScheme => $"DROP PARTITION SCHEME [{key.Name}];",
         ObjectKind.FullTextCatalog => $"DROP FULLTEXT CATALOG [{key.Name}];",
+        ObjectKind.XmlSchemaCollection => $"DROP XML SCHEMA COLLECTION [{key.Schema}].[{key.Name}];",
         _ => $"DROP TYPE [{key.Schema}].[{key.Name}];",
     };
 
