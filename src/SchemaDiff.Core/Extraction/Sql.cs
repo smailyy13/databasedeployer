@@ -178,6 +178,18 @@ internal static class Sql
         FROM sys.fulltext_catalogs AS ftc;
         """;
 
+    // Full-text stoplist'ler: veritabanı seviyesi, şemasız objeler. Full-text index'ler
+    // bunlara ADIYLA başvurur — hedefte yoksa index'in CREATE'i patlar.
+    public const string FullTextStoplists = """
+        SELECT sl.stoplist_id, sl.name
+        FROM sys.fulltext_stoplists AS sl;
+        """;
+
+    public const string FullTextStopwords = """
+        SELECT sw.stoplist_id, sw.stopword, sw.language_id
+        FROM sys.fulltext_stopwords AS sw;
+        """;
+
     // Full-text index: tablo başına EN FAZLA BİR tane olur, bu yüzden tablonun parçasıdır.
     // KEY INDEX (benzersiz, tek kolonlu, NOT NULL index) zorunludur; adıyla tutulur.
     // stoplist_id: NULL = OFF, 0 = SYSTEM, aksi hâlde kullanıcı stoplist'i.

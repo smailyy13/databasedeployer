@@ -1,12 +1,12 @@
 # DEVAM — Nerede Kaldık (kapsam genişletme çalışması)
 
 > Bu dosya, başka bir makinede kaldığın yerden devam edebilmen için yazıldı.
-> Son güncelleme: 2026-08-12 (Dalga 13 sonrası)
+> Son güncelleme: 2026-08-12 (Dalga 14 sonrası)
 
 ## Hızlı durum
 - **Repo:** `smailyy13/databasedeployer` (GitHub, private) — proje adı **SchemaDiff**
 - **Branch:** `main`
-- **Testler:** **763 (760 yeşil + 3 atlanan entegrasyon)**
+- **Testler:** **792 (789 yeşil + 3 atlanan entegrasyon)**
 - **Son release:** **v1.4** (portable, 4 parça). **v1.5 HENÜZ ÇIKARILMADI** — aşağıya bak.
 - **Gereken SDK:** .NET 10 (`dotnet-install.sh --channel 10.0`; macOS'ta `~/.dotnet`).
 
@@ -18,7 +18,7 @@ git pull                        # en güncel main
 
 # Derle + test
 dotnet build -c Release
-dotnet test  -c Release --no-build      # 760 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
+dotnet test  -c Release --no-build      # 789 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
 
 # Web arayüzünü çalıştır (yerel, sadece 127.0.0.1)
 dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
@@ -46,7 +46,7 @@ dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
    tam ve güvenli (SET OFF + DROP PERIOD); **AÇMA/yeniden kurulum** riskli olduğu için
    (PERIOD kolonu + DEFAULT gerektirir) elle uygulanmak üzere uyarıyla atlanıyor.
 
-## Bu oturumda tamamlananlar (Dalga 4–13)
+## Bu oturumda tamamlananlar (Dalga 4–14)
 
 Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi eklendi.
 
@@ -175,7 +175,19 @@ Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi ekle
     - Değişen koleksiyon script'lenmiyor: `ALTER XML SCHEMA COLLECTION` yalnız EKLEYEBİLİR,
       çıkarma yoktur — fark görünür, uygulama elle.
 
-15. **Test:** 276 → **763** (760 yeşil + 3 atlanan entegrasyon).
+15. **Dalga 14 — Full-text stoplist**: yeni obje sınıfı, şemasız. Full-text index'ler
+    (Dalga 8) buna ADIYLA başvuruyor — hedefte yoksa index'in CREATE'i patlar.
+    - Tip üretecinde katalogdan da önce (öncelik -2): index ikisine birden bağlı.
+    - **Tip üretecindeki TEK istisna:** SQL Server kelime seviyesinde `ALTER … ADD/DROP`
+      verdiği için değişim TAM ve GÜVENLİ üretilebiliyor → öteki türlerdeki
+      "elle drop+recreate" mesajı yerine gerçek script yazılıyor. Kelime + dil birlikte
+      kimlik (aynı kelime farklı dilde ayrı kayıt).
+    - `FROM SYSTEM STOPLIST` KULLANILMIYOR: sistem listesi sunucu sürümüne göre değişir,
+      kaynakla hedefte farklı içerik üretirdi.
+    - Kelimesiz stoplist de obje olarak yazılıyor ki "boş stoplist" ile "stoplist yok"
+      birbirine karışmasın.
+
+16. **Test:** 276 → **792** (789 yeşil + 3 atlanan entegrasyon).
    - `StatisticsTests` (33): karşılaştırma, sıra, filtre/NORECOMPUTE/INCREMENTAL,
      drop-önce/create-sonra sıralaması, yeni tablo script'i, okunamayan sorgu davranışı.
    - `CatalogQueryTests` (yeni): TÜM katalog sorgularının yapısal denetimi — en önemlisi
@@ -310,6 +322,14 @@ rm -f publish-portable/*.pdb
 - `src/SchemaDiff.Core/Extraction/SnapshotBuilder.cs` — koleksiyon objeleri (namespace + content)
 - `src/SchemaDiff.Core/Scripting/TypeScriptGenerator.cs` — CREATE/DROP/exists, öncelik -2
 - Testler: `XmlSchemaCollectionTests` (yeni, 16)
+
+## Dalga 14'te değişen dosyalar (full-text stoplist)
+- `src/SchemaDiff.Core/Extraction/Sql.cs` — `FullTextStoplists`, `FullTextStopwords`
+- `src/SchemaDiff.Core/Extraction/{CatalogRows,CatalogExtractor}.cs` — satırlar + opsiyonel sorgular
+- `src/SchemaDiff.Core/Model/{ObjectKey,ObjectKindLabels,Snapshot}.cs` — tür, etiket, `StopwordDefinition`
+- `src/SchemaDiff.Core/Extraction/SnapshotBuilder.cs` — stoplist objeleri + `StopwordStatement`
+- `src/SchemaDiff.Core/Scripting/TypeScriptGenerator.cs` — kelime seviyesi değişim yolu
+- Testler: `FullTextStoplistTests` (yeni, 17)
 
 ## Dalga 1–3'te değişen ana dosyalar (referans)
 - `src/SchemaDiff.Core/Analysis/CoverageProbe.cs` — sayaçlar (Probes internal)

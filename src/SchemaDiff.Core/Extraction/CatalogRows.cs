@@ -78,6 +78,10 @@ internal sealed record XmlSchemaNamespaceRow(int CollectionId, string Namespace)
 
 internal sealed record XmlSchemaContentRow(int CollectionId, string? Content);
 
+internal sealed record FullTextStoplistRow(int StoplistId, string Name);
+
+internal sealed record FullTextStopwordRow(int StoplistId, string Stopword, int LanguageId);
+
 internal sealed record FullTextCatalogRow(
     int CatalogId, string Name, bool AccentSensitive, bool IsDefault);
 

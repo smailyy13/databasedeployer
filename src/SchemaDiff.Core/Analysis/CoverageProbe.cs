@@ -64,6 +64,7 @@ public static class CoverageProbe
         ("Index", "Kullanıcı istatistikleri", true, "SELECT COUNT(*) FROM sys.stats WHERE user_created = 1"),
         ("Index", "Otomatik istatistikler (kapsam dışı — runtime artefaktı)", false, "SELECT COUNT(*) FROM sys.stats WHERE auto_created = 1"),
         ("Full-text", "Full-text katalogları", true, "SELECT COUNT(*) FROM sys.fulltext_catalogs"),
+        ("Full-text", "Full-text stoplist'ler", true, "SELECT COUNT(*) FROM sys.fulltext_stoplists"),
         ("Full-text", "Full-text index'ler", true, "SELECT COUNT(*) FROM sys.fulltext_indexes"),
         ("CLR", "Assembly'ler", false, "SELECT COUNT(*) FROM sys.assemblies WHERE is_user_defined = 1"),
         ("CLR", "CLR prosedür/fonksiyonları", false, "SELECT COUNT(*) FROM sys.objects WHERE is_ms_shipped = 0 AND type IN ('PC','FS','FT','AF')"),

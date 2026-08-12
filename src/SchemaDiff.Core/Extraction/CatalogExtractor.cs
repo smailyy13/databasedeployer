@@ -19,6 +19,8 @@ internal sealed class CatalogSet
     public List<IndexExtraRow> IndexExtras { get; set; } = [];
     public List<XmlIndexRow> XmlIndexes { get; set; } = [];
     public List<SpatialIndexRow> SpatialIndexes { get; set; } = [];
+    public List<FullTextStoplistRow> FullTextStoplists { get; set; } = [];
+    public List<FullTextStopwordRow> FullTextStopwords { get; set; } = [];
     public List<FullTextCatalogRow> FullTextCatalogs { get; set; } = [];
     public List<FullTextIndexRow> FullTextIndexes { get; set; } = [];
     public List<FullTextIndexColumnRow> FullTextIndexColumns { get; set; } = [];
@@ -120,6 +122,10 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
                 rows => catalog.SpatialIndexes = rows, optional: true),
 
             // Full-text: sunucuda FTS kurulu değilse ya da yetki yoksa düşebilir.
+            Run("fullTextStoplists", Sql.FullTextStoplists, MapFullTextStoplist,
+                rows => catalog.FullTextStoplists = rows, optional: true),
+            Run("fullTextStopwords", Sql.FullTextStopwords, MapFullTextStopword,
+                rows => catalog.FullTextStopwords = rows, optional: true),
             Run("fullTextCatalogs", Sql.FullTextCatalogs, MapFullTextCatalog,
                 rows => catalog.FullTextCatalogs = rows, optional: true),
             Run("fullTextIndexes", Sql.FullTextIndexes, MapFullTextIndex,
@@ -314,6 +320,12 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
         Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.Str(r, 2), Rdr.Str(r, 3),
         Rdr.NDbl(r, 4), Rdr.NDbl(r, 5), Rdr.NDbl(r, 6), Rdr.NDbl(r, 7),
         Rdr.NStr(r, 8), Rdr.NStr(r, 9), Rdr.NStr(r, 10), Rdr.NStr(r, 11), Rdr.NInt(r, 12));
+
+    private static FullTextStoplistRow MapFullTextStoplist(SqlDataReader r) => new(
+        Rdr.Int(r, 0), Rdr.Str(r, 1));
+
+    private static FullTextStopwordRow MapFullTextStopword(SqlDataReader r) => new(
+        Rdr.Int(r, 0), Rdr.Str(r, 1), Rdr.Int(r, 2));
 
     private static FullTextCatalogRow MapFullTextCatalog(SqlDataReader r) => new(
         Rdr.Int(r, 0), Rdr.Str(r, 1), Rdr.Bool(r, 2), Rdr.Bool(r, 3));

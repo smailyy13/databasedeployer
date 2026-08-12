@@ -1,6 +1,6 @@
 # KAPSAM — SchemaDiff neyi görür, neyi yazar, neyi görmez
 
-Son güncelleme: 2026-08-12 (Dalga 13 sonrası)
+Son güncelleme: 2026-08-12 (Dalga 14 sonrası)
 
 Bu belge tek soruyu cevaplar: **"Bu araca güvenip deploy edersem neyi kaçırırım?"**
 
@@ -46,6 +46,7 @@ En tehlikeli sonuç "fark yok" demektir; bu yüzden okunamayan her sınıf ayrı
 | Veritabanı kullanıcıları | `CREATE USER` (login/SID eşlemesi ortama özgü, kıyasa girmez) |
 | Temporal (system-versioned) | `CREATE TABLE` tam üretir; **kapatma** tam ve güvenli |
 | XML schema collection | `CREATE XML SCHEMA COLLECTION` (XSD okunabilirse); namespace'ler her hâlde kıyaslanır |
+| Full-text stoplist | `CREATE FULLTEXT STOPLIST` + kelime seviyesi `ALTER … ADD/DROP` (değişim TAM üretilir) |
 | Full-text katalog | `CREATE FULLTEXT CATALOG` — accent sensitivity, `AS DEFAULT` |
 | XML index | `CREATE PRIMARY XML INDEX` / secondary `USING XML INDEX … FOR PATH\|VALUE\|PROPERTY` |
 | Spatial index | `CREATE SPATIAL INDEX … USING …` — `BOUNDING_BOX`, `GRIDS`, `CELLS_PER_OBJECT` |
@@ -97,10 +98,9 @@ Sayılıyor (sayısı > 0 çıkarsa `--coverage` uyarır) ama görülmüyor ve y
 
 | # | Konu | Neden bu sırada |
 |---|---|---|
-| 1 | Full-text stoplist objesi | Index artık stoplist'e ADIYLA başvuruyor; stoplist'in kendisi kapsam dışı |
-| 2 | Table type drop+recreate üretimi | Fark artık görünüyor; bağımlılık (prosedür parametreleri) düşürme sırası gerekir |
-| 3 | Plan guide · DB scoped configuration · legacy `RULE`/`DEFAULT` | Düz `CREATE`/`ALTER`, düşük risk, düşük sıklık |
-| 4 | Parametre / principal seviyesi extended property | Obje/kolon/şema/db kapsandı, kalan uçlar |
+| 1 | Table type drop+recreate üretimi | Fark artık görünüyor; bağımlılık (prosedür parametreleri) düşürme sırası gerekir |
+| 2 | Plan guide · DB scoped configuration · legacy `RULE`/`DEFAULT` | Düz `CREATE`/`ALTER`, düşük risk, düşük sıklık |
+| 3 | Parametre / principal seviyesi extended property | Obje/kolon/şema/db kapsandı, kalan uçlar |
 
 **Bilinçli ertelenen:** fiziksel yerleşim — `ON [filegroup]`, `TEXTIMAGE_ON`,
 `FILESTREAM_ON`, tablo/index'in partition scheme üzerine yerleşimi. Filegroup'ları biz

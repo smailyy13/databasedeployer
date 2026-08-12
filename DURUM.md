@@ -1,6 +1,6 @@
 # Durum ve Yol Haritası
 
-Son güncelleme: 2026-08-12 · 5 proje (Core, Cli, Web, Bench, Tests) · 763 test (760 yeşil + 3 atlanan entegrasyon)
+Son güncelleme: 2026-08-12 · 5 proje (Core, Cli, Web, Bench, Tests) · 792 test (789 yeşil + 3 atlanan entegrasyon)
 
 ---
 
@@ -119,7 +119,7 @@ roller + üyelikleri · obje/şema/**db** izinleri (GRANT/DENY) · alias tipler 
 (xml(CONTENT/DOCUMENT koleksiyon))** · **NOT FOR REPLICATION (IDENTITY / CHECK / FK)** ·
 **index kilit seçenekleri (ALLOW_ROW_LOCKS / ALLOW_PAGE_LOCKS)** · **constraint durumu
 (pasif / güvenilmez) — script'e de yansıyor** · **full-text katalog + index** · **table type constraint/index/DEFAULT'ları** · **XML ve spatial index'ler** · **index ek seçenekleri (STATISTICS_NORECOMPUTE / OPTIMIZE_FOR_SEQUENTIAL_KEY)** ·
-**XML schema collection**.
+**XML schema collection** · **full-text stoplist**.
 
 **Hâlâ kapsanmayan** (sessizce atlanır — sayısı >0 çıkarsa `--coverage` uyarır):
 
@@ -127,14 +127,14 @@ roller + üyelikleri · obje/şema/**db** izinleri (GRANT/DENY) · alias tipler 
 - In-memory OLTP tabloları · Graph node/edge tablolar
 - CLR: assembly, tip, CLR prosedür/fonksiyon
 - CLR tipleri
-- Full-text stoplist objesi · selective XML index (otomatik/index istatistikleri
+- Selective XML index (otomatik/index istatistikleri
   bilinçli kapsam dışı: şema değil, optimizer artefaktı)
 - Always Encrypted · Row-Level Security · sertifika/anahtar/credential
 - Service Broker · PolyBase · application role · plan guide
 - Parametre/principal seviyesi extended property (obje/kolon/şema/db kapsandı)
 - PRIMARY dışı filegroup'lar
 
-### 3. Otomatik test — ✅ kuruldu (763 test: 760 birim + 3 entegrasyon)
+### 3. Otomatik test — ✅ kuruldu (792 test: 789 birim + 3 entegrasyon)
 
 Entegrasyon testleri (`IntegrationTests`, `[SkippableFact]`) canlı SQL Server'a karşı koşar,
 DB yoksa ATLANIR (CI'da derleme yeşil kalır): küçük fixture 5 fark (2/1/2), Big 359 fark,

@@ -50,6 +50,7 @@ public static class TypeScriptGenerator
         ObjectKind.PartitionFunction, ObjectKind.PartitionScheme,
         ObjectKind.FullTextCatalog,
         ObjectKind.XmlSchemaCollection,
+        ObjectKind.FullTextStoplist,
     };
 
     public static TypeScriptResult Generate(
@@ -62,6 +63,7 @@ public static class TypeScriptGenerator
 
         var creates = new List<ObjectKey>();
         var drops = new List<ObjectKey>();
+        var stoplistChanges = new List<ObjectKey>();
 
         foreach (var diff in result.Differences)
         {
@@ -72,6 +74,12 @@ public static class TypeScriptGenerator
             {
                 case DiffKind.Added: creates.Add(diff.Key); break;
                 case DiffKind.Removed: drops.Add(diff.Key); break;
+                case DiffKind.Changed when diff.Key.Kind == ObjectKind.FullTextStoplist:
+                    // Stoplist tek istisna: SQL Server kelime seviyesinde ADD/DROP veriyor,
+                    // yani değişim TAM ve GÜVENLİ üretilebilir — drop+recreate gereksiz.
+                    stoplistChanges.Add(diff.Key);
+                    break;
+
                 case DiffKind.Changed:
                     // Tip ALTER edilemez; sequence/synonym da güvenli olsun diye drop+recreate önerilir.
                     skipped.Add(new SkippedObject(diff.Key,
@@ -80,7 +88,7 @@ public static class TypeScriptGenerator
             }
         }
 
-        if (creates.Count == 0 && (!options.IncludeDrops || drops.Count == 0))
+        if (creates.Count == 0 && stoplistChanges.Count == 0 && (!options.IncludeDrops || drops.Count == 0))
         {
             foreach (var key in drops)
                 if (!options.IncludeDrops) skipped.Add(new SkippedObject(key, "DROP kapalı — obje hedefte kalacak"));
@@ -125,6 +133,22 @@ public static class TypeScriptGenerator
             included.Add(key);
         }
 
+        foreach (var key in stoplistChanges.OrderBy(k => k.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            var statements = StoplistWordDiff(key, result);
+            if (statements.Count == 0)
+            {
+                skipped.Add(new SkippedObject(key, "kelime listesi okunamadı — değişiklik üretilemedi"));
+                continue;
+            }
+
+            sb.AppendLine($"PRINT N'Güncelleniyor: {Describe(key)}';");
+            foreach (var statement in statements) sb.AppendLine(statement);
+            sb.AppendLine("GO");
+            sb.AppendLine();
+            included.Add(key);
+        }
+
         if (options.IncludeDrops)
         {
             // DROP'lar ters sırada: synonym → table type → alias tip → sequence.
@@ -150,6 +174,28 @@ public static class TypeScriptGenerator
         return new TypeScriptResult(sb.ToString(), included, skipped);
     }
 
+    /// <summary>
+    /// Stoplist'in kelime farkı: kaynakta olup hedefte olmayanlar ADD, tersi DROP.
+    /// Kelime + dil birlikte kimliktir (aynı kelime farklı dilde ayrı kayıttır).
+    /// </summary>
+    private static List<string> StoplistWordDiff(ObjectKey key, CompareResult result)
+    {
+        var statements = new List<string>();
+        if (!result.Source.Objects.TryGetValue(key, out var source)) return statements;
+        if (!result.Target.Objects.TryGetValue(key, out var target)) return statements;
+        if (source.Stopwords is null || target.Stopwords is null) return statements;
+
+        var sourceWords = source.Stopwords.ToHashSet();
+        var targetWords = target.Stopwords.ToHashSet();
+
+        statements.AddRange(source.Stopwords.Where(w => !targetWords.Contains(w))
+            .Select(w => Extraction.SnapshotBuilder.StopwordStatement(key.Name, w, add: true)));
+        statements.AddRange(target.Stopwords.Where(w => !sourceWords.Contains(w))
+            .Select(w => Extraction.SnapshotBuilder.StopwordStatement(key.Name, w, add: false)));
+
+        return statements;
+    }
+
     private static void WriteHeader(StringBuilder sb, CompareResult result, TypeScriptOptions options)
     {
         sb.AppendLine("/* ---- 1) Tipler / sequence / synonym / partition -------------------------");
@@ -164,7 +210,9 @@ public static class TypeScriptGenerator
     {
         // XML schema collection en önce: TİPLİ XML KOLONLARI ona bağlı, yani tablo
         // CREATE'i onsuz patlar. Sonra full-text katalog (index'i ona bağlı).
-        ObjectKind.XmlSchemaCollection => -2,
+        ObjectKind.XmlSchemaCollection => -3,
+        // Stoplist katalogdan da önce: full-text index ikisine birden bağlı.
+        ObjectKind.FullTextStoplist => -2,
         ObjectKind.FullTextCatalog => -1,
         ObjectKind.PartitionFunction => 0,
         ObjectKind.PartitionScheme => 1,
@@ -182,6 +230,7 @@ public static class TypeScriptGenerator
         ObjectKind.PartitionFunction => $"NOT EXISTS (SELECT 1 FROM sys.partition_functions WHERE name = N'{Escape(key.Name)}')",
         ObjectKind.PartitionScheme => $"NOT EXISTS (SELECT 1 FROM sys.partition_schemes WHERE name = N'{Escape(key.Name)}')",
         ObjectKind.FullTextCatalog => $"NOT EXISTS (SELECT 1 FROM sys.fulltext_catalogs WHERE name = N'{Escape(key.Name)}')",
+        ObjectKind.FullTextStoplist => $"NOT EXISTS (SELECT 1 FROM sys.fulltext_stoplists WHERE name = N'{Escape(key.Name)}')",
         ObjectKind.XmlSchemaCollection => $"NOT EXISTS (SELECT 1 FROM sys.xml_schema_collections AS c INNER JOIN sys.schemas AS s ON s.schema_id = c.schema_id WHERE s.name = N'{Escape(key.Schema)}' AND c.name = N'{Escape(key.Name)}')",
         _ => $"TYPE_ID(N'[{key.Schema}].[{key.Name}]') IS NULL",
     };
@@ -193,6 +242,7 @@ public static class TypeScriptGenerator
         ObjectKind.PartitionFunction => $"EXISTS (SELECT 1 FROM sys.partition_functions WHERE name = N'{Escape(key.Name)}')",
         ObjectKind.PartitionScheme => $"EXISTS (SELECT 1 FROM sys.partition_schemes WHERE name = N'{Escape(key.Name)}')",
         ObjectKind.FullTextCatalog => $"EXISTS (SELECT 1 FROM sys.fulltext_catalogs WHERE name = N'{Escape(key.Name)}')",
+        ObjectKind.FullTextStoplist => $"EXISTS (SELECT 1 FROM sys.fulltext_stoplists WHERE name = N'{Escape(key.Name)}')",
         ObjectKind.XmlSchemaCollection => $"EXISTS (SELECT 1 FROM sys.xml_schema_collections AS c INNER JOIN sys.schemas AS s ON s.schema_id = c.schema_id WHERE s.name = N'{Escape(key.Schema)}' AND c.name = N'{Escape(key.Name)}')",
         _ => $"TYPE_ID(N'[{key.Schema}].[{key.Name}]') IS NOT NULL",
     };
@@ -204,6 +254,7 @@ public static class TypeScriptGenerator
         ObjectKind.PartitionFunction => $"DROP PARTITION FUNCTION [{key.Name}];",
         ObjectKind.PartitionScheme => $"DROP PARTITION SCHEME [{key.Name}];",
         ObjectKind.FullTextCatalog => $"DROP FULLTEXT CATALOG [{key.Name}];",
+        ObjectKind.FullTextStoplist => $"DROP FULLTEXT STOPLIST [{key.Name}];",
         ObjectKind.XmlSchemaCollection => $"DROP XML SCHEMA COLLECTION [{key.Schema}].[{key.Name}];",
         _ => $"DROP TYPE [{key.Schema}].[{key.Name}];",
     };

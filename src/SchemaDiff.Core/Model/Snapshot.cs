@@ -79,6 +79,9 @@ public sealed class ObjectSnapshot
     /// <summary>Tablonun full-text index'i (en fazla bir tane) — script üretimi için.</summary>
     public FullTextIndexDefinition? FullTextIndex { get; set; }
 
+    /// <summary>Full-text stoplist'in kelimeleri — kelime seviyesi ALTER üretimi için.</summary>
+    public IReadOnlyList<StopwordDefinition>? Stopwords { get; set; }
+
     /// <summary>XML ve spatial index'ler — sözdizimleri genel index'ten tamamen farklı.</summary>
     public IReadOnlyList<XmlIndexDefinition>? XmlIndexes { get; set; }
 
@@ -123,6 +126,10 @@ public sealed record IndexDefinition(
 }
 
 public sealed record IndexKeyColumn(string Column, bool Descending);
+
+/// <summary>Stoplist'in bir kelimesi. Dil (LCID) kelimenin parçasıdır: aynı kelime
+/// farklı dillerde ayrı kayıtlardır.</summary>
+public sealed record StopwordDefinition(string Word, int LanguageId);
 
 /// <summary>
 /// XML index. Primary'de <c>CREATE PRIMARY XML INDEX</c>, secondary'de

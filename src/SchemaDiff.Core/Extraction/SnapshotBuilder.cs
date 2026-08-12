@@ -418,6 +418,31 @@ internal static class SnapshotBuilder
             objects[key] = snapshot;
         }
 
+        // Full-text stoplist'ler: veritabanı seviyesi, şemasız. Full-text index'ler bunlara
+        // ADIYLA başvurur; hedefte yoksa index'in CREATE'i patlar.
+        var stopwordsByList = GroupBy(catalog.FullTextStopwords, w => w.StoplistId);
+        foreach (var sl in catalog.FullTextStoplists)
+        {
+            var key = new ObjectKey(string.Empty, sl.Name, ObjectKind.FullTextStoplist);
+            var snapshot = new ObjectSnapshot { Key = key, Hash = UInt128.Zero };
+
+            var words = (stopwordsByList.GetValueOrDefault(sl.StoplistId) ?? [])
+                .Select(w => new StopwordDefinition(w.Stopword, w.LanguageId))
+                .OrderBy(w => w.LanguageId)
+                .ThenBy(w => w.Word, StringComparer.Ordinal)
+                .ToList();
+
+            // Kelimesiz stoplist de geçerli bir objedir: parça HER ZAMAN yazılır ki
+            // "boş stoplist" ile "stoplist yok" birbirine karışmasın.
+            SetPart(snapshot, "definition",
+                $"ftstoplist|words={string.Join(',', words.Select(w => $"{w.LanguageId}:{w.Word}"))}");
+            snapshot.Stopwords = words;
+            if (options.KeepDisplayScripts) snapshot.DisplayScript = RenderStoplist(sl.Name, words);
+
+            Finalize(snapshot);
+            objects[key] = snapshot;
+        }
+
         // Full-text kataloglar: veritabanı seviyesi, şemasız objeler (partition function gibi).
         foreach (var ftc in catalog.FullTextCatalogs)
         {
@@ -968,6 +993,22 @@ internal static class SnapshotBuilder
         0 => "SYSTEM",
         _ => ft.StoplistName ?? "SYSTEM",
     };
+
+    /// <summary>
+    /// Stoplist CREATE'i kelimesizdir; kelimeler ayrı ALTER ifadeleriyle eklenir.
+    /// <c>FROM SYSTEM STOPLIST</c> KULLANILMAZ: sistem listesi sunucu sürümüne göre değişir,
+    /// kaynakla hedefte farklı içerik üretir.
+    /// </summary>
+    internal static string RenderStoplist(string name, IReadOnlyList<StopwordDefinition> words)
+    {
+        var lines = new List<string> { $"CREATE FULLTEXT STOPLIST [{name}];" };
+        lines.AddRange(words.Select(w => StopwordStatement(name, w, add: true)));
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    internal static string StopwordStatement(string name, StopwordDefinition word, bool add) =>
+        $"ALTER FULLTEXT STOPLIST [{name}] {(add ? "ADD" : "DROP")} " +
+        $"N'{word.Word.Replace("'", "''")}' LANGUAGE {word.LanguageId.ToString(CultureInfo.InvariantCulture)};";
 
     private static string RenderFullTextCatalog(FullTextCatalogRow ftc)
     {
