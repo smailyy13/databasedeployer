@@ -1,6 +1,6 @@
 # KAPSAM — SchemaDiff neyi görür, neyi yazar, neyi görmez
 
-Son güncelleme: 2026-08-12 (Dalga 17 sonrası)
+Son güncelleme: 2026-08-12 (Dalga 18 sonrası)
 
 Bu belge tek soruyu cevaplar: **"Bu araca güvenip deploy edersem neyi kaçırırım?"**
 
@@ -45,7 +45,7 @@ En tehlikeli sonuç "fark yok" demektir; bu yüzden okunamayan her sınıf ayrı
 | Extended property'ler | obje / kolon / şema / **veritabanı** / **parametre** / **principal** / **index** seviyesi |
 | Veritabanı kullanıcıları | `CREATE USER` (login/SID eşlemesi ortama özgü, kıyasa girmez) |
 | Plan guide | `sp_create_plan_guide` + pasiflik (`sp_control_plan_guide`) |
-| Database scoped configuration | varsayılandan SAPAN ayarlar (MAXDOP, legacy CE …) |
+| Database scoped configuration | varsayılandan SAPAN ayarlar (MAXDOP, legacy CE …); değeri yorumlanamayan ayar yazılmaz, bildirilir |
 | Legacy `RULE` / `DEFAULT` | gövdesiyle karşılaştırılır |
 | Temporal (system-versioned) | `CREATE TABLE` tam üretir; **kapatma** tam ve güvenli |
 | XML schema collection | `CREATE XML SCHEMA COLLECTION` (XSD okunabilirse); namespace'ler her hâlde kıyaslanır |
@@ -71,6 +71,7 @@ Bunlar rapora düşer, script'e girmez. Girmedikleri her seferinde **sebebiyle b
 | Temporal **açma** / history değişimi | PERIOD kolonları + DEFAULT gerektirir; yarım SQL yerine uyarı |
 | View üzerindeki istatistikler | fark görünür; script view'ın kendi drop+create'inden gider |
 | Rol sahibi (owner) değişimi | üretilmiyor |
+| Varsayılana dönen scoped configuration | katalog yalnız sapanları verir; "kaynakta yok" = varsayılan, ve varsayılan sürüme göre değişir — tahmin etmektense dokunulmuyor |
 | XML schema collection **değişimi** | `ALTER … ADD` yalnız EKLEYEBİLİR, çıkarma yoktur; fark görünür, uygulama elle |
 | Table type **değişimi** (seçenek kapalıyken) | tip ALTER edilemez; "Değişen table type'ları yeniden kur" seçeneği kapalıysa fark yalnız görünür |
 

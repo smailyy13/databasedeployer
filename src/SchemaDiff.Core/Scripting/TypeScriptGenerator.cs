@@ -59,6 +59,7 @@ public static class TypeScriptGenerator
         ObjectKind.FullTextCatalog,
         ObjectKind.XmlSchemaCollection,
         ObjectKind.FullTextStoplist,
+        ObjectKind.LegacyRuleDefault,
     };
 
     public static TypeScriptResult Generate(
@@ -187,7 +188,7 @@ public static class TypeScriptGenerator
             {
                 sb.AppendLine($"PRINT N'Siliniyor: {Describe(key)}';");
                 sb.AppendLine($"IF {ExistsCondition(key)}");
-                sb.AppendLine($"    {DropStatement(key)}");
+                sb.AppendLine($"    {DropStatement(key, result.Target.Objects.GetValueOrDefault(key))}");
                 sb.AppendLine("GO");
                 sb.AppendLine();
                 included.Add(key);
@@ -244,7 +245,7 @@ public static class TypeScriptGenerator
             sb.AppendLine($"    DROP {ModuleVerb(dependent.Kind)} [{dependent.Schema}].[{dependent.Name}];");
         }
         sb.AppendLine($"IF {ExistsCondition(key)}");
-        sb.AppendLine($"    {DropStatement(key)}");
+        sb.AppendLine($"    {DropStatement(key, result.Target.Objects.GetValueOrDefault(key))}");
         sb.AppendLine("GO");
         sb.AppendLine();
 
@@ -321,6 +322,7 @@ public static class TypeScriptGenerator
         ObjectKind.UserDefinedType => 3,
         ObjectKind.TableType => 4,
         ObjectKind.Synonym => 5,
+        ObjectKind.LegacyRuleDefault => 6,
         _ => 6,
     };
 
@@ -333,6 +335,7 @@ public static class TypeScriptGenerator
         ObjectKind.FullTextCatalog => $"NOT EXISTS (SELECT 1 FROM sys.fulltext_catalogs WHERE name = N'{Escape(key.Name)}')",
         ObjectKind.FullTextStoplist => $"NOT EXISTS (SELECT 1 FROM sys.fulltext_stoplists WHERE name = N'{Escape(key.Name)}')",
         ObjectKind.XmlSchemaCollection => $"NOT EXISTS (SELECT 1 FROM sys.xml_schema_collections AS c INNER JOIN sys.schemas AS s ON s.schema_id = c.schema_id WHERE s.name = N'{Escape(key.Schema)}' AND c.name = N'{Escape(key.Name)}')",
+        ObjectKind.LegacyRuleDefault => $"OBJECT_ID(N'[{key.Schema}].[{key.Name}]') IS NULL",
         _ => $"TYPE_ID(N'[{key.Schema}].[{key.Name}]') IS NULL",
     };
 
@@ -345,10 +348,27 @@ public static class TypeScriptGenerator
         ObjectKind.FullTextCatalog => $"EXISTS (SELECT 1 FROM sys.fulltext_catalogs WHERE name = N'{Escape(key.Name)}')",
         ObjectKind.FullTextStoplist => $"EXISTS (SELECT 1 FROM sys.fulltext_stoplists WHERE name = N'{Escape(key.Name)}')",
         ObjectKind.XmlSchemaCollection => $"EXISTS (SELECT 1 FROM sys.xml_schema_collections AS c INNER JOIN sys.schemas AS s ON s.schema_id = c.schema_id WHERE s.name = N'{Escape(key.Schema)}' AND c.name = N'{Escape(key.Name)}')",
+        ObjectKind.LegacyRuleDefault => $"OBJECT_ID(N'[{key.Schema}].[{key.Name}]') IS NOT NULL",
         _ => $"TYPE_ID(N'[{key.Schema}].[{key.Name}]') IS NOT NULL",
     };
 
-    private static string DropStatement(ObjectKey key) => key.Kind switch
+    /// <summary>
+    /// Legacy objede RULE ile DEFAULT'un DROP fiili farklıdır ve ikisi de tek ObjectKind
+    /// altındadır; tür snapshot'ın kanonik parçasından okunur.
+    /// </summary>
+    private static string DropStatement(ObjectKey key, ObjectSnapshot? snapshot = null)
+    {
+        if (key.Kind == ObjectKind.LegacyRuleDefault)
+        {
+            var isDefault = snapshot?.PartCanonical.GetValueOrDefault("definition", string.Empty)
+                .Contains("type=D", StringComparison.Ordinal) == true;
+            return $"DROP {(isDefault ? "DEFAULT" : "RULE")} [{key.Schema}].[{key.Name}];";
+        }
+
+        return DropByKind(key);
+    }
+
+    private static string DropByKind(ObjectKey key) => key.Kind switch
     {
         ObjectKind.Sequence => $"DROP SEQUENCE [{key.Schema}].[{key.Name}];",
         ObjectKind.Synonym => $"DROP SYNONYM [{key.Schema}].[{key.Name}];",

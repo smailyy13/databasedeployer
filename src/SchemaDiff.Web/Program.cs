@@ -222,7 +222,7 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
                 // Tip üretecinin listesinden türetilir; elle kopyalanınca sürekli ayrışıyordu.
                 HandledElsewhere = new HashSet<ObjectKind>(TypeScriptGenerator.HandledKinds)
                 {
-                    ObjectKind.Role, ObjectKind.User,
+                    ObjectKind.Role, ObjectKind.User, ObjectKind.PlanGuide,
                 },
             });
             sb.AppendLine(module.Sql);
@@ -248,6 +248,11 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
             var perms = PermissionScriptGenerator.Generate(comparison, selection, generatedAt);
             if (!perms.IsEmpty) { sb.AppendLine(); sb.AppendLine(perms.Sql); included += perms.Included.Count; }
             skipped.AddRange(perms.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
+
+            // Ayarlar ve plan guide'lar EN SONDA: OBJECT kapsamlı guide modüle bağlıdır.
+            var settings = SettingsScriptGenerator.Generate(comparison, selection, generatedAt);
+            if (!settings.IsEmpty) { sb.AppendLine(); sb.AppendLine(settings.Sql); included += settings.Included.Count; }
+            skipped.AddRange(settings.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
         }
     }
 

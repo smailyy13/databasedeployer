@@ -31,6 +31,7 @@ public static class DeploymentHeader
         sb.AppendLine("     3) Modüller   — CREATE SCHEMA, view, fonksiyon, prosedür, trigger");
         sb.AppendLine("     4) Roller     — CREATE/ALTER/DROP ROLE ve üyelik");
         sb.AppendLine("     5) Extended property + izinler (GRANT/DENY)");
+        sb.AppendLine("     6) Veritabanı ayarları + plan guide'lar — modüllere bağlı olabilirler");
         sb.AppendLine();
         sb.AppendLine(allowDataLoss
             ? "   !! VERİ KAYBI ONAYLANDI — kolon/tablo silme ve tip daraltma script'e DAHİL."

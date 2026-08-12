@@ -307,7 +307,7 @@ static (string Sql, ScriptResult? Module, TableScriptResult? Table, RoleScriptRe
             // Tip üretecinin listesinden türetilir; elle kopyalanınca sürekli ayrışıyordu.
             HandledElsewhere = new HashSet<ObjectKind>(TypeScriptGenerator.HandledKinds)
             {
-                ObjectKind.Role, ObjectKind.User,
+                ObjectKind.Role, ObjectKind.User, ObjectKind.PlanGuide,
             },
         });
         sb.AppendLine(moduleScript.Sql);
@@ -322,6 +322,10 @@ static (string Sql, ScriptResult? Module, TableScriptResult? Table, RoleScriptRe
 
             var permScript = PermissionScriptGenerator.Generate(cmp, selection: null, generatedAt);
             if (!permScript.IsEmpty) sb.AppendLine().AppendLine(permScript.Sql);
+
+            // Ayarlar ve plan guide'lar EN SONDA: OBJECT kapsamlı guide modüle bağlıdır.
+            var settingsScript = SettingsScriptGenerator.Generate(cmp, selection: null, generatedAt);
+            if (!settingsScript.IsEmpty) sb.AppendLine().AppendLine(settingsScript.Sql);
         }
     }
 

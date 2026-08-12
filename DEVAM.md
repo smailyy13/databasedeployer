@@ -1,12 +1,12 @@
 # DEVAM — Nerede Kaldık (kapsam genişletme çalışması)
 
 > Bu dosya, başka bir makinede kaldığın yerden devam edebilmen için yazıldı.
-> Son güncelleme: 2026-08-12 (Dalga 17 sonrası)
+> Son güncelleme: 2026-08-12 (Dalga 18 sonrası)
 
 ## Hızlı durum
 - **Repo:** `smailyy13/databasedeployer` (GitHub, private) — proje adı **SchemaDiff**
 - **Branch:** `main`
-- **Testler:** **863 (860 yeşil + 3 atlanan entegrasyon)**
+- **Testler:** **876 (873 yeşil + 3 atlanan entegrasyon)**
 - **Son release:** **v1.4** (portable, 4 parça). **v1.5 HENÜZ ÇIKARILMADI** — aşağıya bak.
 - **Gereken SDK:** .NET 10 (`dotnet-install.sh --channel 10.0`; macOS'ta `~/.dotnet`).
 
@@ -18,7 +18,7 @@ git pull                        # en güncel main
 
 # Derle + test
 dotnet build -c Release
-dotnet test  -c Release --no-build      # 860 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
+dotnet test  -c Release --no-build      # 873 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
 
 # Web arayüzünü çalıştır (yerel, sadece 127.0.0.1)
 dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
@@ -46,7 +46,7 @@ dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
    tam ve güvenli (SET OFF + DROP PERIOD); **AÇMA/yeniden kurulum** riskli olduğu için
    (PERIOD kolonu + DEFAULT gerektirir) elle uygulanmak üzere uyarıyla atlanıyor.
 
-## Bu oturumda tamamlananlar (Dalga 4–17)
+## Bu oturumda tamamlananlar (Dalga 4–18)
 
 Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi eklendi.
 
@@ -221,7 +221,20 @@ Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi ekle
     - **Ön koşul katı:** bağımlıların TAMAMININ tanımı okunabilir olmalı; tek biri
       okunamıyorsa HİÇBİR ŞEY üretilmez ve o modül ismen bildirilir.
 
-19. **Test:** 276 → **863** (860 yeşil + 3 atlanan entegrasyon).
+19. **Dalga 18 — Dalga 16'nın script boşluğu kapatıldı** ("eklenecek bir şey kaldı mı?" taraması):
+    Plan guide, legacy RULE/DEFAULT ve scoped configuration KARŞILAŞTIRMAYA giriyordu ama
+    **hiçbir üreteç onları script'e yazmıyordu** — KAPSAM.md ise "görür ve yazar" diyordu.
+    Dalga 11'de düzelttiğim "rapor script'le çelişiyor" hatasının aynısını kendim yapmışım.
+    - **Yeni 6. bölüm** (`SettingsScriptGenerator`): scoped configuration + plan guide.
+      Modüllerden SONRA çalışır — OBJECT kapsamlı plan guide bağlı olduğu prosedür yokken
+      kurulamaz, bu yüzden 1. bölüme konamazdı.
+    - Scoped configuration'da katalog 0/1 tutar ama T-SQL ON/OFF bekler: sayısal ayarlar
+      (MAXDOP vb.) allowlist'ten, ötekiler 0/1 → OFF/ON. Yorumlanamayan değer YAZILMAZ,
+      ismen bildirilir.
+    - Legacy RULE/DEFAULT 1. bölüme alındı; DROP fiili tipe göre (`DROP RULE` / `DROP DEFAULT`).
+    - Plan guide ALTER edilemez → değişen guide önce `sp_control_plan_guide N'DROP'`.
+
+20. **Test:** 276 → **876** (873 yeşil + 3 atlanan entegrasyon).
    - `StatisticsTests` (33): karşılaştırma, sıra, filtre/NORECOMPUTE/INCREMENTAL,
      drop-önce/create-sonra sıralaması, yeni tablo script'i, okunamayan sorgu davranışı.
    - `CatalogQueryTests` (yeni): TÜM katalog sorgularının yapısal denetimi — en önemlisi
@@ -390,6 +403,13 @@ rm -f publish-portable/*.pdb
 - `src/SchemaDiff.Core/Scripting/TypeScriptGenerator.cs` — `RecreateChangedTableTypes` + üretim
 - `src/SchemaDiff.Web/{Contracts,Program}.cs` + `wwwroot/app.js` — seçenek kutusu
 - Testler: `TableTypeRecreateTests` (yeni, 12)
+
+## Dalga 18'de değişen dosyalar (script boşluğu)
+- `src/SchemaDiff.Core/Scripting/SettingsScriptGenerator.cs` — **yeni**: 6. bölüm
+- `src/SchemaDiff.Core/Scripting/TypeScriptGenerator.cs` — legacy RULE/DEFAULT + tip-duyarlı DROP
+- `src/SchemaDiff.Core/Scripting/DeploymentHeader.cs` — 6. bölüm başlıkta
+- `src/SchemaDiff.Web/Program.cs` + `src/SchemaDiff.Cli/Program.cs` — bölüm bağlandı
+- Testler: `SettingsScriptTests` (yeni, 13)
 
 ## Dalga 1–3'te değişen ana dosyalar (referans)
 - `src/SchemaDiff.Core/Analysis/CoverageProbe.cs` — sayaçlar (Probes internal)
