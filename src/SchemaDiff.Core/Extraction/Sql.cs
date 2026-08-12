@@ -346,6 +346,34 @@ internal static class Sql
         INNER JOIN sys.objects AS o ON o.object_id = pr.object_id AND o.is_ms_shipped = 0;
         """;
 
+    // Plan guide'lar: sorgu planı zorlamaları. sp_create_plan_guide ile kurulur, DDL değildir.
+    // scope_object_id modül kapsamlı guide'larda dolu; ADIYLA tutulur (id ortama özgü).
+    public const string PlanGuides = """
+        SELECT pg.plan_guide_id, pg.name, pg.is_disabled,
+               pg.scope_type_desc, OBJECT_SCHEMA_NAME(pg.scope_object_id), OBJECT_NAME(pg.scope_object_id),
+               pg.scope_batch, pg.parameters, pg.hints, pg.query_text
+        FROM sys.plan_guides AS pg;
+        """;
+
+    // Veritabanı seviyesi ayarlar (SQL 2016+). Yalnız VARSAYILANDAN SAPANLAR: varsayılanlar
+    // sürümle değişir, hepsini kıyaslamak sürüm farkını şema farkı gibi gösterirdi.
+    public const string DatabaseScopedConfigurations = """
+        SELECT dsc.configuration_id, dsc.name,
+               CONVERT(nvarchar(256), dsc.value), CONVERT(nvarchar(256), dsc.value_for_secondary)
+        FROM sys.database_scoped_configurations AS dsc
+        WHERE dsc.is_value_default = 0;
+        """;
+
+    // Legacy CREATE RULE / CREATE DEFAULT objeleri (SQL 2005'ten beri kullanımdan kalkmış
+    // ama eski EDW'lerde hâlâ var). Tanımları sys.sql_modules'ta; bağlandıkları kolonlar ayrı.
+    public const string LegacyRuleDefaults = """
+        SELECT o.object_id, s.name, o.name, RTRIM(o.type), m.definition
+        FROM sys.objects AS o
+        INNER JOIN sys.schemas AS s ON s.schema_id = o.schema_id
+        LEFT JOIN sys.sql_modules AS m ON m.object_id = o.object_id
+        WHERE o.is_ms_shipped = 0 AND o.type IN ('R', 'D') AND o.parent_object_id = 0;
+        """;
+
     // Kullanıcı tanımlı alias tipler (CREATE TYPE dbo.Money FROM decimal(19,4)).
     // CLR assembly tipleri ve table type'lar hariç. Baz sistem tipi adıyla tutulur.
     public const string UserDefinedTypes = """

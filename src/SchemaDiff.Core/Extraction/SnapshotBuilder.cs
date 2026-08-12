@@ -422,6 +422,54 @@ internal static class SnapshotBuilder
             objects[key] = snapshot;
         }
 
+        // Plan guide'lar: veritabanı seviyesi, şemasız. Kapsam objesi ADIYLA tutulur.
+        foreach (var pg in catalog.PlanGuides)
+        {
+            var key = new ObjectKey(string.Empty, pg.Name, ObjectKind.PlanGuide);
+            var snapshot = new ObjectSnapshot { Key = key, Hash = UInt128.Zero };
+            var scope = pg.ScopeObject is null ? "-" : $"[{pg.ScopeSchema}].[{pg.ScopeObject}]";
+            SetPart(snapshot, "definition",
+                $"planguide|type={pg.ScopeType}|scope={scope}|batch={pg.ScopeBatch ?? "-"}" +
+                $"|params={pg.Parameters ?? "-"}|hints={pg.Hints ?? "-"}|query={pg.QueryText ?? "-"}" +
+                $"|disabled={Flag(pg.IsDisabled)}");
+            snapshot.IsDisabled = pg.IsDisabled;
+            if (options.KeepDisplayScripts) snapshot.DisplayScript = RenderPlanGuide(pg);
+            Finalize(snapshot);
+            objects[key] = snapshot;
+        }
+
+        // Legacy CREATE RULE / CREATE DEFAULT objeleri: şemalı, gövdeleri sys.sql_modules'ta.
+        foreach (var rd in catalog.LegacyRuleDefaults)
+        {
+            var key = new ObjectKey(rd.SchemaName, rd.Name, ObjectKind.LegacyRuleDefault);
+            var snapshot = new ObjectSnapshot { Key = key, Hash = UInt128.Zero };
+            if (rd.Definition is null)
+            {
+                SetPart(snapshot, "body",
+                    MarkIncomparable(snapshot, "definition NULL — şifrelenmiş obje ya da yetki eksik"));
+            }
+            else
+            {
+                SetPart(snapshot, "body", TSqlNormalizer.Normalize(rd.Definition, true, options.Normalization));
+                SetPart(snapshot, "definition", $"legacy|type={rd.Type}");
+                if (options.KeepDisplayScripts) snapshot.DisplayScript = rd.Definition;
+            }
+            Finalize(snapshot);
+            objects[key] = snapshot;
+        }
+
+        // Veritabanı seviyesi ayarlar: sentetik "(database)" objesinin parçası — ayrı obje
+        // değil, çünkü hepsi tek bir ALTER DATABASE SCOPED CONFIGURATION ailesidir.
+        if (catalog.DatabaseScopedConfigurations.Count > 0)
+        {
+            var settings = catalog.DatabaseScopedConfigurations
+                .OrderBy(c => c.Name, StringComparer.Ordinal)
+                .Select(c => $"dbconfig|{c.Name}|value={c.Value ?? "-"}|secondary={c.ValueForSecondary ?? "-"}")
+                .ToList();
+            SetPart(dbSnapshot, "scopedConfiguration", string.Join('\n', settings));
+            Finalize(dbSnapshot);
+        }
+
         // Full-text stoplist'ler: veritabanı seviyesi, şemasız. Full-text index'ler bunlara
         // ADIYLA başvurur; hedefte yoksa index'in CREATE'i patlar.
         var stopwordsByList = GroupBy(catalog.FullTextStopwords, w => w.StoplistId);
@@ -1013,6 +1061,45 @@ internal static class SnapshotBuilder
     internal static string StopwordStatement(string name, StopwordDefinition word, bool add) =>
         $"ALTER FULLTEXT STOPLIST [{name}] {(add ? "ADD" : "DROP")} " +
         $"N'{word.Word.Replace("'", "''")}' LANGUAGE {word.LanguageId.ToString(CultureInfo.InvariantCulture)};";
+
+    /// <summary>
+    /// Plan guide DDL ile değil <c>sp_create_plan_guide</c> ile kurulur. Sorgu metni ve
+    /// ipuçları serbest metindir; tek tırnaklar kaçırılmazsa çağrı bozulur.
+    /// </summary>
+    private static string RenderPlanGuide(PlanGuideRow pg)
+    {
+        var sb = new StringBuilder(512);
+        sb.Append("EXEC sp_create_plan_guide").Append(Environment.NewLine)
+          .Append("    @name = N'").Append(Quote(pg.Name)).Append("',").Append(Environment.NewLine)
+          .Append("    @stmt = N'").Append(Quote(pg.QueryText)).Append("',").Append(Environment.NewLine)
+          .Append("    @type = N'").Append(Quote(pg.ScopeType)).Append('\'');
+
+        var moduleOrBatch = pg.ScopeObject is not null
+            ? $"[{pg.ScopeSchema}].[{pg.ScopeObject}]"
+            : pg.ScopeBatch;
+        if (moduleOrBatch is not null)
+            sb.Append(',').Append(Environment.NewLine)
+              .Append("    @module_or_batch = N'").Append(Quote(moduleOrBatch)).Append('\'');
+
+        if (pg.Parameters is not null)
+            sb.Append(',').Append(Environment.NewLine)
+              .Append("    @params = N'").Append(Quote(pg.Parameters)).Append('\'');
+
+        if (pg.Hints is not null)
+            sb.Append(',').Append(Environment.NewLine)
+              .Append("    @hints = N'").Append(Quote(pg.Hints)).Append('\'');
+
+        sb.Append(';');
+
+        // Plan guide her zaman ETKİN doğar; pasiflik ayrı ifadedir.
+        if (pg.IsDisabled)
+            sb.Append(Environment.NewLine)
+              .Append("EXEC sp_control_plan_guide N'DISABLE', N'").Append(Quote(pg.Name)).Append("';");
+
+        return sb.ToString();
+    }
+
+    private static string Quote(string? value) => (value ?? string.Empty).Replace("'", "''");
 
     private static string RenderFullTextCatalog(FullTextCatalogRow ftc)
     {

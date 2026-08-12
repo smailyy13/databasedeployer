@@ -89,10 +89,10 @@ public static class CoverageProbe
         ("Güvenlik", "Column Master/Encryption Key (Always Encrypted)", false, "SELECT (SELECT COUNT(*) FROM sys.column_master_keys) + (SELECT COUNT(*) FROM sys.column_encryption_keys)"),
         ("Programlanabilirlik", "Service Broker (queue/service/contract)", false, "SELECT (SELECT COUNT(*) FROM sys.service_queues WHERE is_ms_shipped = 0) + (SELECT COUNT(*) FROM sys.services WHERE service_id > 5) + (SELECT COUNT(*) FROM sys.service_contracts WHERE service_contract_id > 5)"),
         ("Programlanabilirlik", "XML schema collection'lar", true, "SELECT COUNT(*) FROM sys.xml_schema_collections WHERE schema_id <> 4"),
-        ("Programlanabilirlik", "Plan guide'lar", false, "SELECT COUNT(*) FROM sys.plan_guides"),
+        ("Programlanabilirlik", "Plan guide'lar", true, "SELECT COUNT(*) FROM sys.plan_guides"),
         ("Entegrasyon", "External data source/table (PolyBase)", false, "SELECT (SELECT COUNT(*) FROM sys.external_data_sources) + (SELECT COUNT(*) FROM sys.external_tables)"),
-        ("Ayar", "Database scoped configuration'lar", false, "SELECT COUNT(*) FROM sys.database_scoped_configurations WHERE is_value_default = 0"),
-        ("Legacy", "CREATE RULE / CREATE DEFAULT (bağlı objeler)", false, "SELECT COUNT(*) FROM sys.objects WHERE is_ms_shipped = 0 AND type IN ('R', 'D') AND parent_object_id = 0"),
+        ("Ayar", "Database scoped configuration'lar", true, "SELECT COUNT(*) FROM sys.database_scoped_configurations WHERE is_value_default = 0"),
+        ("Legacy", "CREATE RULE / CREATE DEFAULT (bağlı objeler)", true, "SELECT COUNT(*) FROM sys.objects WHERE is_ms_shipped = 0 AND type IN ('R', 'D') AND parent_object_id = 0"),
     ];
 
     public static async Task<CoverageReport> RunAsync(string connectionString, CancellationToken ct = default)

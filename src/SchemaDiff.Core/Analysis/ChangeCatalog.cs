@@ -167,6 +167,10 @@ public static class ChangeCatalog
                     children.AddRange(CompareLines(key, source, target, part));
                     break;
 
+                case "scopedConfiguration":
+                    children.AddRange(CompareLines(key, source, target, "scopedConfiguration"));
+                    break;
+
                 case "content":
                     children.Add(new ChildChange(ChangeAction.Change, "Properties", "Schema Content",
                         "XSD içeriği", $"{key.Schema}.{key.Name}", "içerik değişti"));
@@ -465,6 +469,7 @@ public static class ChangeCatalog
     {
         "checks" => ("Check Constraints", "Check Constraint"),
         "statistics" => ("Statistics", "Statistics"),
+        "scopedConfiguration" => ("Database Settings", "Scoped Configuration"),
         "fullText" => ("Full-Text", "Full-Text Index"),
         "xmlIndexes" => ("XML Indexes", "XML Index"),
         "spatialIndexes" => ("Spatial Indexes", "Spatial Index"),

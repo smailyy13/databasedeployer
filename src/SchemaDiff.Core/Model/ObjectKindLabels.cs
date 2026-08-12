@@ -34,6 +34,8 @@ public static class ObjectKindLabels
         ObjectKind.FullTextCatalog => "Full-Text Catalog",
         ObjectKind.FullTextStoplist => "Full-Text Stoplist",
         ObjectKind.XmlSchemaCollection => "XML Schema Collection",
+        ObjectKind.PlanGuide => "Plan Guide",
+        ObjectKind.LegacyRuleDefault => "Rule or Default",
         ObjectKind.Database => "Database",
         _ => kind.ToString(),
     };
@@ -47,6 +49,7 @@ public static class ObjectKindLabels
         "Scalar Function" => ObjectKind.ScalarFunction,
         "Inline Function" => ObjectKind.InlineTableFunction,
         "Table Function" => ObjectKind.TableFunction,
+        "Rule or Default" => ObjectKind.LegacyRuleDefault,
         _ => Parse(label),
     };
 

@@ -50,6 +50,19 @@ internal sealed record RoleRow(int PrincipalId, string Name, string? Owner, bool
 /// <summary>Veritabanı kullanıcısı. Tip: S=SQL, U=Windows kullanıcı, G=Windows grup, E/X=external.</summary>
 internal sealed record UserRow(string Name, string Type, string? DefaultSchema, int PrincipalId = 0);
 
+/// <summary>Plan guide. Kapsam objesi ADIYLA tutulur — object_id ortama özgüdür.</summary>
+internal sealed record PlanGuideRow(
+    int PlanGuideId, string Name, bool IsDisabled, string ScopeType,
+    string? ScopeSchema, string? ScopeObject, string? ScopeBatch,
+    string? Parameters, string? Hints, string? QueryText);
+
+internal sealed record DatabaseScopedConfigurationRow(
+    int ConfigurationId, string Name, string? Value, string? ValueForSecondary);
+
+/// <summary>Legacy CREATE RULE ('R') / CREATE DEFAULT ('D') objesi.</summary>
+internal sealed record LegacyRuleDefaultRow(
+    int ObjectId, string SchemaName, string Name, string Type, string? Definition);
+
 internal sealed record ParameterRow(int ObjectId, int ParameterId, string Name);
 
 internal sealed record RoleMemberRow(int RolePrincipalId, string? MemberName);

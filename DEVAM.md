@@ -1,12 +1,12 @@
 # DEVAM — Nerede Kaldık (kapsam genişletme çalışması)
 
 > Bu dosya, başka bir makinede kaldığın yerden devam edebilmen için yazıldı.
-> Son güncelleme: 2026-08-12 (Dalga 15 sonrası)
+> Son güncelleme: 2026-08-12 (Dalga 16 sonrası)
 
 ## Hızlı durum
 - **Repo:** `smailyy13/databasedeployer` (GitHub, private) — proje adı **SchemaDiff**
 - **Branch:** `main`
-- **Testler:** **810 (807 yeşil + 3 atlanan entegrasyon)**
+- **Testler:** **846 (843 yeşil + 3 atlanan entegrasyon)**
 - **Son release:** **v1.4** (portable, 4 parça). **v1.5 HENÜZ ÇIKARILMADI** — aşağıya bak.
 - **Gereken SDK:** .NET 10 (`dotnet-install.sh --channel 10.0`; macOS'ta `~/.dotnet`).
 
@@ -18,7 +18,7 @@ git pull                        # en güncel main
 
 # Derle + test
 dotnet build -c Release
-dotnet test  -c Release --no-build      # 807 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
+dotnet test  -c Release --no-build      # 843 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
 
 # Web arayüzünü çalıştır (yerel, sadece 127.0.0.1)
 dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
@@ -46,7 +46,7 @@ dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
    tam ve güvenli (SET OFF + DROP PERIOD); **AÇMA/yeniden kurulum** riskli olduğu için
    (PERIOD kolonu + DEFAULT gerektirir) elle uygulanmak üzere uyarıyla atlanıyor.
 
-## Bu oturumda tamamlananlar (Dalga 4–15)
+## Bu oturumda tamamlananlar (Dalga 4–16)
 
 Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi eklendi.
 
@@ -197,7 +197,21 @@ Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi ekle
     - **Yol boyunca bulunan eksik:** rol ve kullanıcı snapshot'larına `extendedProperties`
       parçası hiç eklenmiyordu; class 4 host'ları onlar olduğu için eklendi.
 
-17. **Test:** 276 → **810** (807 yeşil + 3 atlanan entegrasyon).
+17. **Dalga 16 — Plan guide · DB scoped configuration · legacy RULE/DEFAULT** (üçü tek dalgada):
+    - **Plan guide:** veritabanı seviyesi obje. DDL değil `sp_create_plan_guide` ile kurulur;
+      pasiflik ayrı `sp_control_plan_guide` çağrısı (her zaman ETKİN doğar). Kapsam objesi
+      ADIYLA tutuluyor. Sorgu metni ve ipuçları serbest metin → tek tırnaklar kaçırılıyor.
+    - **Database scoped configuration:** ayrı obje DEĞİL, sentetik `(database)` objesinin
+      parçası — hepsi tek bir `ALTER DATABASE SCOPED CONFIGURATION` ailesidir. Yalnız
+      **varsayılandan sapanlar** çekiliyor: varsayılanlar sürümle değişir, hepsini kıyaslamak
+      sürüm farkını şema farkı gibi gösterirdi. (MAXDOP / legacy CE dev-prod arasında sessizce
+      farklıysa sorgu planları değişir; bunu şema aracı yakalamazsa hiçbir şey yakalamaz.)
+    - **Legacy RULE/DEFAULT:** şemalı objeler, gövdeleriyle karşılaştırılıyor; okunamayan
+      gövde "aynı" değil **Belirsiz** raporlanıyor.
+    - Round-trip testi yeni etiketi ("Rule or Default") anında yakaladı — Dalga 11'de eklenen
+      koruma işini yaptı.
+
+18. **Test:** 276 → **846** (843 yeşil + 3 atlanan entegrasyon).
    - `StatisticsTests` (33): karşılaştırma, sıra, filtre/NORECOMPUTE/INCREMENTAL,
      drop-önce/create-sonra sıralaması, yeni tablo script'i, okunamayan sorgu davranışı.
    - `CatalogQueryTests` (yeni): TÜM katalog sorgularının yapısal denetimi — en önemlisi
@@ -349,6 +363,15 @@ rm -f publish-portable/*.pdb
 - `src/SchemaDiff.Core/Scripting/ExtendedPropertyScriptGenerator.cs` — level2 (PARAMETER/INDEX),
   principal level0, User/Role host olarak
 - Testler: `ExtendedPropertyScopeTests` (yeni, 12)
+
+## Dalga 16'da değişen dosyalar (plan guide / DB config / legacy)
+- `src/SchemaDiff.Core/Extraction/Sql.cs` — `PlanGuides`, `DatabaseScopedConfigurations`,
+  `LegacyRuleDefaults`
+- `src/SchemaDiff.Core/Extraction/{CatalogRows,CatalogExtractor}.cs` — satırlar + opsiyonel sorgular
+- `src/SchemaDiff.Core/Model/{ObjectKey,ObjectKindLabels}.cs` — `PlanGuide`, `LegacyRuleDefault`
+- `src/SchemaDiff.Core/Extraction/SnapshotBuilder.cs` — üç sınıfın objeleri + `RenderPlanGuide`
+- `src/SchemaDiff.Core/Analysis/ChangeCatalog.cs` — "Database Settings" klasörü
+- Testler: `PlanGuideAndSettingsTests` (yeni, 19)
 
 ## Dalga 1–3'te değişen ana dosyalar (referans)
 - `src/SchemaDiff.Core/Analysis/CoverageProbe.cs` — sayaçlar (Probes internal)

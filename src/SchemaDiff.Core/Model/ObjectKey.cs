@@ -24,6 +24,8 @@ public enum ObjectKind
     FullTextCatalog,
     FullTextStoplist,
     XmlSchemaCollection,
+    PlanGuide,
+    LegacyRuleDefault,
     Database,
 }
 
@@ -62,6 +64,7 @@ public readonly record struct ObjectKey(string Schema, string Name, ObjectKind K
         ObjectKind.DdlTrigger => $"DDL TRIGGER [{Name}]",
         ObjectKind.FullTextCatalog => $"FULLTEXT CATALOG [{Name}]",
         ObjectKind.FullTextStoplist => $"FULLTEXT STOPLIST [{Name}]",
+        ObjectKind.PlanGuide => $"PLAN GUIDE [{Name}]",
         ObjectKind.Database => "DATABASE",
         _ => $"{Kind} [{Schema}].[{Name}]",
     };

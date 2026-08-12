@@ -1,6 +1,6 @@
 # KAPSAM — SchemaDiff neyi görür, neyi yazar, neyi görmez
 
-Son güncelleme: 2026-08-12 (Dalga 15 sonrası)
+Son güncelleme: 2026-08-12 (Dalga 16 sonrası)
 
 Bu belge tek soruyu cevaplar: **"Bu araca güvenip deploy edersem neyi kaçırırım?"**
 
@@ -44,6 +44,9 @@ En tehlikeli sonuç "fark yok" demektir; bu yüzden okunamayan her sınıf ayrı
 | İzinler | obje / kolon / şema / **veritabanı** seviyesi `GRANT` / `DENY` |
 | Extended property'ler | obje / kolon / şema / **veritabanı** / **parametre** / **principal** / **index** seviyesi |
 | Veritabanı kullanıcıları | `CREATE USER` (login/SID eşlemesi ortama özgü, kıyasa girmez) |
+| Plan guide | `sp_create_plan_guide` + pasiflik (`sp_control_plan_guide`) |
+| Database scoped configuration | varsayılandan SAPAN ayarlar (MAXDOP, legacy CE …) |
+| Legacy `RULE` / `DEFAULT` | gövdesiyle karşılaştırılır |
 | Temporal (system-versioned) | `CREATE TABLE` tam üretir; **kapatma** tam ve güvenli |
 | XML schema collection | `CREATE XML SCHEMA COLLECTION` (XSD okunabilirse); namespace'ler her hâlde kıyaslanır |
 | Full-text stoplist | `CREATE FULLTEXT STOPLIST` + kelime seviyesi `ALTER … ADD/DROP` (değişim TAM üretilir) |
@@ -99,7 +102,6 @@ Sayılıyor (sayısı > 0 çıkarsa `--coverage` uyarır) ama görülmüyor ve y
 | # | Konu | Neden bu sırada |
 |---|---|---|
 | 1 | Table type drop+recreate üretimi | Fark artık görünüyor; bağımlılık (prosedür parametreleri) düşürme sırası gerekir |
-| 2 | Plan guide · DB scoped configuration · legacy `RULE`/`DEFAULT` | Düz `CREATE`/`ALTER`, düşük risk, düşük sıklık |
 
 **Bilinçli ertelenen:** fiziksel yerleşim — `ON [filegroup]`, `TEXTIMAGE_ON`,
 `FILESTREAM_ON`, tablo/index'in partition scheme üzerine yerleşimi. Filegroup'ları biz
