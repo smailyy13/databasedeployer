@@ -51,6 +51,7 @@ internal sealed class CatalogSet
     public List<TableTypeRow> TableTypes { get; set; } = [];
     public List<TableTypeColumnRow> TableTypeColumns { get; set; } = [];
     public List<TableTypeIndexRow> TableTypeIndexes { get; set; } = [];
+    public List<TableTypeDependentRow> TableTypeDependents { get; set; } = [];
     public List<IndexColumnRow> TableTypeIndexColumns { get; set; } = [];
     public List<TableTypeCheckRow> TableTypeChecks { get; set; } = [];
     public List<PartitionFunctionRow> PartitionFunctions { get; set; } = [];
@@ -173,6 +174,8 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
             Run("tableTypes", Sql.TableTypes, MapTableType, rows => catalog.TableTypes = rows, optional: true),
             Run("tableTypeColumns", Sql.TableTypeColumns, MapTableTypeColumn,
                 rows => catalog.TableTypeColumns = rows, optional: true),
+            Run("tableTypeDependents", Sql.TableTypeDependents, MapTableTypeDependent,
+                rows => catalog.TableTypeDependents = rows, optional: true),
             Run("tableTypeIndexes", Sql.TableTypeIndexes, MapTableTypeIndex,
                 rows => catalog.TableTypeIndexes = rows, optional: true),
             Run("tableTypeIndexColumns", Sql.TableTypeIndexColumns, MapIndexColumn,
@@ -436,6 +439,9 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
         Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.Str(r, 2), Rdr.Str(r, 3), Rdr.Str(r, 4),
         Rdr.Short(r, 5), Rdr.Byte(r, 6), Rdr.Byte(r, 7), Rdr.Bool(r, 8), Rdr.NStr(r, 9),
         Rdr.Bool(r, 10), Rdr.Bool(r, 11), Rdr.NStr(r, 12));
+
+    private static TableTypeDependentRow MapTableTypeDependent(SqlDataReader r) => new(
+        Rdr.Int(r, 0), Rdr.Int(r, 1));
 
     private static TableTypeIndexRow MapTableTypeIndex(SqlDataReader r) => new(
         Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.NStr(r, 2), Rdr.Str(r, 3),

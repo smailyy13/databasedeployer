@@ -11,6 +11,14 @@ public sealed record TypeScriptOptions
 
     public bool WrapInTransaction { get; init; } = true;
 
+    /// <summary>
+    /// Değişen table type'ı yeniden kur: bağımlı modülleri DÜŞÜR → tipi drop+create →
+    /// modülleri geri kur. Varsayılan KAPALI, çünkü bir prosedürü düşürüp geri kuramamak
+    /// (tanımı okunamıyorsa) onarılamaz. Açıkken bile bağımlıların TAMAMI okunabilir
+    /// değilse üretim yapılmaz, sebebiyle atlanır.
+    /// </summary>
+    public bool RecreateChangedTableTypes { get; init; }
+
     public string? GeneratedAt { get; init; }
 
     public static readonly TypeScriptOptions Default = new();
@@ -64,6 +72,7 @@ public static class TypeScriptGenerator
         var creates = new List<ObjectKey>();
         var drops = new List<ObjectKey>();
         var stoplistChanges = new List<ObjectKey>();
+        var tableTypeRecreates = new List<ObjectKey>();
 
         foreach (var diff in result.Differences)
         {
@@ -74,6 +83,17 @@ public static class TypeScriptGenerator
             {
                 case DiffKind.Added: creates.Add(diff.Key); break;
                 case DiffKind.Removed: drops.Add(diff.Key); break;
+                case DiffKind.Changed when diff.Key.Kind == ObjectKind.TableType
+                                           && options.RecreateChangedTableTypes:
+                    tableTypeRecreates.Add(diff.Key);
+                    break;
+
+                case DiffKind.Changed when diff.Key.Kind == ObjectKind.TableType:
+                    skipped.Add(new SkippedObject(diff.Key,
+                        "değişti — table type ALTER edilemez. Bağımlı modülleri düşürüp yeniden " +
+                        "kuran script için 'Değişen table type'ları yeniden kur' seçeneğini açın."));
+                    break;
+
                 case DiffKind.Changed when diff.Key.Kind == ObjectKind.FullTextStoplist:
                     // Stoplist tek istisna: SQL Server kelime seviyesinde ADD/DROP veriyor,
                     // yani değişim TAM ve GÜVENLİ üretilebilir — drop+recreate gereksiz.
@@ -88,7 +108,8 @@ public static class TypeScriptGenerator
             }
         }
 
-        if (creates.Count == 0 && stoplistChanges.Count == 0 && (!options.IncludeDrops || drops.Count == 0))
+        if (creates.Count == 0 && stoplistChanges.Count == 0 && tableTypeRecreates.Count == 0
+            && (!options.IncludeDrops || drops.Count == 0))
         {
             foreach (var key in drops)
                 if (!options.IncludeDrops) skipped.Add(new SkippedObject(key, "DROP kapalı — obje hedefte kalacak"));
@@ -133,6 +154,14 @@ public static class TypeScriptGenerator
             included.Add(key);
         }
 
+        foreach (var key in tableTypeRecreates
+                     .OrderBy(k => k.Schema, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(k => k.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            if (RecreateTableType(sb, key, result) is { } reason) skipped.Add(new SkippedObject(key, reason));
+            else included.Add(key);
+        }
+
         foreach (var key in stoplistChanges.OrderBy(k => k.Name, StringComparer.OrdinalIgnoreCase))
         {
             var statements = StoplistWordDiff(key, result);
@@ -173,6 +202,78 @@ public static class TypeScriptGenerator
 
         return new TypeScriptResult(sb.ToString(), included, skipped);
     }
+
+    /// <summary>
+    /// Değişen table type'ı yeniden kurar: bağımlı modülleri düşür → tipi drop+create →
+    /// modülleri KAYNAK tanımıyla geri kur.
+    ///
+    /// ÖN KOŞUL katı: bağımlı modüllerin TAMAMININ tanımı okunabilir olmalı. Okunamayan tek
+    /// bir modül varsa hiçbir şey üretilmez — düşürüp geri kuramamak onarılamaz bir hatadır.
+    /// </summary>
+    /// <returns>Üretilemediyse sebebi, üretildiyse null.</returns>
+    private static string? RecreateTableType(StringBuilder sb, ObjectKey key, CompareResult result)
+    {
+        if (!result.Source.Objects.TryGetValue(key, out var source)
+            || string.IsNullOrWhiteSpace(source.DisplayScript))
+            return "CREATE metni yok — snapshot display script'i gerekli";
+
+        result.Target.Objects.TryGetValue(key, out var target);
+
+        // Hedefte var olan bağımlılar düşürülür, kaynaktakiler geri kurulur; birleşimin
+        // tamamı okunabilir olmalı.
+        var toDrop = target?.DependentModules ?? [];
+        var toCreate = source.DependentModules ?? [];
+
+        foreach (var dependent in toDrop.Concat(toCreate).Distinct())
+        {
+            if (!result.Source.Objects.TryGetValue(dependent, out var module)
+                || string.IsNullOrWhiteSpace(module.DisplayScript) || module.Incomparable)
+            {
+                return $"bağımlı modül {dependent} geri kurulamaz (tanımı okunamıyor) — " +
+                       "tip yeniden kurulmadı; elle uygulayın";
+            }
+        }
+
+        sb.AppendLine($"PRINT N'Yeniden kuruluyor: {Describe(key)}';");
+        sb.AppendLine("GO");
+        sb.AppendLine();
+
+        foreach (var dependent in toDrop)
+        {
+            sb.AppendLine($"IF OBJECT_ID(N'[{dependent.Schema}].[{dependent.Name}]') IS NOT NULL");
+            sb.AppendLine($"    DROP {ModuleVerb(dependent.Kind)} [{dependent.Schema}].[{dependent.Name}];");
+        }
+        sb.AppendLine($"IF {ExistsCondition(key)}");
+        sb.AppendLine($"    {DropStatement(key)}");
+        sb.AppendLine("GO");
+        sb.AppendLine();
+
+        sb.AppendLine(source.DisplayScript!.TrimEnd());
+        sb.AppendLine("GO");
+        sb.AppendLine();
+
+        foreach (var dependent in toCreate)
+        {
+            var module = result.Source.Objects[dependent];
+            // Modülün özgün SET seçenekleri korunmalı: aksi hâlde davranışı değişir.
+            sb.AppendLine($"SET ANSI_NULLS {(module.UsesAnsiNulls == false ? "OFF" : "ON")};");
+            sb.AppendLine($"SET QUOTED_IDENTIFIER {(module.UsesQuotedIdentifier == false ? "OFF" : "ON")};");
+            sb.AppendLine("GO");
+            sb.AppendLine(module.DisplayScript!.TrimEnd());
+            sb.AppendLine("GO");
+            sb.AppendLine();
+        }
+
+        return null;
+    }
+
+    private static string ModuleVerb(ObjectKind kind) => kind switch
+    {
+        ObjectKind.Procedure => "PROCEDURE",
+        ObjectKind.Trigger => "TRIGGER",
+        ObjectKind.View => "VIEW",
+        _ => "FUNCTION",
+    };
 
     /// <summary>
     /// Stoplist'in kelime farkı: kaynakta olup hedefte olmayanlar ADD, tersi DROP.

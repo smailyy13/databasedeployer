@@ -434,6 +434,16 @@ internal static class Sql
         LEFT JOIN sys.default_constraints AS dc ON dc.object_id = c.default_object_id;
         """;
 
+    // Table type'ı PARAMETRE olarak kullanan modüller. Tip ALTER edilemez; yeniden kurmak
+    // için önce bu modüller düşürülmeli. sys.sql_expression_dependencies bunu GÖRMEZ —
+    // parametre tipi bir ifade bağımlılığı değildir, bu yüzden ayrı sorgu şart.
+    public const string TableTypeDependents = """
+        SELECT pr.user_type_id, pr.object_id
+        FROM sys.parameters AS pr
+        INNER JOIN sys.table_types AS tt ON tt.user_type_id = pr.user_type_id
+        INNER JOIN sys.objects AS o ON o.object_id = pr.object_id AND o.is_ms_shipped = 0;
+        """;
+
     // Table type'ın PK/UNIQUE ve (SQL 2014+) bağımsız index'leri. Table type ALTER edilemez;
     // bunlar tipin TANIMININ parçasıdır, farkları görünmezse tip "aynı" sanılır.
     public const string TableTypeIndexes = """

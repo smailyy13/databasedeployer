@@ -79,6 +79,12 @@ public sealed class ObjectSnapshot
     /// <summary>Tablonun full-text index'i (en fazla bir tane) — script üretimi için.</summary>
     public FullTextIndexDefinition? FullTextIndex { get; set; }
 
+    /// <summary>
+    /// Bu objeyi (table type'ı) parametre olarak kullanan modüller. Tip ALTER edilemediği
+    /// için yeniden kurulumda önce bunlar düşürülür, sonra geri kurulur.
+    /// </summary>
+    public IReadOnlyList<ObjectKey>? DependentModules { get; set; }
+
     /// <summary>Full-text stoplist'in kelimeleri — kelime seviyesi ALTER üretimi için.</summary>
     public IReadOnlyList<StopwordDefinition>? Stopwords { get; set; }
 

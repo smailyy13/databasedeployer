@@ -184,7 +184,12 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
         if (wantTables || wantModules)
         {
             var types = TypeScriptGenerator.Generate(comparison, selection,
-                new TypeScriptOptions { GeneratedAt = generatedAt, IncludeDrops = request.DropNotInSource });
+                new TypeScriptOptions
+                {
+                    GeneratedAt = generatedAt,
+                    IncludeDrops = request.DropNotInSource,
+                    RecreateChangedTableTypes = request.RecreateChangedTableTypes,
+                });
             if (!types.IsEmpty) { sb.AppendLine(types.Sql); sb.AppendLine(); included += types.Included.Count; }
             skipped.AddRange(types.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
         }

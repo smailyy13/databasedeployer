@@ -1,12 +1,12 @@
 # DEVAM — Nerede Kaldık (kapsam genişletme çalışması)
 
 > Bu dosya, başka bir makinede kaldığın yerden devam edebilmen için yazıldı.
-> Son güncelleme: 2026-08-12 (Dalga 16 sonrası)
+> Son güncelleme: 2026-08-12 (Dalga 17 sonrası)
 
 ## Hızlı durum
 - **Repo:** `smailyy13/databasedeployer` (GitHub, private) — proje adı **SchemaDiff**
 - **Branch:** `main`
-- **Testler:** **846 (843 yeşil + 3 atlanan entegrasyon)**
+- **Testler:** **863 (860 yeşil + 3 atlanan entegrasyon)**
 - **Son release:** **v1.4** (portable, 4 parça). **v1.5 HENÜZ ÇIKARILMADI** — aşağıya bak.
 - **Gereken SDK:** .NET 10 (`dotnet-install.sh --channel 10.0`; macOS'ta `~/.dotnet`).
 
@@ -18,7 +18,7 @@ git pull                        # en güncel main
 
 # Derle + test
 dotnet build -c Release
-dotnet test  -c Release --no-build      # 843 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
+dotnet test  -c Release --no-build      # 860 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
 
 # Web arayüzünü çalıştır (yerel, sadece 127.0.0.1)
 dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
@@ -46,7 +46,7 @@ dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
    tam ve güvenli (SET OFF + DROP PERIOD); **AÇMA/yeniden kurulum** riskli olduğu için
    (PERIOD kolonu + DEFAULT gerektirir) elle uygulanmak üzere uyarıyla atlanıyor.
 
-## Bu oturumda tamamlananlar (Dalga 4–16)
+## Bu oturumda tamamlananlar (Dalga 4–17)
 
 Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi eklendi.
 
@@ -211,7 +211,17 @@ Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi ekle
     - Round-trip testi yeni etiketi ("Rule or Default") anında yakaladı — Dalga 11'de eklenen
       koruma işini yaptı.
 
-18. **Test:** 276 → **846** (843 yeşil + 3 atlanan entegrasyon).
+18. **Dalga 17 — Table type drop+recreate üretimi**: yapılacaklar listesinin son maddesi.
+    - Bağımlı modüller `sys.parameters` üzerinden bulunuyor — `sys.sql_expression_dependencies`
+      parametre TİPİ bağımlılığını GÖRMEZ, ayrı sorgu şart.
+    - Üretim: bağımlıları düşür → tipi drop → tipi create → modülleri KAYNAK tanımıyla geri
+      kur (özgün `ANSI_NULLS`/`QUOTED_IDENTIFIER` korunarak).
+    - **Varsayılan KAPALI** (`RecreateChangedTableTypes`): bir prosedürü düşürüp geri
+      kuramamak onarılamaz. Kapalıyken eski davranış sürer, atlama mesajı seçeneği gösterir.
+    - **Ön koşul katı:** bağımlıların TAMAMININ tanımı okunabilir olmalı; tek biri
+      okunamıyorsa HİÇBİR ŞEY üretilmez ve o modül ismen bildirilir.
+
+19. **Test:** 276 → **863** (860 yeşil + 3 atlanan entegrasyon).
    - `StatisticsTests` (33): karşılaştırma, sıra, filtre/NORECOMPUTE/INCREMENTAL,
      drop-önce/create-sonra sıralaması, yeni tablo script'i, okunamayan sorgu davranışı.
    - `CatalogQueryTests` (yeni): TÜM katalog sorgularının yapısal denetimi — en önemlisi
@@ -372,6 +382,14 @@ rm -f publish-portable/*.pdb
 - `src/SchemaDiff.Core/Extraction/SnapshotBuilder.cs` — üç sınıfın objeleri + `RenderPlanGuide`
 - `src/SchemaDiff.Core/Analysis/ChangeCatalog.cs` — "Database Settings" klasörü
 - Testler: `PlanGuideAndSettingsTests` (yeni, 19)
+
+## Dalga 17'de değişen dosyalar (table type recreate)
+- `src/SchemaDiff.Core/Extraction/Sql.cs` — `TableTypeDependents`
+- `src/SchemaDiff.Core/Extraction/{CatalogRows,CatalogExtractor,SnapshotBuilder}.cs` — bağımlılar
+- `src/SchemaDiff.Core/Model/Snapshot.cs` — `ObjectSnapshot.DependentModules`
+- `src/SchemaDiff.Core/Scripting/TypeScriptGenerator.cs` — `RecreateChangedTableTypes` + üretim
+- `src/SchemaDiff.Web/{Contracts,Program}.cs` + `wwwroot/app.js` — seçenek kutusu
+- Testler: `TableTypeRecreateTests` (yeni, 12)
 
 ## Dalga 1–3'te değişen ana dosyalar (referans)
 - `src/SchemaDiff.Core/Analysis/CoverageProbe.cs` — sayaçlar (Probes internal)

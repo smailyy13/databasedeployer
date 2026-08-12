@@ -97,6 +97,7 @@ const I18N = {
     opt_ignoreSystemNamedConstraints: 'Ignore system-named constraints', optn_ignoreSystemNamedConstraints: 'Auto names like PK__Tbl__A1B2C3 differ between environments.',
     opt_ignoreExtendedProperties: 'Ignore extended properties', optn_ignoreExtendedProperties: 'Descriptions like MS_Description are not compared. Default: compared (SSDT does too).',
     opt_ignorePermissions: 'Ignore permissions and roles', optn_ignorePermissions: 'User-defined roles, memberships and object/schema permissions are not compared. Default: compared.',
+    opt_recreateChangedTableTypes: 'Recreate changed table types', optn_recreateChangedTableTypes: 'A changed table type cannot be altered. When on, dependent modules are dropped, the type is recreated and the modules are restored — only if every dependent definition is readable.',
     opt_caseSensitiveNames: 'Case-sensitive names', optn_caseSensitiveNames: "Default is case-insensitive — SQL Server's usual collation behaviour.",
   },
   tr: {
@@ -186,6 +187,7 @@ const I18N = {
     opt_ignoreSystemNamedConstraints: 'Sistem üretimi constraint adlarını yok say', optn_ignoreSystemNamedConstraints: 'PK__Tbl__A1B2C3 gibi otomatik adlar ortamlar arasında farklıdır.',
     opt_ignoreExtendedProperties: 'Extended property\'leri yok say', optn_ignoreExtendedProperties: 'MS_Description gibi açıklamalar karşılaştırılmaz. Varsayılan: karşılaştırılır (SSDT de eder).',
     opt_ignorePermissions: 'İzin ve rolleri yok say', optn_ignorePermissions: 'Kullanıcı tanımlı roller, üyelikler ve obje/şema izinleri karşılaştırılmaz. Varsayılan: karşılaştırılır.',
+    opt_recreateChangedTableTypes: 'Değişen table type\'ları yeniden kur', optn_recreateChangedTableTypes: 'Table type ALTER edilemez. Açıkken bağımlı modüller düşürülür, tip yeniden kurulur ve modüller geri yüklenir — yalnızca bağımlıların TAMAMININ tanımı okunabiliyorsa.',
     opt_caseSensitiveNames: 'İsimlerde büyük/küçük harf duyarlı', optn_caseSensitiveNames: 'Varsayılan duyarsızdır — SQL Server\'ın olağan collation davranışı.',
   },
 };
@@ -312,7 +314,8 @@ const OPTION_GROUPS = [
                                'ignoreDataCompression', 'ignoreStatistics'] },
   { group: 'optgObject', keys: ['ignoreDmlTriggerState', 'ignoreSystemNamedConstraints'] },
   { group: 'optgScope', keys: ['ignoreExtendedProperties', 'ignorePermissions', 'caseSensitiveNames'] },
-  { group: 'optgScript', keys: ['blockDataLoss', 'dropNotInSource', 'scriptValidateConstraints'] },
+  { group: 'optgScript', keys: ['blockDataLoss', 'dropNotInSource', 'scriptValidateConstraints',
+                                'recreateChangedTableTypes'] },
 ];
 
 const OPTION_KEYS = OPTION_GROUPS.flatMap((g) => g.keys);
@@ -327,6 +330,7 @@ const DEFAULT_OPTIONS = {
   ignoreDmlTriggerState: false, ignoreSystemNamedConstraints: true,
   ignoreExtendedProperties: false, ignorePermissions: false, caseSensitiveNames: false,
   blockDataLoss: true, dropNotInSource: true, scriptValidateConstraints: true,
+  recreateChangedTableTypes: false,
   maxQueries: 16,
 };
 

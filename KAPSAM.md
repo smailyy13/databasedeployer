@@ -1,6 +1,6 @@
 # KAPSAM — SchemaDiff neyi görür, neyi yazar, neyi görmez
 
-Son güncelleme: 2026-08-12 (Dalga 16 sonrası)
+Son güncelleme: 2026-08-12 (Dalga 17 sonrası)
 
 Bu belge tek soruyu cevaplar: **"Bu araca güvenip deploy edersem neyi kaçırırım?"**
 
@@ -38,7 +38,7 @@ En tehlikeli sonuç "fark yok" demektir; bu yüzden okunamayan her sınıf ayrı
 | Sequence | `CREATE SEQUENCE` (current_value hariç — şema farkı değil) |
 | Synonym | `CREATE SYNONYM` |
 | Alias tipler | `CREATE TYPE … FROM` |
-| Table type | kolon yapısı + DEFAULT + PK/UNIQUE/CHECK/index (tip ALTER edilemez, bkz. §2) |
+| Table type | kolon yapısı + DEFAULT + PK/UNIQUE/CHECK/index; **değişimi için opt-in drop+recreate** (bağımlı modülleri düşürüp geri kurar) |
 | Partition function / scheme | `CREATE PARTITION FUNCTION/SCHEME` |
 | Roller ve üyelikler | `CREATE ROLE`, `ALTER ROLE ADD MEMBER` (sabit rollerin ÜYELİĞİ dahil) |
 | İzinler | obje / kolon / şema / **veritabanı** seviyesi `GRANT` / `DENY` |
@@ -72,7 +72,7 @@ Bunlar rapora düşer, script'e girmez. Girmedikleri her seferinde **sebebiyle b
 | View üzerindeki istatistikler | fark görünür; script view'ın kendi drop+create'inden gider |
 | Rol sahibi (owner) değişimi | üretilmiyor |
 | XML schema collection **değişimi** | `ALTER … ADD` yalnız EKLEYEBİLİR, çıkarma yoktur; fark görünür, uygulama elle |
-| Table type **değişimi** | tip ALTER edilemez; fark GÖRÜNÜR, script için bağımlılıkları düşürüp elle drop+recreate gerekir |
+| Table type **değişimi** (seçenek kapalıyken) | tip ALTER edilemez; "Değişen table type'ları yeniden kur" seçeneği kapalıysa fark yalnız görünür |
 
 ---
 
@@ -97,11 +97,11 @@ yanlış üretilmiş bir güvenlik ya da kripto DDL'i, hiç üretilmemesinden k�
 ## 4. Henüz kapsanmıyor — yapılacaklar
 
 Sayılıyor (sayısı > 0 çıkarsa `--coverage` uyarır) ama görülmüyor ve yazılmıyor.
-**Öncelik sırasıyla:**
+Liste bu noktada **tükendi**: kalan her şey ya §3'teki bilinçli tespit-only kararı, ya da
+aşağıdaki tek ertelenmiş madde.
 
 | # | Konu | Neden bu sırada |
 |---|---|---|
-| 1 | Table type drop+recreate üretimi | Fark artık görünüyor; bağımlılık (prosedür parametreleri) düşürme sırası gerekir |
 
 **Bilinçli ertelenen:** fiziksel yerleşim — `ON [filegroup]`, `TEXTIMAGE_ON`,
 `FILESTREAM_ON`, tablo/index'in partition scheme üzerine yerleşimi. Filegroup'ları biz

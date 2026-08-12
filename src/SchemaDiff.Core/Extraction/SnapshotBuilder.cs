@@ -325,6 +325,7 @@ internal static class SnapshotBuilder
 
         // Table type'lar: üst seviye objeler, kolon yapısıyla karşılaştırılır (ALTER edilemez;
         // kolon farkı drop+recreate demektir, ama farkı görmek yine de değerli).
+        var tableTypeDependentsBy = GroupBy(catalog.TableTypeDependents, d => d.UserTypeId);
         var tableTypeColumnsBy = GroupBy(catalog.TableTypeColumns, c => c.ObjectId);
         var tableTypeIndexesBy = GroupBy(catalog.TableTypeIndexes, i => i.ObjectId);
         var tableTypeIndexColumnsBy = GroupBy(catalog.TableTypeIndexColumns, ic => Pair(ic.ObjectId, ic.IndexId));
@@ -339,6 +340,13 @@ internal static class SnapshotBuilder
             var ttConstraints = BuildTableTypeConstraints(
                 tt.TypeTableObjectId, tableTypeIndexesBy, tableTypeIndexColumnsBy,
                 tableTypeChecksBy, tableTypeColumnNames, options);
+            snapshot.DependentModules = (tableTypeDependentsBy.GetValueOrDefault(tt.UserTypeId) ?? [])
+                .Select(d => keyById.GetValueOrDefault(d.ObjectId))
+                .Where(k => k.Kind != ObjectKind.Unknown)
+                .Distinct()
+                .OrderBy(k => k.Schema, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(k => k.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
             SetPart(snapshot, "columns", BuildTableTypeColumns(ttColumns, options));
             // Constraint/index tipin TANIMININ parçası: farkı görünmezse tip "aynı" sanılır.
             SetPart(snapshot, "constraints", string.Join('\n', ttConstraints));

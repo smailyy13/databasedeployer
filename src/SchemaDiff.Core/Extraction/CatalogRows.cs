@@ -27,6 +27,9 @@ internal sealed record TableTypeColumnRow(
     short MaxLength, byte Precision, byte Scale, bool IsNullable, string? Collation,
     bool IsIdentity, bool IsComputed, string? DefaultDefinition = null);
 
+/// <summary>Table type'ı parametre olarak kullanan modül.</summary>
+internal sealed record TableTypeDependentRow(int UserTypeId, int ObjectId);
+
 /// <summary>Table type'ın PK/UNIQUE ya da bağımsız index'i. Ad genelde sistem üretimidir.</summary>
 internal sealed record TableTypeIndexRow(
     int ObjectId, int IndexId, string? Name, string TypeDesc,
