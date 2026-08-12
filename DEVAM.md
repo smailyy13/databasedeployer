@@ -78,7 +78,23 @@ Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi ekle
    - FILESTREAM ve COLUMN_SET ALTER ile değiştirilemez → üretmek yerine ismen atlanıp bildiriliyor.
    - Ağaçta kolonun altında hangi niteliğin değiştiği yazıyor; CoverageProbe'da artık *covered*.
 
-7. **Test:** 276 → **558** (555 yeşil + 3 atlanan entegrasyon).
+7. **Dalga 6 — Tipli XML · NOT FOR REPLICATION · index kilit seçenekleri**: yine "yanlış DDL"
+   sınıfı, üçü birden.
+   - **Tipli XML kolonları:** `xml_collection_id` + `is_xml_document` çekiliyor; yeni
+     `Sql.XmlSchemaCollections` sorgusuyla id → `[şema].[koleksiyon]` çözülüyor.
+     Karşılaştırma ve script ADI kullanıyor (id ortama özgü). Ad çözülemezse düz `xml`
+     yazılıyor — uydurulmuyor. Öncesinde iki taraf da "xml" görünüp fark kaçıyordu.
+   - **NOT FOR REPLICATION:** IDENTITY, CHECK ve FK üzerinde. IDENTITY'nin bayrağı ALTER ile
+     değiştirilemediği için değişimi ismen atlanıp bildiriliyor.
+   - **Bulunan yan hata:** `ADD COLUMN` yolunda IDENTITY hiç yazılmıyordu — identity kolonu
+     hedefe sıradan kolon olarak ekleniyordu. `ColumnInfo` artık seed/increment taşıyor, düzeldi.
+   - **Index kilit seçenekleri:** `allow_row_locks` / `allow_page_locks`. Yalnız KAPALI
+     olduklarında yazılıyor (varsayılan ON → mevcut hash ve script'ler değişmiyor) ve
+     DATA_COMPRESSION ile **tek** `WITH (...)` listesinde birleşiyor.
+     `optimize_for_sequential_key` (2019+) bilinçli ALINMADI: `Indexes` sorgusu zorunlu,
+     eski sunucuda düşerse karşılaştırma tümden biter.
+
+8. **Test:** 276 → **582** (579 yeşil + 3 atlanan entegrasyon).
    - `StatisticsTests` (33): karşılaştırma, sıra, filtre/NORECOMPUTE/INCREMENTAL,
      drop-önce/create-sonra sıralaması, yeni tablo script'i, okunamayan sorgu davranışı.
    - `CatalogQueryTests` (yeni): TÜM katalog sorgularının yapısal denetimi — en önemlisi
@@ -93,6 +109,13 @@ Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi ekle
 Commit + push, sonra **v1.5 release** (aşağıdaki publish adımları).
 
 ### Kalan scriptlenebilir maddeler (düşük öncelik)
+- Constraint DURUMU script'te: `is_disabled` / `is_not_trusted` karşılaştırılıyor ama
+  üretilen script'e yansımıyor — kaynakta disabled bir CHECK hedefte enabled kuruluyor.
+  (Düzeltmesi küçük: `NOCHECK` + `ALTER TABLE … NOCHECK CONSTRAINT`.)
+- `OPTIMIZE_FOR_SEQUENTIAL_KEY` (2019+) ve `STATISTICS_NORECOMPUTE` (index istatistiği)
+- Full-text katalog + index — ayrı obje sınıfı
+- Table type constraint/index'leri (şu an yalnız kolon yapısı)
+- XML schema collection / plan guide / application role / DB scoped configuration / RULE-DEFAULT
 - XML index / Spatial index — index handling'in uzantısı
 - Fiziksel yerleşim (`ON [filegroup]`) — **bilinçli ertelendi:** filegroup'ları biz
   oluşturmuyoruz, `ON [DATA_FG]` yazarsak hedefte o FG yoksa CREATE patlar.
@@ -139,6 +162,18 @@ rm -f publish-portable/*.pdb
   `AppendColumnAttributeDiff`
 - `src/SchemaDiff.Core/Analysis/ChangeCatalog.cs` — kolon detayında nitelik değişimi
 - Testler: `ColumnAttributeTests` (yeni)
+
+## Dalga 6'da değişen dosyalar (tipli XML · NFR · index kilitleri)
+- `src/SchemaDiff.Core/Extraction/Sql.cs` — `XmlSchemaCollections` (yeni sorgu),
+  Columns/Indexes/ForeignKeys/CheckConstraints'e yeni alanlar
+- `src/SchemaDiff.Core/Extraction/{CatalogRows,CatalogExtractor}.cs` — satır alanları + mapper'lar
+- `src/SchemaDiff.Core/Extraction/SnapshotBuilder.cs` — koleksiyon id→ad haritası, kanonikler
+- `src/SchemaDiff.Core/Model/Snapshot.cs` — `ColumnInfo.XmlTypeSuffix`, IndexDefinition kilitleri,
+  Check/ForeignKeyDefinition `NotForReplication`
+- `src/SchemaDiff.Core/Scripting/TableScriptWriter.cs` — XML tipi, IDENTITY/CHECK/FK NFR, WITH listesi
+- `src/SchemaDiff.Core/Scripting/TableScriptGenerator.cs` — `WithOptions`, XML RenderType,
+  ADD COLUMN IDENTITY, NFR imzaları
+- Testler: `TypedXmlAndReplicationTests` (yeni)
 
 ## Dalga 1–3'te değişen ana dosyalar (referans)
 - `src/SchemaDiff.Core/Analysis/CoverageProbe.cs` — sayaçlar (Probes internal)

@@ -111,6 +111,12 @@ internal static class SnapshotBuilder
         var columnNames = new Dictionary<long, string>(catalog.Columns.Count);
         foreach (var c in catalog.Columns) columnNames[Pair(c.ObjectId, c.ColumnId)] = c.Name;
 
+        // Tipli XML kolonları id tutar, ad tutmaz: id ortamlar arasında farklıdır, bu yüzden
+        // karşılaştırmaya da script'e de ADI girer.
+        var xmlCollections = new Dictionary<int, string>(catalog.XmlSchemaCollections.Count);
+        foreach (var x in catalog.XmlSchemaCollections)
+            xmlCollections[x.CollectionId] = $"[{x.SchemaName}].[{x.Name}]";
+
         var columnsBy = GroupBy(catalog.Columns, c => c.ObjectId);
         var indexesBy = GroupBy(catalog.Indexes, i => i.ObjectId);
         var indexColumnsBy = GroupBy(catalog.IndexColumns, ic => Pair(ic.ObjectId, ic.IndexId));
@@ -169,6 +175,7 @@ internal static class SnapshotBuilder
             TemporalBy = temporalById,
             StatisticsBy = statisticsBy,
             StatisticColumnsBy = statisticColumnsBy,
+            XmlCollections = xmlCollections,
         };
 
         var comparer = options.CaseSensitiveNames
@@ -371,7 +378,7 @@ internal static class SnapshotBuilder
             switch (key.Kind)
             {
                 case ObjectKind.Table:
-                    snapshot.Columns = ToColumnInfo(columnsBy.GetValueOrDefault(obj.ObjectId));
+                    snapshot.Columns = ToColumnInfo(columnsBy.GetValueOrDefault(obj.ObjectId), xmlCollections);
                     snapshot.RowCount = rowCountsById.TryGetValue(obj.ObjectId, out var rows) ? rows : null;
                     if (options.KeepDisplayScripts)
                     {
@@ -384,7 +391,7 @@ internal static class SnapshotBuilder
                         snapshot.StatisticsDefinitions = BuildStatisticsDefinitions(
                             obj.ObjectId, statisticsBy, statisticColumnsBy, columnNames, options);
                     }
-                    SetPart(snapshot, "columns", BuildColumns(columnsBy.GetValueOrDefault(obj.ObjectId), options));
+                    SetPart(snapshot, "columns", BuildColumns(columnsBy.GetValueOrDefault(obj.ObjectId), xmlCollections, options));
                     SetPart(snapshot, "indexes", BuildIndexes(obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, columnNames, options));
                     SetPart(snapshot, "statistics", BuildStatistics(obj.ObjectId, statisticsBy, statisticColumnsBy, columnNames, options));
                     SetPart(snapshot, "checks", BuildChecks(checksBy.GetValueOrDefault(obj.ObjectId), options));
@@ -395,7 +402,7 @@ internal static class SnapshotBuilder
 
                 case ObjectKind.View:
                     ApplyModule(snapshot, obj.ObjectId, modulesById, normalizedBodies, options);
-                    SetPart(snapshot, "columns", BuildColumns(columnsBy.GetValueOrDefault(obj.ObjectId), options));
+                    SetPart(snapshot, "columns", BuildColumns(columnsBy.GetValueOrDefault(obj.ObjectId), xmlCollections, options));
                     SetPart(snapshot, "indexes", BuildIndexes(obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, columnNames, options));
                     // Indexed view'larda kullanıcı istatistiği olabilir: farkı GÖRÜNÜR kılıyoruz.
                     // Script'i view'ın kendi drop+create'i üzerinden gider (tablo yolu değil).
@@ -533,16 +540,24 @@ internal static class SnapshotBuilder
         SetPart(snapshot, "body", bodies.GetValueOrDefault(objectId, string.Empty));
     }
 
-    private static IReadOnlyList<ColumnInfo>? ToColumnInfo(List<ColumnRow>? columns) =>
+    private static IReadOnlyList<ColumnInfo>? ToColumnInfo(
+        List<ColumnRow>? columns, Dictionary<int, string> xmlCollections) =>
         columns?.OrderBy(c => c.ColumnId)
             .Select(c => new ColumnInfo(
                 c.Name, c.TypeSchema, c.TypeName, c.MaxLength, c.Precision, c.Scale,
                 c.IsNullable, c.Collation, c.IsIdentity, c.IsComputed, c.DefaultDefinition,
                 c.DefaultName, c.DefaultIsSystemNamed == true,
-                c.IsSparse, c.IsFileStream, c.IsRowGuidCol, c.IsColumnSet))
+                c.IsSparse, c.IsFileStream, c.IsRowGuidCol, c.IsColumnSet,
+                XmlCollectionName(c, xmlCollections), c.IsXmlDocument, c.IdentityNotForReplication,
+                c.IdentitySeed, c.IdentityIncrement))
             .ToList();
 
-    private static string BuildColumns(List<ColumnRow>? columns, SnapshotOptions options)
+    /// <summary>Tipli XML kolonunun koleksiyon adı; tipsizse ya da ad çözülemediyse null.</summary>
+    private static string? XmlCollectionName(ColumnRow c, Dictionary<int, string> xmlCollections) =>
+        c.XmlCollectionId == 0 ? null : xmlCollections.GetValueOrDefault(c.XmlCollectionId);
+
+    private static string BuildColumns(
+        List<ColumnRow>? columns, Dictionary<int, string> xmlCollections, SnapshotOptions options)
     {
         if (columns is null || columns.Count == 0) return string.Empty;
 
@@ -569,6 +584,8 @@ internal static class SnapshotBuilder
                 sb.Append("|identity");
                 if (!options.IgnoreIdentitySeed) sb.Append(";seed=").Append(c.IdentitySeed);
                 if (!options.IgnoreIdentityIncrement) sb.Append(";inc=").Append(c.IdentityIncrement);
+                // NOT FOR REPLICATION: replikasyon yazarken IDENTITY'yi atlatır — semantik fark.
+                if (c.IdentityNotForReplication) sb.Append(";nfr");
             }
             if (c.IsComputed)
                 sb.Append("|computed=").Append(c.ComputedDefinition)
@@ -580,6 +597,10 @@ internal static class SnapshotBuilder
 
             // Depolama nitelikleri: tablonun fiziksel tanımının parçası, yoksa yazılmaz
             // (varsayılan durumda kanonik metin değişmesin — eski snapshot'larla aynı kalsın).
+            // Tipli XML: id değil AD karşılaştırılır (id ortama özgüdür).
+            if (XmlCollectionName(c, xmlCollections) is { } collection)
+                sb.Append("|xml=").Append(c.IsXmlDocument ? "DOCUMENT" : "CONTENT").Append(' ').Append(collection);
+
             if (c.IsSparse) sb.Append("|sparse");
             if (c.IsFileStream) sb.Append("|filestream");
             if (c.IsRowGuidCol) sb.Append("|rowguidcol");
@@ -634,7 +655,12 @@ internal static class SnapshotBuilder
             if (!options.IgnoreIndexPhysicalOptions && !options.IgnoreIndexPadding)
                 sb.Append("|padded=").Append(Flag(index.IsPadded));
             if (!options.IgnoreIndexPhysicalOptions)
+            {
                 sb.Append("|ignoreDupKey=").Append(Flag(index.IgnoreDupKey));
+                // Varsayılan ON; yalnızca KAPALI olduğunda yazılır ki mevcut hash'ler değişmesin.
+                if (!index.AllowRowLocks) sb.Append("|rowLocks=0");
+                if (!index.AllowPageLocks) sb.Append("|pageLocks=0");
+            }
             if (!options.IgnoreDataCompression && ExplicitCompression(index.DataCompression) is { } comp)
                 sb.Append("|compression=").Append(comp);
 
@@ -702,7 +728,8 @@ internal static class SnapshotBuilder
         var lines = checks.Select(c =>
         {
             var name = options.IgnoreSystemNamedConstraints && c.IsSystemNamed ? "(system-named)" : c.Name;
-            return $"chk|{name}|{c.Definition}|disabled={Flag(c.IsDisabled)}|notTrusted={Flag(c.IsNotTrusted)}";
+            var nfr = c.IsNotForReplication ? "|nfr" : string.Empty;
+            return $"chk|{name}|{c.Definition}|disabled={Flag(c.IsDisabled)}|notTrusted={Flag(c.IsNotTrusted)}{nfr}";
         }).ToList();
 
         lines.Sort(StringComparer.Ordinal);
@@ -733,7 +760,8 @@ internal static class SnapshotBuilder
 
             return $"fk|{name}|ref={referenced}|cols={string.Join(',', columns)}" +
                    $"|onDelete={fk.DeleteAction}|onUpdate={fk.UpdateAction}" +
-                   $"|disabled={Flag(fk.IsDisabled)}|notTrusted={Flag(fk.IsNotTrusted)}";
+                   $"|disabled={Flag(fk.IsDisabled)}|notTrusted={Flag(fk.IsNotTrusted)}" +
+                   (fk.IsNotForReplication ? "|nfr" : string.Empty);
         }).ToList();
 
         lines.Sort(StringComparer.Ordinal);
@@ -927,7 +955,10 @@ internal static class SnapshotBuilder
             result.Add(new IndexDefinition(
                 name, index.IsPrimaryKey, index.IsUniqueConstraint, index.IsUnique,
                 index.TypeDesc, systemNamed, keys, included, index.FilterDefinition,
-                options.IgnoreDataCompression ? null : index.DataCompression));
+                options.IgnoreDataCompression ? null : index.DataCompression,
+                // Fiziksel ayarlar yok sayılıyorsa script'e de varsayılan (ON) girsin.
+                options.IgnoreIndexPhysicalOptions || index.AllowRowLocks,
+                options.IgnoreIndexPhysicalOptions || index.AllowPageLocks));
         }
 
         return result;
@@ -972,7 +1003,7 @@ internal static class SnapshotBuilder
         {
             if (options.IgnoreSystemNamedConstraints && c.IsSystemNamed) continue;
             if (c.Definition is null) continue;
-            result.Add(new CheckDefinition(c.Name, c.Definition, c.IsSystemNamed));
+            result.Add(new CheckDefinition(c.Name, c.Definition, c.IsSystemNamed, c.IsNotForReplication));
         }
         return result;
     }
@@ -1002,7 +1033,7 @@ internal static class SnapshotBuilder
 
             result.Add(new ForeignKeyDefinition(
                 fk.Name, fk.IsSystemNamed, referenced.Schema, referenced.Name, cols,
-                fk.DeleteAction, fk.UpdateAction));
+                fk.DeleteAction, fk.UpdateAction, fk.IsNotForReplication));
         }
         return result;
     }

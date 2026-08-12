@@ -16,6 +16,7 @@ internal sealed class TableScriptSources
     public required Dictionary<int, List<ForeignKeyRow>> ForeignKeysBy { get; init; }
     public required Dictionary<int, List<ForeignKeyColumnRow>> FkColumnsBy { get; init; }
     public required Dictionary<long, string> ColumnNames { get; init; }
+    public Dictionary<int, string> XmlCollections { get; init; } = [];
     public required Dictionary<int, ObjectKey> KeyById { get; init; }
     public Dictionary<int, TemporalRow> TemporalBy { get; init; } = [];
     public Dictionary<int, List<StatisticRow>> StatisticsBy { get; init; } = [];
@@ -45,10 +46,10 @@ internal static class TableScriptWriter
 
         var body = new List<string>(columns.Count + 8);
         var nameWidth = columns.Count == 0 ? 0 : columns.Max(c => c.Name.Length + 2);
-        var typeWidth = columns.Count == 0 ? 0 : columns.Max(c => FormatType(c).Length);
+        var typeWidth = columns.Count == 0 ? 0 : columns.Max(c => FormatType(c, sources).Length);
 
         foreach (var column in columns.OrderBy(c => c.ColumnId))
-            body.Add(WriteColumn(column, nameWidth, typeWidth, options));
+            body.Add(WriteColumn(column, nameWidth, typeWidth, sources, options));
 
         body.AddRange(WriteTableConstraints(objectId, sources, options));
 
@@ -96,7 +97,8 @@ internal static class TableScriptWriter
 
     // --- kolonlar ---
 
-    private static string WriteColumn(ColumnRow column, int nameWidth, int typeWidth, SnapshotOptions options)
+    private static string WriteColumn(
+        ColumnRow column, int nameWidth, int typeWidth, TableScriptSources sources, SnapshotOptions options)
     {
         var name = $"[{column.Name}]".PadRight(nameWidth);
 
@@ -107,7 +109,7 @@ internal static class TableScriptWriter
         }
 
         var sb = new StringBuilder("    ");
-        sb.Append(name).Append(' ').Append(FormatType(column).PadRight(typeWidth));
+        sb.Append(name).Append(' ').Append(FormatType(column, sources).PadRight(typeWidth));
 
         // Sıra T-SQL grameriyle aynı: FILESTREAM → COLLATE → SPARSE → COLUMN_SET → ROWGUIDCOL.
         if (column.IsFileStream) sb.Append(" FILESTREAM");
@@ -124,6 +126,7 @@ internal static class TableScriptWriter
             sb.Append(" IDENTITY");
             if (!options.IgnoreIdentitySeed)
                 sb.Append(" (").Append(column.IdentitySeed).Append(", ").Append(column.IdentityIncrement).Append(')');
+            if (column.IdentityNotForReplication) sb.Append(" NOT FOR REPLICATION");
         }
 
         // Temporal PERIOD kolonu: GENERATED ALWAYS AS ROW START/END [HIDDEN].
@@ -145,7 +148,7 @@ internal static class TableScriptWriter
         return sb.ToString();
     }
 
-    private static string FormatType(ColumnRow column)
+    private static string FormatType(ColumnRow column, TableScriptSources sources)
     {
         // Kullanıcı tanımlı tipler şema nitelemesiyle yazılır.
         if (!string.Equals(column.TypeSchema, "sys", StringComparison.OrdinalIgnoreCase))
@@ -153,6 +156,14 @@ internal static class TableScriptWriter
 
         var upper = column.TypeName.ToUpperInvariant();
         var length = column.MaxLength.ToString(CultureInfo.InvariantCulture);
+
+        // Tipli XML: xml(CONTENT|DOCUMENT [şema].[koleksiyon]). Koleksiyon adı çözülemezse
+        // düz XML yazmak yanlış kolon üretir — bu yüzden yalnız ad varsa ek yazılır.
+        if (column.XmlCollectionId != 0
+            && sources.XmlCollections.TryGetValue(column.XmlCollectionId, out var collection))
+        {
+            return $"{upper} ({(column.IsXmlDocument ? "DOCUMENT" : "CONTENT")} {collection})";
+        }
 
         return column.TypeName.ToLowerInvariant() switch
         {
@@ -194,7 +205,9 @@ internal static class TableScriptWriter
         foreach (var check in (sources.ChecksBy.GetValueOrDefault(objectId) ?? []).OrderBy(c => c.Name, StringComparer.Ordinal))
         {
             var prefix = NameConstraint(check.Name, check.IsSystemNamed, options);
-            lines.Add($"    {prefix}CHECK {check.Definition}");
+            // Gramer: CHECK [NOT FOR REPLICATION] (ifade).
+            var nfr = check.IsNotForReplication ? "NOT FOR REPLICATION " : string.Empty;
+            lines.Add($"    {prefix}CHECK {nfr}{check.Definition}");
         }
 
         foreach (var foreignKey in (sources.ForeignKeysBy.GetValueOrDefault(objectId) ?? []).OrderBy(f => f.Name, StringComparer.Ordinal))
@@ -214,6 +227,7 @@ internal static class TableScriptWriter
             var actions = new StringBuilder();
             if (foreignKey.DeleteAction != 0) actions.Append(" ON DELETE ").Append(ReferentialAction(foreignKey.DeleteAction));
             if (foreignKey.UpdateAction != 0) actions.Append(" ON UPDATE ").Append(ReferentialAction(foreignKey.UpdateAction));
+            if (foreignKey.IsNotForReplication) actions.Append(" NOT FOR REPLICATION");
 
             lines.Add($"    {prefix}FOREIGN KEY ({parentColumns}) REFERENCES {referenced} ({referencedColumns}){actions}");
         }
@@ -259,8 +273,17 @@ internal static class TableScriptWriter
             if (index.FilterDefinition is not null)
                 sb.AppendLine().Append("    WHERE ").Append(index.FilterDefinition);
 
-            if (!options.IgnoreIndexPhysicalOptions && index.FillFactor > 0)
-                sb.AppendLine().Append("    WITH (FILLFACTOR = ").Append(index.FillFactor).Append(')');
+            // Fiziksel seçenekler tek WITH listesinde toplanır; varsayılandan sapanlar yazılır.
+            if (!options.IgnoreIndexPhysicalOptions)
+            {
+                var withOptions = new List<string>(3);
+                if (index.FillFactor > 0)
+                    withOptions.Add($"FILLFACTOR = {index.FillFactor.ToString(CultureInfo.InvariantCulture)}");
+                if (!index.AllowRowLocks) withOptions.Add("ALLOW_ROW_LOCKS = OFF");
+                if (!index.AllowPageLocks) withOptions.Add("ALLOW_PAGE_LOCKS = OFF");
+                if (withOptions.Count > 0)
+                    sb.AppendLine().Append("    WITH (").Append(string.Join(", ", withOptions)).Append(')');
+            }
 
             sb.Append(';');
             lines.Add(sb.ToString());

@@ -100,7 +100,9 @@ public sealed record IndexDefinition(
     IReadOnlyList<IndexKeyColumn> KeyColumns,
     IReadOnlyList<string> IncludedColumns,
     string? FilterDefinition,
-    string? DataCompression = null)
+    string? DataCompression = null,
+    bool AllowRowLocks = true,
+    bool AllowPageLocks = true)
 {
     /// <summary>PK ve UNIQUE constraint'ler ALTER TABLE ADD CONSTRAINT ile yazılır; ötekiler CREATE INDEX.</summary>
     public bool IsConstraint => IsPrimaryKey || IsUniqueConstraint;
@@ -112,7 +114,8 @@ public sealed record IndexDefinition(
 
 public sealed record IndexKeyColumn(string Column, bool Descending);
 
-public sealed record CheckDefinition(string Name, string Definition, bool IsSystemNamed);
+public sealed record CheckDefinition(
+    string Name, string Definition, bool IsSystemNamed, bool NotForReplication = false);
 
 public sealed record ForeignKeyDefinition(
     string Name,
@@ -121,7 +124,8 @@ public sealed record ForeignKeyDefinition(
     string ReferencedName,
     IReadOnlyList<ForeignKeyColumnPair> Columns,
     byte DeleteAction,
-    byte UpdateAction);
+    byte UpdateAction,
+    bool NotForReplication = false);
 
 public sealed record ForeignKeyColumnPair(string Parent, string Referenced);
 
@@ -143,9 +147,18 @@ public sealed record ColumnInfo(
     bool IsSparse = false,
     bool IsFileStream = false,
     bool IsRowGuidCol = false,
-    bool IsColumnSet = false)
+    bool IsColumnSet = false,
+    string? XmlCollection = null,
+    bool IsXmlDocument = false,
+    bool IdentityNotForReplication = false,
+    string? IdentitySeed = null,
+    string? IdentityIncrement = null)
 {
-    public string TypeDisplay => MaxLength switch
+    /// <summary>Tipli XML kolonunun tip eki: <c>(CONTENT [şema].[koleksiyon])</c>; tipsizse null.</summary>
+    public string? XmlTypeSuffix =>
+        XmlCollection is null ? null : $"({(IsXmlDocument ? "DOCUMENT" : "CONTENT")} {XmlCollection})";
+
+    public string TypeDisplay => XmlCollection is not null ? $"xml {XmlTypeSuffix}" : MaxLength switch
     {
         -1 => $"{TypeName}(max)",
         _ when TypeName is "decimal" or "numeric" => $"{TypeName}({Precision},{Scale})",

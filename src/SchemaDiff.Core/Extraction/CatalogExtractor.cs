@@ -13,6 +13,7 @@ internal sealed class CatalogSet
     public List<ColumnRow> Columns { get; set; } = [];
     public List<IndexRow> Indexes { get; set; } = [];
     public List<IndexColumnRow> IndexColumns { get; set; } = [];
+    public List<XmlSchemaCollectionRow> XmlSchemaCollections { get; set; } = [];
     public List<StatisticRow> Statistics { get; set; } = [];
     public List<StatisticColumnRow> StatisticColumns { get; set; } = [];
     public List<KeyConstraintRow> KeyConstraints { get; set; } = [];
@@ -86,6 +87,10 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
             // sys.periods eski sürümlerde yok; eksik kalması karşılaştırmayı durdurmamalı.
             Run("temporal", Sql.Temporal, MapTemporal, rows => catalog.Temporal = rows, optional: true),
             Run("ddlTriggers", Sql.DdlTriggers, MapDdlTrigger, rows => catalog.DdlTriggers = rows, optional: true),
+
+            // Tipli XML kolonlarının koleksiyon adı; yoksa kolon düz "xml" script'lenirdi.
+            Run("xmlSchemaCollections", Sql.XmlSchemaCollections, MapXmlSchemaCollection,
+                rows => catalog.XmlSchemaCollections = rows, optional: true),
 
             // sys.stats.is_incremental SQL Server 2014 ile geldi; eski sürümde sorgu düşer,
             // karşılaştırma istatistiksiz devam eder (rapora uyarı düşülür).
@@ -236,12 +241,17 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
         Rdr.NStr(r, 15), Rdr.NBool(r, 16),
         Rdr.Variant(r, 17), Rdr.Variant(r, 18),
         Rdr.Byte(r, 19), Rdr.Bool(r, 20),
-        Rdr.Bool(r, 21), Rdr.Bool(r, 22), Rdr.Bool(r, 23), Rdr.Bool(r, 24));
+        Rdr.Bool(r, 21), Rdr.Bool(r, 22), Rdr.Bool(r, 23), Rdr.Bool(r, 24),
+        Rdr.Int(r, 25), Rdr.Bool(r, 26), Rdr.NBool(r, 27) == true);
+
+    private static XmlSchemaCollectionRow MapXmlSchemaCollection(SqlDataReader r) => new(
+        Rdr.Int(r, 0), Rdr.NStr(r, 1) ?? "dbo", Rdr.Str(r, 2));
 
     private static IndexRow MapIndex(SqlDataReader r) => new(
         Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.NStr(r, 2), Rdr.Str(r, 3),
         Rdr.Bool(r, 4), Rdr.Bool(r, 5), Rdr.Bool(r, 6),
-        Rdr.Byte(r, 7), Rdr.Bool(r, 8), Rdr.Bool(r, 9), Rdr.NStr(r, 10), Rdr.NStr(r, 11));
+        Rdr.Byte(r, 7), Rdr.Bool(r, 8), Rdr.Bool(r, 9), Rdr.NStr(r, 10), Rdr.NStr(r, 11),
+        Rdr.Bool(r, 12), Rdr.Bool(r, 13));
 
     private static IndexColumnRow MapIndexColumn(SqlDataReader r) => new(
         Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.Int(r, 2), Rdr.Int(r, 3),
@@ -258,13 +268,14 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
 
     private static ForeignKeyRow MapForeignKey(SqlDataReader r) => new(
         Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.Str(r, 2), Rdr.Bool(r, 3), Rdr.Int(r, 4),
-        Rdr.Byte(r, 5), Rdr.Byte(r, 6), Rdr.Bool(r, 7), Rdr.Bool(r, 8));
+        Rdr.Byte(r, 5), Rdr.Byte(r, 6), Rdr.Bool(r, 7), Rdr.Bool(r, 8), Rdr.Bool(r, 9));
 
     private static ForeignKeyColumnRow MapForeignKeyColumn(SqlDataReader r) => new(
         Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.Int(r, 2), Rdr.Int(r, 3), Rdr.Int(r, 4), Rdr.Int(r, 5));
 
     private static CheckConstraintRow MapCheckConstraint(SqlDataReader r) => new(
-        Rdr.Int(r, 0), Rdr.Str(r, 1), Rdr.Bool(r, 2), Rdr.NStr(r, 3), Rdr.Bool(r, 4), Rdr.Bool(r, 5));
+        Rdr.Int(r, 0), Rdr.Str(r, 1), Rdr.Bool(r, 2), Rdr.NStr(r, 3), Rdr.Bool(r, 4), Rdr.Bool(r, 5),
+        Rdr.Bool(r, 6));
 
     private static SynonymRow MapSynonym(SqlDataReader r) => new(
         Rdr.Int(r, 0), Rdr.Str(r, 1));

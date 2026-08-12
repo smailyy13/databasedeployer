@@ -59,13 +59,18 @@ internal sealed record ColumnRow(
     string? ComputedDefinition, bool? ComputedIsPersisted,
     string? IdentitySeed, string? IdentityIncrement,
     byte GeneratedAlwaysType = 0, bool IsHidden = false,
-    bool IsSparse = false, bool IsFileStream = false, bool IsRowGuidCol = false, bool IsColumnSet = false);
+    bool IsSparse = false, bool IsFileStream = false, bool IsRowGuidCol = false, bool IsColumnSet = false,
+    int XmlCollectionId = 0, bool IsXmlDocument = false, bool IdentityNotForReplication = false);
+
+/// <summary>Tipli XML kolonlarının başvurduğu şema koleksiyonu — id'den ada çözüm için.</summary>
+internal sealed record XmlSchemaCollectionRow(int CollectionId, string SchemaName, string Name);
 
 internal sealed record IndexRow(
     int ObjectId, int IndexId, string? Name, string TypeDesc,
     bool IsUnique, bool IsPrimaryKey, bool IsUniqueConstraint,
     byte FillFactor, bool IsPadded, bool IgnoreDupKey, string? FilterDefinition,
-    string? DataCompression = null);
+    string? DataCompression = null,
+    bool AllowRowLocks = true, bool AllowPageLocks = true);
 
 internal sealed record IndexColumnRow(
     int ObjectId, int IndexId, int IndexColumnId, int ColumnId,
@@ -85,7 +90,8 @@ internal sealed record KeyConstraintRow(
 
 internal sealed record ForeignKeyRow(
     int ObjectId, int ParentObjectId, string Name, bool IsSystemNamed, int ReferencedObjectId,
-    byte DeleteAction, byte UpdateAction, bool IsDisabled, bool IsNotTrusted);
+    byte DeleteAction, byte UpdateAction, bool IsDisabled, bool IsNotTrusted,
+    bool IsNotForReplication = false);
 
 internal sealed record ForeignKeyColumnRow(
     int ConstraintObjectId, int ConstraintColumnId,
@@ -94,7 +100,7 @@ internal sealed record ForeignKeyColumnRow(
 
 internal sealed record CheckConstraintRow(
     int ParentObjectId, string Name, bool IsSystemNamed,
-    string? Definition, bool IsDisabled, bool IsNotTrusted);
+    string? Definition, bool IsDisabled, bool IsNotTrusted, bool IsNotForReplication = false);
 
 internal sealed record SynonymRow(int ObjectId, string BaseObjectName);
 

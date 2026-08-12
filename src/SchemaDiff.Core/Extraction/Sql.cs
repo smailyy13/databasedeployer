@@ -67,7 +67,8 @@ internal static class Sql
                cc.definition, cc.is_persisted,
                ic.seed_value, ic.increment_value,
                c.generated_always_type, c.is_hidden,
-               c.is_sparse, c.is_filestream, c.is_rowguidcol, c.is_column_set
+               c.is_sparse, c.is_filestream, c.is_rowguidcol, c.is_column_set,
+               c.xml_collection_id, c.is_xml_document, ic.is_not_for_replication
         FROM sys.columns AS c
         INNER JOIN sys.objects AS o
             ON o.object_id = c.object_id AND o.is_ms_shipped = 0 AND o.type IN ('U','V')
@@ -79,12 +80,22 @@ internal static class Sql
             ON ic.object_id = c.object_id AND ic.column_id = c.column_id;
         """;
 
+    // Tipli XML kolonlarının (xml(CONTENT [şema].[koleksiyon])) ad çözümü için.
+    // Kolon yalnızca id tutar; ad olmadan script'te düz "xml" yazılır ve kolon YANLIŞ oluşur.
+    public const string XmlSchemaCollections = """
+        SELECT xsc.xml_collection_id, SCHEMA_NAME(xsc.schema_id), xsc.name
+        FROM sys.xml_schema_collections AS xsc;
+        """;
+
     // type = 0 heap'tir, karşılaştırılacak bir tanımı yok.
+    // NOT: allow_row_locks/allow_page_locks SQL 2005+; optimize_for_sequential_key (2019+)
+    // BİLİNÇLİ olarak alınmıyor — bu sorgu zorunlu, eski sunucuda düşerse karşılaştırma biter.
     public const string Indexes = """
         SELECT i.object_id, i.index_id, i.name, i.type_desc,
                i.is_unique, i.is_primary_key, i.is_unique_constraint,
                i.fill_factor, i.is_padded, i.ignore_dup_key, i.filter_definition,
-               p.data_compression_desc
+               p.data_compression_desc,
+               i.allow_row_locks, i.allow_page_locks
         FROM sys.indexes AS i
         INNER JOIN sys.objects AS o
             ON o.object_id = i.object_id AND o.is_ms_shipped = 0 AND o.type IN ('U','V')
@@ -137,7 +148,7 @@ internal static class Sql
         SELECT fk.object_id, fk.parent_object_id, fk.name, fk.is_system_named,
                fk.referenced_object_id,
                fk.delete_referential_action, fk.update_referential_action,
-               fk.is_disabled, fk.is_not_trusted
+               fk.is_disabled, fk.is_not_trusted, fk.is_not_for_replication
         FROM sys.foreign_keys AS fk
         INNER JOIN sys.objects AS o ON o.object_id = fk.parent_object_id AND o.is_ms_shipped = 0;
         """;
@@ -152,7 +163,7 @@ internal static class Sql
 
     public const string CheckConstraints = """
         SELECT cc.parent_object_id, cc.name, cc.is_system_named,
-               cc.definition, cc.is_disabled, cc.is_not_trusted
+               cc.definition, cc.is_disabled, cc.is_not_trusted, cc.is_not_for_replication
         FROM sys.check_constraints AS cc
         INNER JOIN sys.objects AS o ON o.object_id = cc.parent_object_id AND o.is_ms_shipped = 0;
         """;

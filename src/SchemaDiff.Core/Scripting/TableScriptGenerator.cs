@@ -407,12 +407,13 @@ public static class TableScriptGenerator
         var srcChk = ByName(source.CheckDefinitions, c => c.Name);
         var tgtChk = ByName(target.CheckDefinitions, c => c.Name);
         foreach (var (name, chk) in tgtChk)
-            if (!srcChk.TryGetValue(name, out var s) || s.Definition != chk.Definition)
+            if (!srcChk.TryGetValue(name, out var s) || Sig(s) != Sig(chk))
                 pre.Add($"ALTER TABLE {qualified} DROP CONSTRAINT [{name}];");
         var chkAdds = new List<string>();
         foreach (var (name, chk) in srcChk)
-            if (!tgtChk.TryGetValue(name, out var t) || t.Definition != chk.Definition)
-                chkAdds.Add($"ALTER TABLE {qualified} {checkClause} ADD CONSTRAINT [{chk.Name}] CHECK {chk.Definition};");
+            if (!tgtChk.TryGetValue(name, out var t) || Sig(t) != Sig(chk))
+                chkAdds.Add($"ALTER TABLE {qualified} {checkClause} ADD CONSTRAINT [{chk.Name}] CHECK " +
+                            $"{(chk.NotForReplication ? "NOT FOR REPLICATION " : string.Empty)}{chk.Definition};");
 
         // Index'ler (PK/UQ dahil).
         var srcIdx = ByName(source.IndexDefinitions, i => i.Name);
@@ -442,6 +443,16 @@ public static class TableScriptGenerator
         if (c.IsSparse) sb.Append(" SPARSE");
         if (c.IsColumnSet) sb.Append(" COLUMN_SET FOR ALL_SPARSE_COLUMNS");
         if (c.IsRowGuidCol) sb.Append(" ROWGUIDCOL");
+
+        // IDENTITY yazılmazsa kolon sıradan bir kolon olarak eklenir — sessizce yanlış.
+        if (c.IsIdentity)
+        {
+            sb.Append(" IDENTITY");
+            if (c.IdentitySeed is not null && c.IdentityIncrement is not null)
+                sb.Append('(').Append(c.IdentitySeed).Append(", ").Append(c.IdentityIncrement).Append(')');
+            if (c.IdentityNotForReplication) sb.Append(" NOT FOR REPLICATION");
+        }
+
         return sb.ToString();
     }
 
@@ -474,6 +485,13 @@ public static class TableScriptGenerator
             if (column.IsSparse != current.IsSparse && !(retyped.Contains(column.Name) && column.IsSparse))
                 statements.Add($"ALTER TABLE {qualified} ALTER COLUMN [{column.Name}] " +
                                $"{(column.IsSparse ? "ADD" : "DROP")} SPARSE;");
+
+            // IDENTITY'nin NOT FOR REPLICATION'ı ALTER ile değiştirilemez; ALTER COLUMN
+            // üretmek de IDENTITY'yi düşürmeye çalışıp patlar — açıkça bildiriyoruz.
+            if (column.IdentityNotForReplication != current.IdentityNotForReplication)
+                localSkips.Add($"[{column.Name}] — IDENTITY NOT FOR REPLICATION " +
+                               $"{(column.IdentityNotForReplication ? "ekleniyor" : "kaldırılıyor")}, " +
+                               "ALTER ile yapılamaz: tablo yeniden oluşturulmalı");
 
             if (column.IsFileStream != current.IsFileStream)
                 localSkips.Add($"[{column.Name}] — FILESTREAM {(column.IsFileStream ? "ekleniyor" : "kaldırılıyor")}, " +
@@ -549,9 +567,7 @@ public static class TableScriptGenerator
             var kind = idx.IsPrimaryKey ? "PRIMARY KEY" : "UNIQUE";
             var pkc = new StringBuilder(
                 $"ALTER TABLE {qualified} ADD CONSTRAINT [{idx.Name}] {kind} {Clustered(idx.TypeDesc)} ({KeyList(idx, ordered: true)})");
-            if (idx.ExplicitCompression is { } pkComp)
-                pkc.Append(" WITH (DATA_COMPRESSION = ").Append(pkComp).Append(')');
-            pkc.Append(';');
+            pkc.Append(WithOptions(idx)).Append(';');
             return pkc.ToString();
         }
 
@@ -562,10 +578,21 @@ public static class TableScriptGenerator
             sb.Append(" INCLUDE (").Append(string.Join(", ", idx.IncludedColumns.Select(c => $"[{c}]"))).Append(')');
         if (idx.FilterDefinition is not null)
             sb.Append(" WHERE ").Append(idx.FilterDefinition);
-        if (idx.ExplicitCompression is { } comp)
-            sb.Append(" WITH (DATA_COMPRESSION = ").Append(comp).Append(')');
-        sb.Append(';');
+        sb.Append(WithOptions(idx)).Append(';');
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Index'in tek <c>WITH (…)</c> listesi. Yalnızca VARSAYILANDAN SAPAN ayarlar yazılır:
+    /// ALLOW_ROW_LOCKS/ALLOW_PAGE_LOCKS varsayılan ON, sıkıştırma varsayılan NONE.
+    /// </summary>
+    private static string WithOptions(IndexDefinition idx)
+    {
+        var options = new List<string>(3);
+        if (idx.ExplicitCompression is { } compression) options.Add($"DATA_COMPRESSION = {compression}");
+        if (!idx.AllowRowLocks) options.Add("ALLOW_ROW_LOCKS = OFF");
+        if (!idx.AllowPageLocks) options.Add("ALLOW_PAGE_LOCKS = OFF");
+        return options.Count == 0 ? string.Empty : $" WITH ({string.Join(", ", options)})";
     }
 
     private static string AddForeignKey(string qualified, ForeignKeyDefinition fk, string checkClause)
@@ -577,6 +604,7 @@ public static class TableScriptGenerator
             $"REFERENCES [{fk.ReferencedSchema}].[{fk.ReferencedName}] ({referenced})");
         if (fk.DeleteAction != 0) sb.Append(" ON DELETE ").Append(ReferentialAction(fk.DeleteAction));
         if (fk.UpdateAction != 0) sb.Append(" ON UPDATE ").Append(ReferentialAction(fk.UpdateAction));
+        if (fk.NotForReplication) sb.Append(" NOT FOR REPLICATION");
         sb.Append(';');
         return sb.ToString();
     }
@@ -605,7 +633,9 @@ public static class TableScriptGenerator
         $"pk={i.IsPrimaryKey}|uq={i.IsUniqueConstraint}|u={i.IsUnique}|t={i.TypeDesc}|" +
         $"keys={string.Join(",", i.KeyColumns.Select(k => $"{k.Column}:{(k.Descending ? "D" : "A")}"))}|" +
         $"inc={string.Join(",", i.IncludedColumns)}|f={i.FilterDefinition ?? ""}|" +
-        $"comp={i.ExplicitCompression ?? ""}";
+        $"comp={i.ExplicitCompression ?? ""}|rowLocks={i.AllowRowLocks}|pageLocks={i.AllowPageLocks}";
+
+    private static string Sig(CheckDefinition c) => $"def={c.Definition}|nfr={c.NotForReplication}";
 
     private static string Sig(StatisticsDefinition s) =>
         $"cols={string.Join(",", s.Columns)}|f={s.FilterDefinition ?? ""}|" +
@@ -614,7 +644,7 @@ public static class TableScriptGenerator
     private static string Sig(ForeignKeyDefinition f) =>
         $"ref={f.ReferencedSchema}.{f.ReferencedName}|" +
         $"cols={string.Join(",", f.Columns.Select(c => $"{c.Parent}>{c.Referenced}"))}|" +
-        $"del={f.DeleteAction}|upd={f.UpdateAction}";
+        $"del={f.DeleteAction}|upd={f.UpdateAction}|nfr={f.NotForReplication}";
 
     // --- DROP ---
 
@@ -700,7 +730,10 @@ public static class TableScriptGenerator
         string.Equals(a.TypeSchema, b.TypeSchema, StringComparison.OrdinalIgnoreCase) &&
         a.MaxLength == b.MaxLength && a.Precision == b.Precision && a.Scale == b.Scale &&
         a.IsNullable == b.IsNullable && a.IsIdentity == b.IsIdentity && a.IsComputed == b.IsComputed &&
-        string.Equals(a.Collation, b.Collation, StringComparison.OrdinalIgnoreCase);
+        string.Equals(a.Collation, b.Collation, StringComparison.OrdinalIgnoreCase) &&
+        // Tipli XML koleksiyonu tipin parçasıdır: değişirse ALTER COLUMN gerekir.
+        string.Equals(a.XmlCollection, b.XmlCollection, StringComparison.OrdinalIgnoreCase) &&
+        a.IsXmlDocument == b.IsXmlDocument;
 
     // --- tip yazımı ---
 
@@ -708,6 +741,9 @@ public static class TableScriptGenerator
     {
         if (!string.Equals(c.TypeSchema, "sys", StringComparison.OrdinalIgnoreCase))
             return $"[{c.TypeSchema}].[{c.TypeName}]";
+
+        // Tipli XML kolonu: koleksiyonsuz yazmak kolonu YANLIŞ oluşturur.
+        if (c.XmlTypeSuffix is { } xml) return $"{c.TypeName.ToLowerInvariant()}{xml}";
 
         var name = c.TypeName.ToLowerInvariant();
         var len = c.MaxLength.ToString(CultureInfo.InvariantCulture);
