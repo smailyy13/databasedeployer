@@ -219,6 +219,7 @@ internal static class SnapshotBuilder
             ? new Dictionary<ObjectKey, string>(comparer)
             : BuildExtendedProperties(catalog, keyById, columnNames, comparer);
 
+
         // İzinleri host objesine göre grupla (obje/kolon → obje, şema → şema).
         var permissionsByHost = options.IgnorePermissions
             ? new Dictionary<ObjectKey, string>(comparer)
@@ -284,6 +285,8 @@ internal static class SnapshotBuilder
                         : $"-- ROLE [{role.Name}] (üyesiz)";
                 }
 
+                // Principal seviyesi (class 4) extended property'ler rolün/kullanıcının parçasıdır.
+                SetPart(snapshot, "extendedProperties", extendedByHost.GetValueOrDefault(key, string.Empty));
                 Finalize(snapshot);
                 objects[key] = snapshot;
             }
@@ -296,6 +299,7 @@ internal static class SnapshotBuilder
                 var snapshot = new ObjectSnapshot { Key = key, Hash = UInt128.Zero };
                 SetPart(snapshot, "definition", $"user|type={user.Type}|schema={user.DefaultSchema ?? "dbo"}");
                 if (options.KeepDisplayScripts) snapshot.DisplayScript = UserCreateScript(user);
+                SetPart(snapshot, "extendedProperties", extendedByHost.GetValueOrDefault(key, string.Empty));
                 Finalize(snapshot);
                 objects[key] = snapshot;
             }
@@ -1081,6 +1085,23 @@ internal static class SnapshotBuilder
         var schemaNameById = new Dictionary<int, string>(catalog.Schemas.Count);
         foreach (var s in catalog.Schemas) schemaNameById[s.SchemaId] = s.Name;
 
+        // Parametre (class 2) ve index (class 7) property'lerinin ad çözümü.
+        var parameterNames = new Dictionary<long, string>(catalog.Parameters.Count);
+        foreach (var p in catalog.Parameters) parameterNames[Pair(p.ObjectId, p.ParameterId)] = p.Name;
+
+        var indexNames = new Dictionary<long, string>();
+        foreach (var i in catalog.Indexes)
+            if (i.Name is not null) indexNames[Pair(i.ObjectId, i.IndexId)] = i.Name;
+        foreach (var i in catalog.XmlIndexes) indexNames[Pair(i.ObjectId, i.IndexId)] = i.Name;
+        foreach (var i in catalog.SpatialIndexes) indexNames[Pair(i.ObjectId, i.IndexId)] = i.Name;
+
+        // Principal (class 4) property'leri: id ortama özgüdür, host ADIYLA bulunur.
+        var principalKeys = new Dictionary<int, ObjectKey>();
+        foreach (var r in catalog.Roles)
+            principalKeys[r.PrincipalId] = new ObjectKey(string.Empty, r.Name, ObjectKind.Role);
+        foreach (var u in catalog.Users)
+            if (u.PrincipalId > 0) principalKeys[u.PrincipalId] = new ObjectKey(string.Empty, u.Name, ObjectKind.User);
+
         var linesByHost = new Dictionary<ObjectKey, List<string>>(comparer);
 
         foreach (var ep in catalog.ExtendedProperties)
@@ -1088,24 +1109,46 @@ internal static class SnapshotBuilder
             ObjectKey host;
             string scope;
 
-            if (ep.Class == 0)
+            switch (ep.Class)
             {
-                host = DatabaseKey;
-                scope = "database";
-            }
-            else if (ep.Class == 3)
-            {
-                if (!schemaNameById.TryGetValue(ep.MajorId, out var schemaName)) continue;
-                host = new ObjectKey(schemaName, schemaName, ObjectKind.Schema);
-                scope = "schema";
-            }
-            else // class 1: obje ya da kolon
-            {
-                if (!keyById.TryGetValue(ep.MajorId, out var key) || key.Kind == ObjectKind.Unknown) continue;
-                host = key;
-                scope = ep.MinorId == 0
-                    ? "obj"
-                    : $"col:{columnNames.GetValueOrDefault(Pair(ep.MajorId, ep.MinorId), $"#{ep.MinorId}")}";
+                case 0:
+                    host = DatabaseKey;
+                    scope = "database";
+                    break;
+
+                case 3:
+                    if (!schemaNameById.TryGetValue(ep.MajorId, out var schemaName)) continue;
+                    host = new ObjectKey(schemaName, schemaName, ObjectKind.Schema);
+                    scope = "schema";
+                    break;
+
+                case 2:
+                    if (!keyById.TryGetValue(ep.MajorId, out var moduleKey) || moduleKey.Kind == ObjectKind.Unknown) continue;
+                    host = moduleKey;
+                    scope = $"param:{parameterNames.GetValueOrDefault(Pair(ep.MajorId, ep.MinorId), $"#{ep.MinorId}")}";
+                    break;
+
+                case 4:
+                    // Principal id'si ortama özgü: çözülemezse property'yi ATLA, aksi hâlde
+                    // iki tarafta farklı id'ler sahte fark üretir.
+                    if (!principalKeys.TryGetValue(ep.MajorId, out var principalKey)) continue;
+                    host = principalKey;
+                    scope = "principal";
+                    break;
+
+                case 7:
+                    if (!keyById.TryGetValue(ep.MajorId, out var indexHost) || indexHost.Kind == ObjectKind.Unknown) continue;
+                    host = indexHost;
+                    scope = $"index:{indexNames.GetValueOrDefault(Pair(ep.MajorId, ep.MinorId), $"#{ep.MinorId}")}";
+                    break;
+
+                default: // class 1: obje ya da kolon
+                    if (!keyById.TryGetValue(ep.MajorId, out var key) || key.Kind == ObjectKind.Unknown) continue;
+                    host = key;
+                    scope = ep.MinorId == 0
+                        ? "obj"
+                        : $"col:{columnNames.GetValueOrDefault(Pair(ep.MajorId, ep.MinorId), $"#{ep.MinorId}")}";
+                    break;
             }
 
             if (!linesByHost.TryGetValue(host, out var list)) linesByHost[host] = list = [];

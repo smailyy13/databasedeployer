@@ -1,12 +1,12 @@
 # DEVAM — Nerede Kaldık (kapsam genişletme çalışması)
 
 > Bu dosya, başka bir makinede kaldığın yerden devam edebilmen için yazıldı.
-> Son güncelleme: 2026-08-12 (Dalga 14 sonrası)
+> Son güncelleme: 2026-08-12 (Dalga 15 sonrası)
 
 ## Hızlı durum
 - **Repo:** `smailyy13/databasedeployer` (GitHub, private) — proje adı **SchemaDiff**
 - **Branch:** `main`
-- **Testler:** **792 (789 yeşil + 3 atlanan entegrasyon)**
+- **Testler:** **810 (807 yeşil + 3 atlanan entegrasyon)**
 - **Son release:** **v1.4** (portable, 4 parça). **v1.5 HENÜZ ÇIKARILMADI** — aşağıya bak.
 - **Gereken SDK:** .NET 10 (`dotnet-install.sh --channel 10.0`; macOS'ta `~/.dotnet`).
 
@@ -18,7 +18,7 @@ git pull                        # en güncel main
 
 # Derle + test
 dotnet build -c Release
-dotnet test  -c Release --no-build      # 789 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
+dotnet test  -c Release --no-build      # 807 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
 
 # Web arayüzünü çalıştır (yerel, sadece 127.0.0.1)
 dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
@@ -46,7 +46,7 @@ dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
    tam ve güvenli (SET OFF + DROP PERIOD); **AÇMA/yeniden kurulum** riskli olduğu için
    (PERIOD kolonu + DEFAULT gerektirir) elle uygulanmak üzere uyarıyla atlanıyor.
 
-## Bu oturumda tamamlananlar (Dalga 4–14)
+## Bu oturumda tamamlananlar (Dalga 4–15)
 
 Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi eklendi.
 
@@ -187,7 +187,17 @@ Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi ekle
     - Kelimesiz stoplist de obje olarak yazılıyor ki "boş stoplist" ile "stoplist yok"
       birbirine karışmasın.
 
-16. **Test:** 276 → **792** (789 yeşil + 3 atlanan entegrasyon).
+16. **Dalga 15 — Parametre / principal / index extended property'leri** (class 2, 4, 7):
+    üçü de host objenin parçası, ayrı obje değil.
+    - Kimlikler ADLA kuruluyor: `principal_id` ve `index_id` ortamlar arasında farklıdır,
+      id kıyaslansa her kullanıcı ve her index "değişti" görünürdü. İkisinin de testi var.
+    - Çözülemeyen principal'ın property'si ATLANIYOR — uydurulan host sahte fark üretirdi.
+    - Script: `@level2type = PARAMETER|INDEX`, principal'da `@level0type = USER|ROLE`
+      (şema yok, principal'ın kendisi level0).
+    - **Yol boyunca bulunan eksik:** rol ve kullanıcı snapshot'larına `extendedProperties`
+      parçası hiç eklenmiyordu; class 4 host'ları onlar olduğu için eklendi.
+
+17. **Test:** 276 → **810** (807 yeşil + 3 atlanan entegrasyon).
    - `StatisticsTests` (33): karşılaştırma, sıra, filtre/NORECOMPUTE/INCREMENTAL,
      drop-önce/create-sonra sıralaması, yeni tablo script'i, okunamayan sorgu davranışı.
    - `CatalogQueryTests` (yeni): TÜM katalog sorgularının yapısal denetimi — en önemlisi
@@ -330,6 +340,15 @@ rm -f publish-portable/*.pdb
 - `src/SchemaDiff.Core/Extraction/SnapshotBuilder.cs` — stoplist objeleri + `StopwordStatement`
 - `src/SchemaDiff.Core/Scripting/TypeScriptGenerator.cs` — kelime seviyesi değişim yolu
 - Testler: `FullTextStoplistTests` (yeni, 17)
+
+## Dalga 15'te değişen dosyalar (EP sınıfları)
+- `src/SchemaDiff.Core/Extraction/Sql.cs` — EP sorgusuna class 2/4/7; `Parameters` (yeni);
+  `Users`'a `principal_id`
+- `src/SchemaDiff.Core/Extraction/{CatalogRows,CatalogExtractor}.cs` — `ParameterRow`, `UserRow.PrincipalId`
+- `src/SchemaDiff.Core/Extraction/SnapshotBuilder.cs` — host çözümü + rol/kullanıcıya EP parçası
+- `src/SchemaDiff.Core/Scripting/ExtendedPropertyScriptGenerator.cs` — level2 (PARAMETER/INDEX),
+  principal level0, User/Role host olarak
+- Testler: `ExtendedPropertyScopeTests` (yeni, 12)
 
 ## Dalga 1–3'te değişen ana dosyalar (referans)
 - `src/SchemaDiff.Core/Analysis/CoverageProbe.cs` — sayaçlar (Probes internal)

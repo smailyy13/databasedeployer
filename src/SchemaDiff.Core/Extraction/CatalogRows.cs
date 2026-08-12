@@ -8,7 +8,11 @@ namespace SchemaDiff.Core.Extraction;
 
 internal sealed record SchemaRow(int SchemaId, string Name);
 
-/// <summary>class: 1 = obje/kolon (major=object_id, minor=column_id ya da 0), 3 = şema (major=schema_id).</summary>
+/// <summary>
+/// class: 0 = veritabanı · 1 = obje/kolon (major=object_id, minor=column_id ya da 0) ·
+/// 2 = parametre (minor=parameter_id) · 3 = şema (major=schema_id) ·
+/// 4 = principal (major=principal_id) · 7 = index (minor=index_id).
+/// </summary>
 internal sealed record ExtendedPropertyRow(
     byte Class, int MajorId, int MinorId, string Name, string? Value);
 
@@ -44,7 +48,9 @@ internal sealed record PartitionSchemeFileRow(int SchemeId, int DestinationId, s
 internal sealed record RoleRow(int PrincipalId, string Name, string? Owner, bool IsFixed = false);
 
 /// <summary>Veritabanı kullanıcısı. Tip: S=SQL, U=Windows kullanıcı, G=Windows grup, E/X=external.</summary>
-internal sealed record UserRow(string Name, string Type, string? DefaultSchema);
+internal sealed record UserRow(string Name, string Type, string? DefaultSchema, int PrincipalId = 0);
+
+internal sealed record ParameterRow(int ObjectId, int ParameterId, string Name);
 
 internal sealed record RoleMemberRow(int RolePrincipalId, string? MemberName);
 

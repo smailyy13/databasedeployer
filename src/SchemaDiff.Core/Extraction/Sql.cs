@@ -339,6 +339,13 @@ internal static class Sql
         WHERE tr.parent_class = 0 AND tr.is_ms_shipped = 0;
         """;
 
+    // Modül parametreleri: yalnız extended property'lerin ad çözümü için (class 2).
+    public const string Parameters = """
+        SELECT pr.object_id, pr.parameter_id, pr.name
+        FROM sys.parameters AS pr
+        INNER JOIN sys.objects AS o ON o.object_id = pr.object_id AND o.is_ms_shipped = 0;
+        """;
+
     // Kullanıcı tanımlı alias tipler (CREATE TYPE dbo.Money FROM decimal(19,4)).
     // CLR assembly tipleri ve table type'lar hariç. Baz sistem tipi adıyla tutulur.
     public const string UserDefinedTypes = """
@@ -445,7 +452,7 @@ internal static class Sql
     // Veritabanı kullanıcıları: SQL (S), Windows kullanıcı (U) / grup (G), external (E/X).
     // Login/SID eşlemesi ortama özgüdür — karşılaştırmaya girmez; ad + tip + default schema.
     public const string Users = """
-        SELECT dp.name, dp.type, dp.default_schema_name
+        SELECT dp.name, dp.type, dp.default_schema_name, dp.principal_id
         FROM sys.database_principals AS dp
         WHERE dp.type IN ('S','U','G','E','X') AND dp.principal_id > 4
           AND dp.name NOT IN (N'dbo', N'guest', N'INFORMATION_SCHEMA', N'sys');
@@ -492,6 +499,27 @@ internal static class Sql
         UNION ALL
         SELECT CAST(0 AS tinyint), 0, 0, ep.name, CONVERT(nvarchar(4000), ep.value)
         FROM sys.extended_properties AS ep
-        WHERE ep.class = 0;
+        WHERE ep.class = 0
+        UNION ALL
+        -- class 2: parametre (major=object_id, minor=parameter_id)
+        SELECT CAST(2 AS tinyint), ep.major_id, ep.minor_id, ep.name,
+               CONVERT(nvarchar(4000), ep.value)
+        FROM sys.extended_properties AS ep
+        INNER JOIN sys.objects AS o ON o.object_id = ep.major_id AND o.is_ms_shipped = 0
+        WHERE ep.class = 2
+        UNION ALL
+        -- class 4: veritabanı principal'ı (major=principal_id)
+        SELECT CAST(4 AS tinyint), ep.major_id, ep.minor_id, ep.name,
+               CONVERT(nvarchar(4000), ep.value)
+        FROM sys.extended_properties AS ep
+        INNER JOIN sys.database_principals AS dp ON dp.principal_id = ep.major_id
+        WHERE ep.class = 4 AND dp.principal_id > 4
+        UNION ALL
+        -- class 7: index (major=object_id, minor=index_id)
+        SELECT CAST(7 AS tinyint), ep.major_id, ep.minor_id, ep.name,
+               CONVERT(nvarchar(4000), ep.value)
+        FROM sys.extended_properties AS ep
+        INNER JOIN sys.objects AS o ON o.object_id = ep.major_id AND o.is_ms_shipped = 0
+        WHERE ep.class = 7;
         """;
 }

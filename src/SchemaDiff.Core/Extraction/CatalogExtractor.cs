@@ -42,6 +42,7 @@ internal sealed class CatalogSet
     public List<RoleRow> Roles { get; set; } = [];
     public List<RoleMemberRow> RoleMembers { get; set; } = [];
     public List<UserRow> Users { get; set; } = [];
+    public List<ParameterRow> Parameters { get; set; } = [];
     public List<PermissionRow> Permissions { get; set; } = [];
     public List<UserDefinedTypeRow> UserDefinedTypes { get; set; } = [];
     public List<TableTypeRow> TableTypes { get; set; } = [];
@@ -154,6 +155,7 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
             Run("roles", Sql.Roles, MapRole, rows => catalog.Roles = rows, optional: true),
             Run("roleMembers", Sql.RoleMembers, MapRoleMember, rows => catalog.RoleMembers = rows, optional: true),
             Run("users", Sql.Users, MapUser, rows => catalog.Users = rows, optional: true),
+            Run("parameters", Sql.Parameters, MapParameter, rows => catalog.Parameters = rows, optional: true),
             Run("permissions", Sql.Permissions, MapPermission, rows => catalog.Permissions = rows, optional: true),
             Run("userDefinedTypes", Sql.UserDefinedTypes, MapUserDefinedType,
                 rows => catalog.UserDefinedTypes = rows, optional: true),
@@ -393,7 +395,10 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
         Rdr.Int(r, 0), Rdr.NStr(r, 1));
 
     private static UserRow MapUser(SqlDataReader r) => new(
-        Rdr.Str(r, 0), Rdr.Str(r, 1).Trim(), Rdr.NStr(r, 2));
+        Rdr.Str(r, 0), Rdr.Str(r, 1).Trim(), Rdr.NStr(r, 2), Rdr.Int(r, 3));
+
+    private static ParameterRow MapParameter(SqlDataReader r) => new(
+        Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.Str(r, 2));
 
     private static PermissionRow MapPermission(SqlDataReader r) => new(
         Rdr.Byte(r, 0), Rdr.Int(r, 1), Rdr.Int(r, 2), Rdr.Str(r, 3), Rdr.Str(r, 4), Rdr.NStr(r, 5));

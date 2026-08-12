@@ -52,7 +52,8 @@ public static class CoverageProbe
         // --- kapsanmayanlar: sayısı > 0 çıkanlar yapılacaklar listesidir ---
         ("Güvenlik", "Veritabanı kullanıcıları", true, "SELECT COUNT(*) FROM sys.database_principals WHERE principal_id > 4 AND type IN ('S','U','G','E','X')"),
         ("Metadata", "Extended property'ler (obje/kolon/şema/db)", true, "SELECT COUNT(*) FROM sys.extended_properties WHERE class IN (0, 1, 3)"),
-        ("Metadata", "Extended property'ler (parametre/principal vb.)", false, "SELECT COUNT(*) FROM sys.extended_properties WHERE class NOT IN (0, 1, 3)"),
+        ("Metadata", "Extended property'ler (parametre/principal/index)", true, "SELECT COUNT(*) FROM sys.extended_properties WHERE class IN (2, 4, 7)"),
+        ("Metadata", "Extended property'ler (öteki sınıflar)", false, "SELECT COUNT(*) FROM sys.extended_properties WHERE class NOT IN (0, 1, 2, 3, 4, 7)"),
         ("Tip", "Kullanıcı tanımlı alias tipler", true, "SELECT COUNT(*) FROM sys.types WHERE is_user_defined = 1 AND is_table_type = 0 AND is_assembly_type = 0"),
         ("Tip", "CLR (assembly) tipler", false, "SELECT COUNT(*) FROM sys.types WHERE is_user_defined = 1 AND is_assembly_type = 1"),
         ("Tip", "Table type'lar", true, "SELECT COUNT(*) FROM sys.table_types WHERE is_user_defined = 1"),

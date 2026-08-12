@@ -27,7 +27,7 @@ public static class ExtendedPropertyScriptGenerator
     [
         ObjectKind.Schema, ObjectKind.Table, ObjectKind.View, ObjectKind.Procedure,
         ObjectKind.ScalarFunction, ObjectKind.InlineTableFunction, ObjectKind.TableFunction,
-        ObjectKind.Trigger,
+        ObjectKind.Trigger, ObjectKind.User, ObjectKind.Role,
     ];
 
     public static ExtendedPropertyScriptResult Generate(
@@ -43,9 +43,11 @@ public static class ExtendedPropertyScriptGenerator
             if (diff.Kind == DiffKind.Removed || diff.Kind == DiffKind.Indeterminate) continue;
 
             var host = diff.Key;
+            // User/Role da host olabilir: principal seviyesi (class 4) property'ler onlarda durur.
             if (host.Kind is not (ObjectKind.Schema or ObjectKind.Table or ObjectKind.View
                 or ObjectKind.Procedure or ObjectKind.ScalarFunction or ObjectKind.InlineTableFunction
-                or ObjectKind.TableFunction or ObjectKind.Trigger or ObjectKind.Sequence))
+                or ObjectKind.TableFunction or ObjectKind.Trigger or ObjectKind.Sequence
+                or ObjectKind.User or ObjectKind.Role))
                 continue;
 
             var source = result.Source.Objects.GetValueOrDefault(host);
@@ -108,18 +110,34 @@ public static class ExtendedPropertyScriptGenerator
             // Şema seviyesi EP: yalnızca level0.
             sb.Append(", @level0type = N'SCHEMA', @level0name = N'").Append(Escape(host.Name)).Append('\'');
         }
+        else if (host.Kind is ObjectKind.User or ObjectKind.Role)
+        {
+            // Principal seviyesi EP: şema yok, principal'ın kendisi level0'dır.
+            sb.Append(", @level0type = N'").Append(host.Kind == ObjectKind.Role ? "ROLE" : "USER")
+              .Append("', @level0name = N'").Append(Escape(host.Name)).Append('\'');
+        }
         else
         {
             sb.Append(", @level0type = N'SCHEMA', @level0name = N'").Append(Escape(host.Schema)).Append('\'');
             sb.Append(", @level1type = N'").Append(Level1(host.Kind)).Append("', @level1name = N'")
               .Append(Escape(host.Name)).Append('\'');
-            if (scope.StartsWith("col:", StringComparison.Ordinal))
-                sb.Append(", @level2type = N'COLUMN', @level2name = N'").Append(Escape(scope[4..])).Append('\'');
+
+            // level2: kolon, parametre ya da index — hepsinin tipi farklı yazılır.
+            if (Level2(scope) is var (level2Type, level2Name))
+                sb.Append(", @level2type = N'").Append(level2Type).Append("', @level2name = N'")
+                  .Append(Escape(level2Name)).Append('\'');
         }
 
         sb.Append(';');
         return sb.ToString();
     }
+
+    /// <summary>Alt kapsamın (level2) tipi ve adı; obje seviyesi property'de null.</summary>
+    private static (string Type, string Name)? Level2(string scope) =>
+        scope.StartsWith("col:", StringComparison.Ordinal) ? ("COLUMN", scope[4..])
+        : scope.StartsWith("param:", StringComparison.Ordinal) ? ("PARAMETER", scope[6..])
+        : scope.StartsWith("index:", StringComparison.Ordinal) ? ("INDEX", scope[6..])
+        : null;
 
     private static string Level1(ObjectKind kind) => kind switch
     {

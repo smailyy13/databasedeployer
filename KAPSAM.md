@@ -1,6 +1,6 @@
 # KAPSAM — SchemaDiff neyi görür, neyi yazar, neyi görmez
 
-Son güncelleme: 2026-08-12 (Dalga 14 sonrası)
+Son güncelleme: 2026-08-12 (Dalga 15 sonrası)
 
 Bu belge tek soruyu cevaplar: **"Bu araca güvenip deploy edersem neyi kaçırırım?"**
 
@@ -42,7 +42,7 @@ En tehlikeli sonuç "fark yok" demektir; bu yüzden okunamayan her sınıf ayrı
 | Partition function / scheme | `CREATE PARTITION FUNCTION/SCHEME` |
 | Roller ve üyelikler | `CREATE ROLE`, `ALTER ROLE ADD MEMBER` (sabit rollerin ÜYELİĞİ dahil) |
 | İzinler | obje / kolon / şema / **veritabanı** seviyesi `GRANT` / `DENY` |
-| Extended property'ler | obje / kolon / şema / **veritabanı** seviyesi |
+| Extended property'ler | obje / kolon / şema / **veritabanı** / **parametre** / **principal** / **index** seviyesi |
 | Veritabanı kullanıcıları | `CREATE USER` (login/SID eşlemesi ortama özgü, kıyasa girmez) |
 | Temporal (system-versioned) | `CREATE TABLE` tam üretir; **kapatma** tam ve güvenli |
 | XML schema collection | `CREATE XML SCHEMA COLLECTION` (XSD okunabilirse); namespace'ler her hâlde kıyaslanır |
@@ -100,7 +100,6 @@ Sayılıyor (sayısı > 0 çıkarsa `--coverage` uyarır) ama görülmüyor ve y
 |---|---|---|
 | 1 | Table type drop+recreate üretimi | Fark artık görünüyor; bağımlılık (prosedür parametreleri) düşürme sırası gerekir |
 | 2 | Plan guide · DB scoped configuration · legacy `RULE`/`DEFAULT` | Düz `CREATE`/`ALTER`, düşük risk, düşük sıklık |
-| 3 | Parametre / principal seviyesi extended property | Obje/kolon/şema/db kapsandı, kalan uçlar |
 
 **Bilinçli ertelenen:** fiziksel yerleşim — `ON [filegroup]`, `TEXTIMAGE_ON`,
 `FILESTREAM_ON`, tablo/index'in partition scheme üzerine yerleşimi. Filegroup'ları biz
