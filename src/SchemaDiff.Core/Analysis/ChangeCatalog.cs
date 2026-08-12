@@ -103,7 +103,7 @@ public static class ChangeCatalog
                 $"{column.TypeDisplay} {(column.IsNullable ? "NULL" : "NOT NULL")}"));
         }
 
-        foreach (var part in new[] { "indexes", "statistics", "checks", "foreignKeys" })
+        foreach (var part in new[] { "indexes", "statistics", "fullText", "checks", "foreignKeys" })
         {
             foreach (var (name, line) in LinesByName(snapshot.PartCanonical.GetValueOrDefault(part)))
             {
@@ -159,6 +159,7 @@ public static class ChangeCatalog
 
                 case "indexes":
                 case "statistics":
+                case "fullText":
                 case "checks":
                 case "foreignKeys":
                     children.AddRange(CompareLines(key, source, target, part));
@@ -457,6 +458,7 @@ public static class ChangeCatalog
     {
         "checks" => ("Check Constraints", "Check Constraint"),
         "statistics" => ("Statistics", "Statistics"),
+        "fullText" => ("Full-Text", "Full-Text Index"),
         "foreignKeys" => ("Foreign Keys", "Foreign Key"),
         "indexes" when line.Contains("|pk=1", StringComparison.Ordinal) => ("Primary Key", "Primary Key"),
         "indexes" when line.Contains("|uq=1", StringComparison.Ordinal) => ("Unique Constraints", "Unique Constraint"),
@@ -541,6 +543,7 @@ public static class ChangeCatalog
         ObjectKind.PartitionFunction => "Partition Function",
         ObjectKind.PartitionScheme => "Partition Scheme",
         ObjectKind.DdlTrigger => "DDL Trigger",
+        ObjectKind.FullTextCatalog => "Full-Text Catalog",
         ObjectKind.Database => "Database",
         _ => kind.ToString(),
     };

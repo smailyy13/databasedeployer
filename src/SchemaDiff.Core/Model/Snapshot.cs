@@ -75,6 +75,9 @@ public sealed class ObjectSnapshot
 
     /// <summary>Kullanıcı istatistikleri (CREATE STATISTICS) — script üretimi için.</summary>
     public IReadOnlyList<StatisticsDefinition>? StatisticsDefinitions { get; set; }
+
+    /// <summary>Tablonun full-text index'i (en fazla bir tane) — script üretimi için.</summary>
+    public FullTextIndexDefinition? FullTextIndex { get; set; }
 }
 
 /// <summary>
@@ -113,6 +116,22 @@ public sealed record IndexDefinition(
 }
 
 public sealed record IndexKeyColumn(string Column, bool Descending);
+
+/// <summary>
+/// Tablonun full-text index'i. Tablo başına en fazla bir tane olduğu için ayrı obje değil,
+/// tablonun parçasıdır. KEY INDEX zorunludur: benzersiz, tek kolonlu, NOT NULL bir index.
+/// </summary>
+public sealed record FullTextIndexDefinition(
+    string KeyIndexName,
+    string CatalogName,
+    IReadOnlyList<FullTextIndexColumn> Columns,
+    string ChangeTracking,
+    string Stoplist,
+    bool IsEnabled);
+
+/// <param name="TypeColumn">Binary kolonun uzantısını tutan kolon (TYPE COLUMN); yoksa null.</param>
+/// <param name="LanguageId">Dil LCID'si; 0 ise sunucu varsayılanı kullanılır, yazılmaz.</param>
+public sealed record FullTextIndexColumn(string Column, string? TypeColumn, int LanguageId);
 
 public sealed record CheckDefinition(
     string Name, string Definition, bool IsSystemNamed, bool NotForReplication = false,

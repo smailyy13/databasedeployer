@@ -1,12 +1,12 @@
 # DEVAM — Nerede Kaldık (kapsam genişletme çalışması)
 
 > Bu dosya, başka bir makinede kaldığın yerden devam edebilmen için yazıldı.
-> Son güncelleme: 2026-08-12 (Dalga 7 sonrası)
+> Son güncelleme: 2026-08-12 (Dalga 8 sonrası)
 
 ## Hızlı durum
 - **Repo:** `smailyy13/databasedeployer` (GitHub, private) — proje adı **SchemaDiff**
 - **Branch:** `main`
-- **Testler:** **598 (595 yeşil + 3 atlanan entegrasyon)**
+- **Testler:** **635 (632 yeşil + 3 atlanan entegrasyon)**
 - **Son release:** **v1.4** (portable, 4 parça). **v1.5 HENÜZ ÇIKARILMADI** — aşağıya bak.
 - **Gereken SDK:** .NET 10 (`dotnet-install.sh --channel 10.0`; macOS'ta `~/.dotnet`).
 
@@ -18,7 +18,7 @@ git pull                        # en güncel main
 
 # Derle + test
 dotnet build -c Release
-dotnet test  -c Release --no-build      # 595 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
+dotnet test  -c Release --no-build      # 632 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
 
 # Web arayüzünü çalıştır (yerel, sadece 127.0.0.1)
 dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
@@ -46,7 +46,7 @@ dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
    tam ve güvenli (SET OFF + DROP PERIOD); **AÇMA/yeniden kurulum** riskli olduğu için
    (PERIOD kolonu + DEFAULT gerektirir) elle uygulanmak üzere uyarıyla atlanıyor.
 
-## Bu oturumda tamamlananlar (Dalga 4–7)
+## Bu oturumda tamamlananlar (Dalga 4–8)
 
 Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi eklendi.
 
@@ -108,7 +108,20 @@ Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi ekle
    - Yeni tabloda da: `CREATE TABLE` içindeki constraint hep AKTİF doğar, pasif olanlar
      tablo oluştuktan sonra ayrı batch'te kapatılıyor.
 
-9. **Test:** 276 → **598** (595 yeşil + 3 atlanan entegrasyon).
+9. **Dalga 8 — Full-text katalog + index** (KAPSAM.md yapılacaklar listesinin 1. maddesi):
+   - **Katalog** yeni obje sınıfı (`ObjectKind.FullTextCatalog`), veritabanı seviyesi/şemasız.
+     Tip üretecinde **en önce** kuruluyor (öncelik -1): tabloların index'i ona bağlı.
+     Dosya yolu (path) kıyasa girmiyor — ortama özgü ve SQL 2008'den beri kullanılmıyor.
+   - **Index** tablonun parçası (tablo başına en fazla bir tane): `KEY INDEX`, katalog,
+     `TYPE COLUMN`, `LANGUAGE`, `CHANGE_TRACKING`, `STOPLIST`, pasiflik.
+   - "Değişti" hâli yok: ya eklenir, ya düşer, ya baştan kurulur. Drop index'lerden ÖNCE,
+     create SONRA (KEY INDEX'e bağlı).
+   - `CREATE FULLTEXT INDEX` her zaman AKTİF doğar → pasif index ayrıca `DISABLE` ediliyor.
+   - LCID 0 ("sunucu varsayılanı") yazılmıyor: yazmak ortama bağımlılık yaratırdı.
+   - `STOPLIST`: `OFF`/`SYSTEM` anahtar kelime, kullanıcı stoplist'i köşeli parantezli.
+   - KEY INDEX ya da katalog adı okunamazsa parça HİÇ yazılmıyor — yarım kanonik sahte fark üretir.
+
+10. **Test:** 276 → **635** (632 yeşil + 3 atlanan entegrasyon).
    - `StatisticsTests` (33): karşılaştırma, sıra, filtre/NORECOMPUTE/INCREMENTAL,
      drop-önce/create-sonra sıralaması, yeni tablo script'i, okunamayan sorgu davranışı.
    - `CatalogQueryTests` (yeni): TÜM katalog sorgularının yapısal denetimi — en önemlisi
@@ -197,6 +210,18 @@ rm -f publish-portable/*.pdb
   durum-farkı yolu (drop+recreate yerine tek ifade)
 - `src/SchemaDiff.Core/Scripting/TableScriptWriter.cs` — `WriteConstraintState` (yeni tablo)
 - Testler: `ConstraintStateTests` (yeni)
+
+## Dalga 8'de değişen dosyalar (full-text)
+- `src/SchemaDiff.Core/Extraction/Sql.cs` — `FullTextCatalogs`, `FullTextIndexes`, `FullTextIndexColumns`
+- `src/SchemaDiff.Core/Extraction/{CatalogRows,CatalogExtractor}.cs` — satırlar + opsiyonel sorgular
+- `src/SchemaDiff.Core/Model/ObjectKey.cs` — `ObjectKind.FullTextCatalog`
+- `src/SchemaDiff.Core/Model/Snapshot.cs` — `FullTextIndexDefinition`, `FullTextIndexColumn`
+- `src/SchemaDiff.Core/Extraction/SnapshotBuilder.cs` — katalog objeleri, `fullText` parçası
+- `src/SchemaDiff.Core/Scripting/FullTextScript.cs` — **yeni**: CREATE/DROP/DISABLE (tek kaynak)
+- `src/SchemaDiff.Core/Scripting/TableScriptWriter.cs` — yeni tabloda `WriteFullText`
+- `src/SchemaDiff.Core/Scripting/TableScriptGenerator.cs` — `AppendFullTextDiff`
+- `src/SchemaDiff.Core/Scripting/TypeScriptGenerator.cs` — katalog create/drop/exists
+- Testler: `FullTextTests` (yeni, 22)
 
 ## Dalga 1–3'te değişen ana dosyalar (referans)
 - `src/SchemaDiff.Core/Analysis/CoverageProbe.cs` — sayaçlar (Probes internal)

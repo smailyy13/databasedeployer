@@ -112,6 +112,39 @@ internal static class Sql
             ON o.object_id = ic.object_id AND o.is_ms_shipped = 0 AND o.type IN ('U','V');
         """;
 
+    // Full-text kataloglar: veritabanı seviyesi, şemasız objeler. Dosya yolu (path) ortama
+    // özgüdür ve SQL 2008'den beri kullanılmaz — karşılaştırmaya girmez.
+    public const string FullTextCatalogs = """
+        SELECT ftc.fulltext_catalog_id, ftc.name, ftc.is_accent_sensitivity_on, ftc.is_default
+        FROM sys.fulltext_catalogs AS ftc;
+        """;
+
+    // Full-text index: tablo başına EN FAZLA BİR tane olur, bu yüzden tablonun parçasıdır.
+    // KEY INDEX (benzersiz, tek kolonlu, NOT NULL index) zorunludur; adıyla tutulur.
+    // stoplist_id: NULL = OFF, 0 = SYSTEM, aksi hâlde kullanıcı stoplist'i.
+    public const string FullTextIndexes = """
+        SELECT fti.object_id, ki.name, ftc.name, fti.is_enabled,
+               fti.change_tracking_state_desc, fti.stoplist_id, sl.name
+        FROM sys.fulltext_indexes AS fti
+        INNER JOIN sys.objects AS o
+            ON o.object_id = fti.object_id AND o.is_ms_shipped = 0
+        LEFT JOIN sys.indexes AS ki
+            ON ki.object_id = fti.object_id AND ki.index_id = fti.unique_index_id
+        LEFT JOIN sys.fulltext_catalogs AS ftc
+            ON ftc.fulltext_catalog_id = fti.fulltext_catalog_id
+        LEFT JOIN sys.fulltext_stoplists AS sl
+            ON sl.stoplist_id = fti.stoplist_id;
+        """;
+
+    // Full-text index'e dahil kolonlar. type_column_id: binary kolonun uzantısını tutan
+    // kolon (TYPE COLUMN); language_id: dil LCID'si.
+    public const string FullTextIndexColumns = """
+        SELECT ftc.object_id, ftc.column_id, ftc.type_column_id, ftc.language_id
+        FROM sys.fulltext_index_columns AS ftc
+        INNER JOIN sys.objects AS o
+            ON o.object_id = ftc.object_id AND o.is_ms_shipped = 0;
+        """;
+
     // Kullanıcı istatistikleri (CREATE STATISTICS). ÜÇ tür istatistik vardır:
     //   • index'in taşıdığı (user_created=0, auto_created=0) → index'in parçası, ayrı script'lenmez
     //   • otomatik üretilen (auto_created=1)                 → optimizer artefaktı, şema farkı değil

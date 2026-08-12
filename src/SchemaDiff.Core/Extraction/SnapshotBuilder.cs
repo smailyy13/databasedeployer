@@ -132,6 +132,10 @@ internal static class SnapshotBuilder
                 "Hedefteki istatistikler için sahte DROP üretmemek adına bu sınıf sessizce boş sayılmadı.");
         }
 
+        var fullTextById = catalog.FullTextIndexes
+            .GroupBy(f => f.ObjectId).ToDictionary(g => g.Key, g => g.First());
+        var fullTextColumnsBy = GroupBy(catalog.FullTextIndexColumns, f => f.ObjectId);
+
         var statisticsBy = statisticsUnreadable ? [] : GroupBy(catalog.Statistics, s => s.ObjectId);
         var statisticColumnsBy = statisticsUnreadable
             ? []
@@ -176,6 +180,11 @@ internal static class SnapshotBuilder
             StatisticsBy = statisticsBy,
             StatisticColumnsBy = statisticColumnsBy,
             XmlCollections = xmlCollections,
+            FullTextBy = catalog.FullTextIndexes
+                .Select(f => (f.ObjectId, Definition: BuildFullTextDefinition(
+                    f.ObjectId, fullTextById, fullTextColumnsBy, columnNames)))
+                .Where(x => x.Definition is not null)
+                .ToDictionary(x => x.ObjectId, x => x.Definition!),
         };
 
         var comparer = options.CaseSensitiveNames
@@ -343,6 +352,18 @@ internal static class SnapshotBuilder
             objects[key] = snapshot;
         }
 
+        // Full-text kataloglar: veritabanı seviyesi, şemasız objeler (partition function gibi).
+        foreach (var ftc in catalog.FullTextCatalogs)
+        {
+            var key = new ObjectKey(string.Empty, ftc.Name, ObjectKind.FullTextCatalog);
+            var snapshot = new ObjectSnapshot { Key = key, Hash = UInt128.Zero };
+            SetPart(snapshot, "definition",
+                $"ftcatalog|accent={Flag(ftc.AccentSensitive)}|default={Flag(ftc.IsDefault)}");
+            if (options.KeepDisplayScripts) snapshot.DisplayScript = RenderFullTextCatalog(ftc);
+            Finalize(snapshot);
+            objects[key] = snapshot;
+        }
+
         // Veritabanı seviyesi DDL trigger'ları (şema yok, ad benzersiz).
         foreach (var dt in catalog.DdlTriggers)
         {
@@ -390,10 +411,13 @@ internal static class SnapshotBuilder
                             foreignKeysBy.GetValueOrDefault(obj.ObjectId), fkColumnsBy, columnNames, keyById, options);
                         snapshot.StatisticsDefinitions = BuildStatisticsDefinitions(
                             obj.ObjectId, statisticsBy, statisticColumnsBy, columnNames, options);
+                        snapshot.FullTextIndex = BuildFullTextDefinition(
+                            obj.ObjectId, fullTextById, fullTextColumnsBy, columnNames);
                     }
                     SetPart(snapshot, "columns", BuildColumns(columnsBy.GetValueOrDefault(obj.ObjectId), xmlCollections, options));
                     SetPart(snapshot, "indexes", BuildIndexes(obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, columnNames, options));
                     SetPart(snapshot, "statistics", BuildStatistics(obj.ObjectId, statisticsBy, statisticColumnsBy, columnNames, options));
+                    SetPart(snapshot, "fullText", BuildFullText(obj.ObjectId, fullTextById, fullTextColumnsBy, columnNames));
                     SetPart(snapshot, "checks", BuildChecks(checksBy.GetValueOrDefault(obj.ObjectId), options));
                     SetPart(snapshot, "foreignKeys", BuildForeignKeys(foreignKeysBy.GetValueOrDefault(obj.ObjectId), fkColumnsBy, columnNames, keyById, options));
                     if (temporalById.TryGetValue(obj.ObjectId, out var temporal))
@@ -719,6 +743,82 @@ internal static class SnapshotBuilder
 
         lines.Sort(StringComparer.Ordinal);
         return string.Join('\n', lines);
+    }
+
+    /// <summary>
+    /// Full-text index kanoniği. KEY INDEX ya da katalog adı okunamıyorsa (yetki/eksik satır)
+    /// parça hiç yazılmaz — yarım bir kanonik, sahte fark üretmekten kötüdür.
+    /// </summary>
+    private static string BuildFullText(
+        int objectId,
+        Dictionary<int, FullTextIndexRow> fullTextById,
+        Dictionary<int, List<FullTextIndexColumnRow>> fullTextColumnsBy,
+        Dictionary<long, string> columnNames)
+    {
+        if (!fullTextById.TryGetValue(objectId, out var ft)) return string.Empty;
+        if (ft.KeyIndexName is null || ft.CatalogName is null) return string.Empty;
+
+        var columns = FullTextColumns(objectId, fullTextColumnsBy, columnNames)
+            .Select(c => c.TypeColumn is null
+                ? $"{c.Column}@{c.LanguageId.ToString(CultureInfo.InvariantCulture)}"
+                : $"{c.Column}>{c.TypeColumn}@{c.LanguageId.ToString(CultureInfo.InvariantCulture)}");
+
+        return $"ft|{ft.KeyIndexName}|catalog={ft.CatalogName}|cols={string.Join(',', columns)}" +
+               $"|changeTracking={ChangeTracking(ft)}|stoplist={Stoplist(ft)}|enabled={Flag(ft.IsEnabled)}";
+    }
+
+    private static FullTextIndexDefinition? BuildFullTextDefinition(
+        int objectId,
+        Dictionary<int, FullTextIndexRow> fullTextById,
+        Dictionary<int, List<FullTextIndexColumnRow>> fullTextColumnsBy,
+        Dictionary<long, string> columnNames)
+    {
+        if (!fullTextById.TryGetValue(objectId, out var ft)) return null;
+        if (ft.KeyIndexName is null || ft.CatalogName is null) return null;
+
+        var columns = FullTextColumns(objectId, fullTextColumnsBy, columnNames);
+        if (columns.Count == 0) return null;
+
+        return new FullTextIndexDefinition(
+            ft.KeyIndexName, ft.CatalogName, columns, ChangeTracking(ft), Stoplist(ft), ft.IsEnabled);
+    }
+
+    private static List<FullTextIndexColumn> FullTextColumns(
+        int objectId,
+        Dictionary<int, List<FullTextIndexColumnRow>> fullTextColumnsBy,
+        Dictionary<long, string> columnNames) =>
+        (fullTextColumnsBy.GetValueOrDefault(objectId) ?? [])
+            .OrderBy(c => c.ColumnId)
+            .Select(c => new FullTextIndexColumn(
+                Column(columnNames, objectId, c.ColumnId),
+                c.TypeColumnId == 0 ? null : Column(columnNames, objectId, c.TypeColumnId),
+                c.LanguageId))
+            .ToList();
+
+    private static string ChangeTracking(FullTextIndexRow ft) =>
+        ft.ChangeTracking?.ToUpperInvariant() switch
+        {
+            "AUTO" => "AUTO",
+            "MANUAL" => "MANUAL",
+            _ => "OFF",
+        };
+
+    /// <summary>stoplist_id: NULL = OFF, 0 = SYSTEM, aksi hâlde kullanıcı stoplist'inin adı.</summary>
+    private static string Stoplist(FullTextIndexRow ft) => ft.StoplistId switch
+    {
+        null => "OFF",
+        0 => "SYSTEM",
+        _ => ft.StoplistName ?? "SYSTEM",
+    };
+
+    private static string RenderFullTextCatalog(FullTextCatalogRow ftc)
+    {
+        var sb = new StringBuilder($"CREATE FULLTEXT CATALOG [{ftc.Name}]");
+        sb.Append(Environment.NewLine)
+          .Append("    WITH ACCENT_SENSITIVITY = ").Append(ftc.AccentSensitive ? "ON" : "OFF");
+        if (ftc.IsDefault) sb.Append(Environment.NewLine).Append("    AS DEFAULT");
+        sb.Append(';');
+        return sb.ToString();
     }
 
     private static string BuildChecks(List<CheckConstraintRow>? checks, SnapshotOptions options)

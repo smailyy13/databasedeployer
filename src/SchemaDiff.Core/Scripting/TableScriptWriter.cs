@@ -21,6 +21,7 @@ internal sealed class TableScriptSources
     public Dictionary<int, TemporalRow> TemporalBy { get; init; } = [];
     public Dictionary<int, List<StatisticRow>> StatisticsBy { get; init; } = [];
     public Dictionary<long, List<StatisticColumnRow>> StatisticColumnsBy { get; init; } = [];
+    public Dictionary<int, FullTextIndexDefinition> FullTextBy { get; init; } = [];
 }
 
 /// <summary>
@@ -71,6 +72,12 @@ internal static class TableScriptWriter
         }
 
         foreach (var line in WriteStatistics(key, objectId, sources, options))
+        {
+            sb.AppendLine();
+            sb.Append(line);
+        }
+
+        foreach (var line in WriteFullText(key, objectId, sources))
         {
             sb.AppendLine();
             sb.Append(line);
@@ -295,6 +302,22 @@ internal static class TableScriptWriter
             lines.Add(sb.ToString());
         }
 
+        return lines;
+    }
+
+    // --- full-text index ---
+
+    /// <summary>
+    /// Full-text index KEY INDEX'e (benzersiz index) bağlıdır, o yüzden index'lerden SONRA
+    /// ve ayrı batch'te yazılır. CREATE her zaman AKTİF doğar; pasif index ayrıca kapatılır.
+    /// </summary>
+    private static IEnumerable<string> WriteFullText(ObjectKey key, int objectId, TableScriptSources sources)
+    {
+        if (!sources.FullTextBy.TryGetValue(objectId, out var ft)) return [];
+
+        var qualified = Quote(key.Schema, key.Name);
+        var lines = new List<string> { $"GO{Environment.NewLine}{FullTextScript.Create(qualified, ft)}" };
+        if (!ft.IsEnabled) lines.Add($"GO{Environment.NewLine}{FullTextScript.Disable(qualified)}");
         return lines;
     }
 

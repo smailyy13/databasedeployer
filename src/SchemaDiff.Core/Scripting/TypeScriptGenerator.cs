@@ -53,7 +53,8 @@ public static class TypeScriptGenerator
         {
             if (diff.Key.Kind is not (ObjectKind.UserDefinedType or ObjectKind.TableType
                 or ObjectKind.Sequence or ObjectKind.Synonym
-                or ObjectKind.PartitionFunction or ObjectKind.PartitionScheme)) continue;
+                or ObjectKind.PartitionFunction or ObjectKind.PartitionScheme
+                or ObjectKind.FullTextCatalog)) continue;
             if (selection is not null && !selection.Contains(diff.Key)) continue;
 
             switch (diff.Kind)
@@ -150,6 +151,8 @@ public static class TypeScriptGenerator
     // Scheme function'a, tablolar scheme'e bağlı olduğundan partition objeler en önce.
     private static int CreatePriority(ObjectKey key) => key.Kind switch
     {
+        // Full-text katalog en önce: tabloların full-text index'i ona bağlı.
+        ObjectKind.FullTextCatalog => -1,
         ObjectKind.PartitionFunction => 0,
         ObjectKind.PartitionScheme => 1,
         ObjectKind.Sequence => 2,
@@ -165,6 +168,7 @@ public static class TypeScriptGenerator
         ObjectKind.Synonym => $"OBJECT_ID(N'[{key.Schema}].[{key.Name}]', N'SN') IS NULL",
         ObjectKind.PartitionFunction => $"NOT EXISTS (SELECT 1 FROM sys.partition_functions WHERE name = N'{Escape(key.Name)}')",
         ObjectKind.PartitionScheme => $"NOT EXISTS (SELECT 1 FROM sys.partition_schemes WHERE name = N'{Escape(key.Name)}')",
+        ObjectKind.FullTextCatalog => $"NOT EXISTS (SELECT 1 FROM sys.fulltext_catalogs WHERE name = N'{Escape(key.Name)}')",
         _ => $"TYPE_ID(N'[{key.Schema}].[{key.Name}]') IS NULL",
     };
 
@@ -174,6 +178,7 @@ public static class TypeScriptGenerator
         ObjectKind.Synonym => $"OBJECT_ID(N'[{key.Schema}].[{key.Name}]', N'SN') IS NOT NULL",
         ObjectKind.PartitionFunction => $"EXISTS (SELECT 1 FROM sys.partition_functions WHERE name = N'{Escape(key.Name)}')",
         ObjectKind.PartitionScheme => $"EXISTS (SELECT 1 FROM sys.partition_schemes WHERE name = N'{Escape(key.Name)}')",
+        ObjectKind.FullTextCatalog => $"EXISTS (SELECT 1 FROM sys.fulltext_catalogs WHERE name = N'{Escape(key.Name)}')",
         _ => $"TYPE_ID(N'[{key.Schema}].[{key.Name}]') IS NOT NULL",
     };
 
@@ -183,6 +188,7 @@ public static class TypeScriptGenerator
         ObjectKind.Synonym => $"DROP SYNONYM [{key.Schema}].[{key.Name}];",
         ObjectKind.PartitionFunction => $"DROP PARTITION FUNCTION [{key.Name}];",
         ObjectKind.PartitionScheme => $"DROP PARTITION SCHEME [{key.Name}];",
+        ObjectKind.FullTextCatalog => $"DROP FULLTEXT CATALOG [{key.Name}];",
         _ => $"DROP TYPE [{key.Schema}].[{key.Name}];",
     };
 

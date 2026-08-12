@@ -65,6 +65,18 @@ internal sealed record ColumnRow(
 /// <summary>Tipli XML kolonlarının başvurduğu şema koleksiyonu — id'den ada çözüm için.</summary>
 internal sealed record XmlSchemaCollectionRow(int CollectionId, string SchemaName, string Name);
 
+internal sealed record FullTextCatalogRow(
+    int CatalogId, string Name, bool AccentSensitive, bool IsDefault);
+
+/// <summary>Tablo başına en fazla bir full-text index. <paramref name="StoplistId"/>:
+/// null = OFF, 0 = SYSTEM, aksi hâlde <paramref name="StoplistName"/> geçerlidir.</summary>
+internal sealed record FullTextIndexRow(
+    int ObjectId, string? KeyIndexName, string? CatalogName, bool IsEnabled,
+    string? ChangeTracking, int? StoplistId, string? StoplistName);
+
+internal sealed record FullTextIndexColumnRow(
+    int ObjectId, int ColumnId, int TypeColumnId, int LanguageId);
+
 internal sealed record IndexRow(
     int ObjectId, int IndexId, string? Name, string TypeDesc,
     bool IsUnique, bool IsPrimaryKey, bool IsUniqueConstraint,

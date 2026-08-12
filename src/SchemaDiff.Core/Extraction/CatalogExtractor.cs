@@ -14,6 +14,9 @@ internal sealed class CatalogSet
     public List<IndexRow> Indexes { get; set; } = [];
     public List<IndexColumnRow> IndexColumns { get; set; } = [];
     public List<XmlSchemaCollectionRow> XmlSchemaCollections { get; set; } = [];
+    public List<FullTextCatalogRow> FullTextCatalogs { get; set; } = [];
+    public List<FullTextIndexRow> FullTextIndexes { get; set; } = [];
+    public List<FullTextIndexColumnRow> FullTextIndexColumns { get; set; } = [];
     public List<StatisticRow> Statistics { get; set; } = [];
     public List<StatisticColumnRow> StatisticColumns { get; set; } = [];
     public List<KeyConstraintRow> KeyConstraints { get; set; } = [];
@@ -91,6 +94,14 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
             // Tipli XML kolonlarının koleksiyon adı; yoksa kolon düz "xml" script'lenirdi.
             Run("xmlSchemaCollections", Sql.XmlSchemaCollections, MapXmlSchemaCollection,
                 rows => catalog.XmlSchemaCollections = rows, optional: true),
+
+            // Full-text: sunucuda FTS kurulu değilse ya da yetki yoksa düşebilir.
+            Run("fullTextCatalogs", Sql.FullTextCatalogs, MapFullTextCatalog,
+                rows => catalog.FullTextCatalogs = rows, optional: true),
+            Run("fullTextIndexes", Sql.FullTextIndexes, MapFullTextIndex,
+                rows => catalog.FullTextIndexes = rows, optional: true),
+            Run("fullTextIndexColumns", Sql.FullTextIndexColumns, MapFullTextIndexColumn,
+                rows => catalog.FullTextIndexColumns = rows, optional: true),
 
             // sys.stats.is_incremental SQL Server 2014 ile geldi; eski sürümde sorgu düşer,
             // karşılaştırma istatistiksiz devam eder (rapora uyarı düşülür).
@@ -256,6 +267,16 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
     private static IndexColumnRow MapIndexColumn(SqlDataReader r) => new(
         Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.Int(r, 2), Rdr.Int(r, 3),
         Rdr.Byte(r, 4), Rdr.Bool(r, 5), Rdr.Bool(r, 6));
+
+    private static FullTextCatalogRow MapFullTextCatalog(SqlDataReader r) => new(
+        Rdr.Int(r, 0), Rdr.Str(r, 1), Rdr.Bool(r, 2), Rdr.Bool(r, 3));
+
+    private static FullTextIndexRow MapFullTextIndex(SqlDataReader r) => new(
+        Rdr.Int(r, 0), Rdr.NStr(r, 1), Rdr.NStr(r, 2), Rdr.Bool(r, 3),
+        Rdr.NStr(r, 4), Rdr.NInt(r, 5), Rdr.NStr(r, 6));
+
+    private static FullTextIndexColumnRow MapFullTextIndexColumn(SqlDataReader r) => new(
+        Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.Int(r, 2), Rdr.Int(r, 3));
 
     private static StatisticRow MapStatistic(SqlDataReader r) => new(
         Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.Str(r, 2), Rdr.Bool(r, 3), Rdr.NStr(r, 4), Rdr.Bool(r, 5));

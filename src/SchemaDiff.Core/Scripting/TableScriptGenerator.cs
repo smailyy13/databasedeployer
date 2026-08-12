@@ -304,6 +304,7 @@ public static class TableScriptGenerator
         var post = new List<string>();
         AppendIndexConstraintDiff(qualified, source, target, pre, post, fkDrops, fkAdds, options.ValidateNewConstraints);
         AppendStatisticsDiff(qualified, source, target, pre, post);
+        AppendFullTextDiff(qualified, source, target, pre, post);
         AppendDefaultDiff(qualified, sourceByName, targetByName, pre, post);
 
         // Temporal (system-versioning): KAPATMA güvenli ve tam üretilir (en başta, çünkü
@@ -524,6 +525,28 @@ public static class TableScriptGenerator
     }
 
     /// <summary>
+    /// Full-text index. Tablo başına en fazla bir tane olduğu için "değişti" hâli yoktur:
+    /// ya eklenir, ya düşürülür, ya da baştan kurulur. KEY INDEX'e bağlı olduğundan
+    /// drop'u index değişikliklerinden ÖNCE (pre), create'i SONRA (post) gelir.
+    /// </summary>
+    private static void AppendFullTextDiff(
+        string qualified, ObjectSnapshot source, ObjectSnapshot target,
+        List<string> pre, List<string> post)
+    {
+        var src = source.FullTextIndex;
+        var tgt = target.FullTextIndex;
+        if (Sig(src) == Sig(tgt)) return;
+
+        if (tgt is not null) pre.Add(FullTextScript.Drop(qualified));
+        if (src is not null)
+        {
+            post.Add(FullTextScript.Create(qualified, src));
+            // CREATE FULLTEXT INDEX her zaman AKTİF doğar; pasiflik ayrıca yazılmalı.
+            if (!src.IsEnabled) post.Add(FullTextScript.Disable(qualified));
+        }
+    }
+
+    /// <summary>
     /// Kullanıcı istatistikleri (CREATE STATISTICS). ALTER STATISTICS yalnızca NORECOMPUTE'u
     /// değiştirebilir; kolon listesi ya da filtre değiştiğinde drop + recreate şarttır — tek
     /// yol olsun diye her değişimde aynısını yapıyoruz.
@@ -676,6 +699,11 @@ public static class TableScriptGenerator
         $"keys={string.Join(",", i.KeyColumns.Select(k => $"{k.Column}:{(k.Descending ? "D" : "A")}"))}|" +
         $"inc={string.Join(",", i.IncludedColumns)}|f={i.FilterDefinition ?? ""}|" +
         $"comp={i.ExplicitCompression ?? ""}|rowLocks={i.AllowRowLocks}|pageLocks={i.AllowPageLocks}";
+
+    private static string Sig(FullTextIndexDefinition? f) => f is null ? string.Empty :
+        $"key={f.KeyIndexName}|catalog={f.CatalogName}|" +
+        $"cols={string.Join(",", f.Columns.Select(c => $"{c.Column}:{c.TypeColumn}:{c.LanguageId}"))}|" +
+        $"ct={f.ChangeTracking}|stoplist={f.Stoplist}|enabled={f.IsEnabled}";
 
     private static string Sig(CheckDefinition c) => $"def={c.Definition}|nfr={c.NotForReplication}";
 

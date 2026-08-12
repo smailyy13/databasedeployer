@@ -21,6 +21,7 @@ public enum ObjectKind
     PartitionFunction,
     PartitionScheme,
     DdlTrigger,
+    FullTextCatalog,
     Database,
 }
 
@@ -57,6 +58,7 @@ public readonly record struct ObjectKey(string Schema, string Name, ObjectKind K
         ObjectKind.PartitionFunction => $"PARTITION FUNCTION [{Name}]",
         ObjectKind.PartitionScheme => $"PARTITION SCHEME [{Name}]",
         ObjectKind.DdlTrigger => $"DDL TRIGGER [{Name}]",
+        ObjectKind.FullTextCatalog => $"FULLTEXT CATALOG [{Name}]",
         ObjectKind.Database => "DATABASE",
         _ => $"{Kind} [{Schema}].[{Name}]",
     };

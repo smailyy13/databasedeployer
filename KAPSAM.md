@@ -1,6 +1,6 @@
 # KAPSAM — SchemaDiff neyi görür, neyi yazar, neyi görmez
 
-Son güncelleme: 2026-08-12 (Dalga 7 sonrası)
+Son güncelleme: 2026-08-12 (Dalga 8 sonrası)
 
 Bu belge tek soruyu cevaplar: **"Bu araca güvenip deploy edersem neyi kaçırırım?"**
 
@@ -45,6 +45,8 @@ En tehlikeli sonuç "fark yok" demektir; bu yüzden okunamayan her sınıf ayrı
 | Extended property'ler | obje / kolon / şema / **veritabanı** seviyesi |
 | Veritabanı kullanıcıları | `CREATE USER` (login/SID eşlemesi ortama özgü, kıyasa girmez) |
 | Temporal (system-versioned) | `CREATE TABLE` tam üretir; **kapatma** tam ve güvenli |
+| Full-text katalog | `CREATE FULLTEXT CATALOG` — accent sensitivity, `AS DEFAULT` |
+| Full-text index | `CREATE FULLTEXT INDEX` — KEY INDEX, katalog, `TYPE COLUMN`, `LANGUAGE`, `CHANGE_TRACKING`, `STOPLIST`, pasiflik |
 
 ---
 
@@ -91,11 +93,11 @@ Sayılıyor (sayısı > 0 çıkarsa `--coverage` uyarır) ama görülmüyor ve y
 
 | # | Konu | Neden bu sırada |
 |---|---|---|
-| 1 | Full-text katalog + index | Ayrı obje sınıfı; arama kullanan sistemlerde işlevsel fark yaratır |
-| 2 | Table type constraint / index'leri | Kısmi kapsamı tamamlar; TVP kullanan yerlerde davranış farkı |
-| 3 | XML index / Spatial index | Mevcut index altyapısının uzantısı |
-| 4 | `OPTIMIZE_FOR_SEQUENTIAL_KEY` (2019+), `STATISTICS_NORECOMPUTE` | Sürüm koşullu: `Indexes` sorgusu ZORUNLU, eski sunucuda düşerse karşılaştırma tümden biter. Ayrı opsiyonel sorgu gerekir |
-| 5 | XML schema collection | Tipli XML kolonları artık ona başvuruyor; koleksiyonun kendisi hâlâ kapsam dışı |
+| 1 | Table type constraint / index'leri | Kısmi kapsamı tamamlar; TVP kullanan yerlerde davranış farkı |
+| 2 | XML index / Spatial index | Mevcut index altyapısının uzantısı |
+| 3 | `OPTIMIZE_FOR_SEQUENTIAL_KEY` (2019+), `STATISTICS_NORECOMPUTE` | Sürüm koşullu: `Indexes` sorgusu ZORUNLU, eski sunucuda düşerse karşılaştırma tümden biter. Ayrı opsiyonel sorgu gerekir |
+| 4 | XML schema collection | Tipli XML kolonları artık ona başvuruyor; koleksiyonun kendisi hâlâ kapsam dışı |
+| 5 | Full-text stoplist objesi | Index artık stoplist'e ADIYLA başvuruyor; stoplist'in kendisi kapsam dışı |
 | 6 | Plan guide · DB scoped configuration · legacy `RULE`/`DEFAULT` | Düz `CREATE`/`ALTER`, düşük risk, düşük sıklık |
 | 7 | Parametre / principal seviyesi extended property | Obje/kolon/şema/db kapsandı, kalan uçlar |
 
