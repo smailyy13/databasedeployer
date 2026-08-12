@@ -148,6 +148,18 @@ public class RoleScriptGeneratorTests
     {
         var script = Generate(Build(Empty()), Build(UserCatalog(("Bob", "S", null))));
         Assert.Contains("DROP USER [Bob];", script.Sql);
+        // Silmeden önce sahip olunan şemalar dbo'ya devredilir (Msg 15138'i önler).
+        Assert.Contains("ALTER AUTHORIZATION ON SCHEMA::", script.Sql);
+        Assert.Contains("DATABASE_PRINCIPAL_ID(N'Bob')", script.Sql);
+    }
+
+    [Fact]
+    public void Section_commit_is_guarded_against_rollback()
+    {
+        // XACT_ABORT sonrası koşulsuz COMMIT Msg 3902 verir; @@TRANCOUNT koruması olmalı.
+        var script = Generate(Build(RoleCatalog(50, "Reader")), Build(Empty()));
+        Assert.Contains("IF @@TRANCOUNT > 0 COMMIT TRANSACTION;", script.Sql);
+        Assert.DoesNotContain("\nCOMMIT TRANSACTION;", script.Sql);
     }
 
     [Fact]

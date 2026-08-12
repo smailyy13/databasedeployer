@@ -10,7 +10,12 @@ namespace SchemaDiff.Core.Scripting;
 /// </summary>
 public static class DeploymentHeader
 {
-    public static string Master(CompareResult result, string? generatedAt, bool allowDataLoss)
+    /// <param name="runOnDatabase">
+    /// Bu script'in üzerinde çalışacağı veritabanı → başa <c>USE [db]</c> yazılır.
+    /// null verilirse USE yazılmaz (ör. ileri+ters karışık script; her bölüm kendi USE'unu koyar).
+    /// </param>
+    public static string Master(CompareResult result, string? generatedAt, bool allowDataLoss,
+        string? runOnDatabase = null)
     {
         var sb = new StringBuilder(1024);
         sb.AppendLine("/* ==========================================================================");
@@ -32,6 +37,19 @@ public static class DeploymentHeader
             : "   Veri kaybı riski taşıyan adımlar script'e ALINMADI (sonda ayrıca raporlanır).");
         sb.AppendLine("   ========================================================================== */");
         sb.AppendLine();
+        // Hedef veritabanını açıkça seç — yanlış DB'ye (ör. master) çalıştırmayı önler.
+        if (runOnDatabase is not null)
+        {
+            sb.AppendLine(UseDatabase(runOnDatabase).TrimEnd());
+            sb.AppendLine();
+        }
         return sb.ToString();
+    }
+
+    /// <summary>Bir bölümün çalışacağı DB'yi seçen <c>USE [db]; GO</c> bloğu (bracket-safe).</summary>
+    public static string UseDatabase(string database)
+    {
+        var safe = database.Replace("]", "]]");
+        return $"USE [{safe}];{Environment.NewLine}GO{Environment.NewLine}";
     }
 }

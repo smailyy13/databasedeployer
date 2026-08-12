@@ -182,7 +182,16 @@ public static class RoleScriptGenerator
             {
                 sb.AppendLine($"PRINT N'Kullanıcı siliniyor: {Escape(key.Name)}';");
                 sb.AppendLine($"IF DATABASE_PRINCIPAL_ID(N'{Escape(key.Name)}') IS NOT NULL");
+                sb.AppendLine("BEGIN");
+                // Kullanıcının sahip olduğu şemaları önce dbo'ya devret; aksi hâlde
+                // "owns a schema and cannot be dropped" (Msg 15138) ile patlar. SSDT de böyle yapar.
+                sb.AppendLine("    DECLARE @reassign nvarchar(max) = N'';");
+                sb.AppendLine("    SELECT @reassign += N'ALTER AUTHORIZATION ON SCHEMA::' + QUOTENAME(s.name) + N' TO [dbo];'");
+                sb.AppendLine("    FROM sys.schemas AS s");
+                sb.AppendLine($"    WHERE s.principal_id = DATABASE_PRINCIPAL_ID(N'{Escape(key.Name)}');");
+                sb.AppendLine("    IF @reassign <> N'' EXEC sys.sp_executesql @reassign;");
                 sb.AppendLine($"    DROP USER [{key.Name}];");
+                sb.AppendLine("END");
                 sb.AppendLine("GO");
                 sb.AppendLine();
                 included.Add(key);
@@ -196,7 +205,9 @@ public static class RoleScriptGenerator
 
         if (options.WrapInTransaction)
         {
-            sb.AppendLine("COMMIT TRANSACTION;");
+            // XACT_ABORT ON: bir adım patlarsa transaction geri sarılmış olur; koşulsuz
+            // COMMIT o durumda Msg 3902 verir. @@TRANCOUNT koruması gerçek hatayı bırakır.
+            sb.AppendLine("IF @@TRANCOUNT > 0 COMMIT TRANSACTION;");
             sb.AppendLine("GO");
         }
 

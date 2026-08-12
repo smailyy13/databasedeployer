@@ -131,7 +131,7 @@ public static class TypeScriptGenerator
 
         if (options.WrapInTransaction)
         {
-            sb.AppendLine("COMMIT TRANSACTION;");
+            sb.AppendLine("IF @@TRANCOUNT > 0 COMMIT TRANSACTION;");
             sb.AppendLine("GO");
         }
 

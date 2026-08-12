@@ -262,6 +262,16 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
     }
     var (blockingCount, warningText) = DeploymentWarning.Build(warnSegments);
 
+    // Bu script HANGİ DB üzerinde çalışır? Her BuildBody yönü cmp.Target'ı mutasyona uğratır:
+    //   ileri → hedef DB ; tam ters (rollback) → kaynak DB.
+    // Karışık (ileri + ⇄ ters bölüm) iki farklı DB'ye dokunur → tek USE olmaz, bölüm başına USE.
+    var mixed = !request.Reverse && fwd is not null && rev is not null;
+    string? headerDb =
+        request.Reverse ? reverseCmp.Target.Database                       // tam ters → kaynak DB
+        : mixed ? null                                                     // karışık → bölüm başına USE
+        : rev is not null ? reverseCmp.Target.Database                     // yalnız ⇄ ters bölüm → kaynak DB
+        : forwardCmp.Target.Database;                                      // ileri → hedef DB
+
     // Eski tam-ters davranış (Reverse=true): tüm ileri seçimi ters karşılaştırmadan üret.
     if (request.Reverse)
     {
@@ -273,7 +283,10 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
         // fwd null ve ters seçim de yoksa → tümü. Ters seçim varsa boş forward = "hiçbiri".
         var forwardAll = fwd is null && rev is null;
         if (forwardAll || fwd is not null)
+        {
+            if (mixed) sb.Append(DeploymentHeader.UseDatabase(forwardCmp.Target.Database)).AppendLine();
             BuildBody(forwardCmp, fwd);
+        }
 
         // GERİ ALMA bölümü: ⇄ ile işaretlenen objeler, ters yönde, aynı dosyaya eklenir.
         if (rev is not null)
@@ -284,13 +297,15 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
             sb.AppendLine($"   (hedef → kaynak). Kaynak: {reverseCmp.Source.Database}  Hedef: {reverseCmp.Target.Database}");
             sb.AppendLine("   ==================================================================== */");
             sb.AppendLine();
+            // Karışık script'te ileri bölüm hedef DB'de kaldı; ters bölüm kaynak DB'ye geçer.
+            if (mixed) sb.Append(DeploymentHeader.UseDatabase(reverseCmp.Target.Database)).AppendLine();
             BuildBody(reverseCmp, rev);
         }
     }
 
-    // Uyarı bloğu ve en üste tek master başlık (kaynak/hedef + çalışma sırası).
+    // Uyarı bloğu ve en üste tek master başlık (kaynak/hedef + çalışma sırası + USE).
     if (warningText.Length > 0) sb.Insert(0, warningText);
-    if (sb.Length > 0) sb.Insert(0, DeploymentHeader.Master(forwardCmp, generatedAt, allowDataLoss));
+    if (sb.Length > 0) sb.Insert(0, DeploymentHeader.Master(forwardCmp, generatedAt, allowDataLoss, headerDb));
 
     var tag = request.Reverse ? "reverse" : (rev is not null ? "ileri+reverse" : (fwd is null ? scope ?? "all" : "secili"));
     var fileName = $"{forwardCmp.Target.Database}_{tag}_{DateTime.Now:yyyyMMdd-HHmm}.sql";

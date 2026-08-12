@@ -64,6 +64,7 @@ public static class ModuleScriptGenerator
     [
         ObjectKind.View, ObjectKind.Procedure, ObjectKind.ScalarFunction,
         ObjectKind.InlineTableFunction, ObjectKind.TableFunction, ObjectKind.Trigger,
+        ObjectKind.DdlTrigger,
     ];
 
     public static ScriptResult Generate(
@@ -149,8 +150,17 @@ public static class ModuleScriptGenerator
         {
             sb.AppendLine($"PRINT N'Siliniyor: {Describe(key)}';");
             sb.AppendLine("GO");
-            sb.AppendLine($"IF OBJECT_ID(N'[{key.Schema}].[{key.Name}]', N'{TypeCode(key.Kind)}') IS NOT NULL");
-            sb.AppendLine($"    DROP {DropKeyword(key.Kind)} [{key.Schema}].[{key.Name}];");
+            if (key.Kind == ObjectKind.DdlTrigger)
+            {
+                // Veritabanı seviyesi DDL trigger: şema yok, sys.triggers'ta parent_class=0.
+                sb.AppendLine($"IF EXISTS (SELECT 1 FROM sys.triggers WHERE parent_class = 0 AND name = N'{Escape(key.Name)}')");
+                sb.AppendLine($"    DROP TRIGGER [{key.Name}] ON DATABASE;");
+            }
+            else
+            {
+                sb.AppendLine($"IF OBJECT_ID(N'[{key.Schema}].[{key.Name}]', N'{TypeCode(key.Kind)}') IS NOT NULL");
+                sb.AppendLine($"    DROP {DropKeyword(key.Kind)} [{key.Schema}].[{key.Name}];");
+            }
             sb.AppendLine("GO");
             sb.AppendLine();
             included.Add(key);
@@ -164,7 +174,7 @@ public static class ModuleScriptGenerator
 
         if (options.WrapInTransaction)
         {
-            sb.AppendLine("COMMIT TRANSACTION;");
+            sb.AppendLine("IF @@TRANCOUNT > 0 COMMIT TRANSACTION;");
             sb.AppendLine("GO");
             sb.AppendLine();
         }
@@ -226,6 +236,12 @@ public static class ModuleScriptGenerator
         sb.AppendLine("GO");
         sb.AppendLine(body);
         sb.AppendLine("GO");
+        // CREATE/ALTER TRIGGER trigger'ı aktif eder; source'ta pasifse durumu koru.
+        if (key.Kind == ObjectKind.DdlTrigger && snapshot.IsDisabled == true)
+        {
+            sb.AppendLine($"DISABLE TRIGGER [{key.Name}] ON DATABASE;");
+            sb.AppendLine("GO");
+        }
         sb.AppendLine();
 
         included.Add(key);

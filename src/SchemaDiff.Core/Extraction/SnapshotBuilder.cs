@@ -203,6 +203,20 @@ internal static class SnapshotBuilder
                 if (members.Count > 0)
                     SetPart(snapshot, "members", string.Join('\n', members.Select(m => $"member|{m}")));
 
+                // Detay panelinde ham "member|KUVEYTTURK\x" yerine okunur script göster.
+                if (options.KeepDisplayScripts)
+                {
+                    var lines = new List<string>();
+                    if (!role.IsFixed)
+                        lines.Add(role.Owner is { } o && o != "-"
+                            ? $"CREATE ROLE [{role.Name}] AUTHORIZATION [{o}];"
+                            : $"CREATE ROLE [{role.Name}];");
+                    lines.AddRange(members.Select(m => $"ALTER ROLE [{role.Name}] ADD MEMBER [{m}];"));
+                    snapshot.DisplayScript = lines.Count > 0
+                        ? string.Join('\n', lines)
+                        : $"-- ROLE [{role.Name}] (üyesiz)";
+                }
+
                 Finalize(snapshot);
                 objects[key] = snapshot;
             }

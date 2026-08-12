@@ -275,7 +275,8 @@ static (string Sql, ScriptResult? Module, TableScriptResult? Table, RoleScriptRe
     BuildCombinedScript(CompareResult cmp, string generatedAt, bool wantTables, bool wantModules, bool allowDataLoss)
 {
     var sb = new StringBuilder(16384);
-    sb.Append(DeploymentHeader.Master(cmp, generatedAt, allowDataLoss));
+    // cmp.Target = bu script'in mutasyona uğrattığı DB (ileri→hedef, rollback→kaynak). USE onu seçer.
+    sb.Append(DeploymentHeader.Master(cmp, generatedAt, allowDataLoss, cmp.Target.Database));
 
     TypeScriptResult? typeScript = null;
     if (wantTables || wantModules)
