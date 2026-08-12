@@ -5,7 +5,7 @@
 
 ## Hızlı durum
 - **Repo:** `smailyy13/databasedeployer` (GitHub, private) — proje adı **SchemaDiff**
-- **Branch:** `main`
+- **Branch:** `main` — tek dal, feature branch kullanılmıyor. Her şey push edilmiş durumda.
 - **Testler:** **876 (873 yeşil + 3 atlanan entegrasyon)**
 - **Son release:** **v1.4** (portable, 4 parça). **v1.5 HENÜZ ÇIKARILMADI** — aşağıya bak.
 - **Gereken SDK:** .NET 10 (`dotnet-install.sh --channel 10.0`; macOS'ta `~/.dotnet`).
@@ -249,17 +249,40 @@ Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi ekle
    - `ConstraintStateTests` (16): üç durum ifadesi, durum-farkında drop+recreate olmaması,
      yeni constraint'in WITH NOCHECK ile eklenmesi, yeni tabloda kapatma sırası.
 
-### Sıradaki adım
-Commit + push, sonra **v1.5 release** (aşağıdaki publish adımları).
+### SIRADAKİ ADIM  ← diğer makinede buradan başla
 
-### Kalan scriptlenebilir maddeler (düşük öncelik)
-- `OPTIMIZE_FOR_SEQUENTIAL_KEY` (2019+) ve `STATISTICS_NORECOMPUTE` (index istatistiği)
-- Full-text katalog + index — ayrı obje sınıfı
-- Table type constraint/index'leri (şu an yalnız kolon yapısı)
-- XML schema collection / plan guide / application role / DB scoped configuration / RULE-DEFAULT
-- XML index / Spatial index — index handling'in uzantısı
-- Fiziksel yerleşim (`ON [filegroup]`) — **bilinçli ertelendi:** filegroup'ları biz
-  oluşturmuyoruz, `ON [DATA_FG]` yazarsak hedefte o FG yoksa CREATE patlar.
+Kapsam listesi TÜKENDİ (Dalga 4–18). Kalan iş yeni obje sınıfı eklemek değil, **doğrulama**:
+
+1. **Fixture'ları kur ve atlanan 3 entegrasyon testini koş.** Bu oturumdaki 15 dalga hiç
+   canlı SQL Server görmedi; birim testler *yazdığımı* doğruluyor, *yazmayı unuttuğumu*
+   değil (Dalga 11 ve 18'de tam bu yüzden iki hata çıktı).
+   ```cmd
+   sqlcmd -S localhost -E -C -b -i test\fixtures\dev.sql
+   sqlcmd -S localhost -E -C -b -i test\fixtures\prod.sql
+   sqlcmd -S localhost -E -C -b -i test\fixtures\generate-large.sql -v DbName="SchemaDiff_Big1" Drift=0
+   sqlcmd -S localhost -E -C -b -i test\fixtures\generate-large.sql -v DbName="SchemaDiff_Big2" Drift=1
+   dotnet test -c Release
+   ```
+   `Big_script_matches_ssdt_operation_counts` beklentileri (125 ALTER PROC, 25 DROP PROC,
+   10 CREATE TABLE, 29 DROP INDEX) **oynamış olabilir**: CREATE TABLE çıktısı artık
+   istatistik, full-text, XML/spatial index ve NOCHECK batch'leri de içeriyor. Sayı
+   değiştiyse önce ÜRETİLEN SCRIPT'E BAK, sonra beklentiyi güncelle.
+
+2. **Canlı sunucuda doğrulanmamış üç nokta** (hepsi opsiyonel sorgu/üretim, düşerse
+   uyarı verir ama çalıştığını görmedik):
+   - `XML_SCHEMA_NAMESPACE`'in kolon argümanıyla çalışması (Dalga 13)
+   - `sp_create_plan_guide` çağrısının gerçek parametrelerle derlenmesi (Dalga 16/18)
+   - Table type recreate akışının uçtan uca çalışması (Dalga 17, varsayılan KAPALI)
+
+3. **Şirket DB'nde `--coverage` çalıştır.** Kapsanmayan ve sayısı > 0 çıkan bir sınıf
+   kaldıysa gerçek yapılacaklar listesi odur; KAPSAM.md'deki genel sıralamadan değerlidir.
+
+4. Sonra **v1.5 release** (aşağıdaki publish adımları).
+
+### Kalan scriptlenebilir maddeler
+Yok — liste tükendi. Tek bilinçli erteleme:
+- Fiziksel yerleşim (`ON [filegroup]`, `TEXTIMAGE_ON`, partition scheme üzerine yerleşim):
+  filegroup'ları biz oluşturmuyoruz, `ON [DATA_FG]` yazarsak hedefte o FG yoksa CREATE patlar.
 
 ### Tespit-only kalacaklar (banka için oto-script RİSKLİ)
 RLS (security policy), Service Broker, kripto anahtarlar/sertifikalar, PolyBase external,
