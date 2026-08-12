@@ -143,6 +143,7 @@ internal static class SnapshotBuilder
             FkColumnsBy = fkColumnsBy,
             ColumnNames = columnNames,
             KeyById = keyById,
+            TemporalBy = temporalById,
         };
 
         var comparer = options.CaseSensitiveNames
@@ -540,6 +541,10 @@ internal static class SnapshotBuilder
             if (c.IsComputed)
                 sb.Append("|computed=").Append(c.ComputedDefinition)
                   .Append(";persisted=").Append(Flag(c.ComputedIsPersisted == true));
+
+            // Temporal PERIOD kolonları: GENERATED ALWAYS AS ROW START(1)/END(2) + HIDDEN.
+            if (c.GeneratedAlwaysType != 0)
+                sb.Append("|genAlways=").Append(c.GeneratedAlwaysType).Append(";hidden=").Append(Flag(c.IsHidden));
 
             if (c.DefaultDefinition is not null)
             {

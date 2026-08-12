@@ -297,10 +297,16 @@ public static class TableScriptGenerator
         AppendIndexConstraintDiff(qualified, source, target, pre, post, fkDrops, fkAdds, options.ValidateNewConstraints);
         AppendDefaultDiff(qualified, sourceByName, targetByName, pre, post);
 
+        // Temporal (system-versioning): KAPATMA güvenli ve tam üretilir (en başta, çünkü
+        // versioned tabloda diğer şema değişiklikleri kısıtlıdır). AÇMA/yeniden kurulum
+        // PERIOD kolonları + DEFAULT gerektirir; riskli olduğundan elle bırakılır.
+        var verPre = new List<string>();
+        AppendTemporalDiff(key, qualified, source, target, verPre, skipped);
+
         foreach (var skip in localSkips)
             skipped.Add(new SkippedObject(key, skip));
 
-        var ordered = pre.Concat(statements).Concat(post).ToList();
+        var ordered = verPre.Concat(pre).Concat(statements).Concat(post).ToList();
 
         if (ordered.Count == 0)
         {
@@ -323,6 +329,38 @@ public static class TableScriptGenerator
         sb.AppendLine("GO");
         sb.AppendLine();
         included.Add(key);
+    }
+
+    /// <summary>
+    /// System-versioning geçişi. Güvenli yön (KAPATMA) tam üretilir; AÇMA ve history/PERIOD
+    /// değişimi PERIOD kolonları + DEFAULT gerektirdiğinden elle uygulanmak üzere atlanır —
+    /// yarım/riskli SQL üretmektense açık bir uyarı bırakmak yeğdir.
+    /// </summary>
+    private static void AppendTemporalDiff(
+        ObjectKey key, string qualified, ObjectSnapshot source, ObjectSnapshot target,
+        List<string> verPre, List<SkippedObject> skipped)
+    {
+        var s = source.PartCanonical.GetValueOrDefault("temporal");
+        var t = target.PartCanonical.GetValueOrDefault("temporal");
+        if (s == t) return;
+
+        if (s is null && t is not null)
+        {
+            // Hedef temporal, kaynak değil → system-versioning'i kapat (tam ve güvenli).
+            verPre.Add($"ALTER TABLE {qualified} SET (SYSTEM_VERSIONING = OFF);");
+            verPre.Add($"ALTER TABLE {qualified} DROP PERIOD FOR SYSTEM_TIME;");
+        }
+        else if (s is not null && t is null)
+        {
+            skipped.Add(new SkippedObject(key,
+                "tablo temporal'a dönüştürülüyor — PERIOD kolonları (GENERATED ALWAYS) + " +
+                "history gerektirir; elle uygulayın: ADD PERIOD FOR SYSTEM_TIME + SET SYSTEM_VERSIONING = ON"));
+        }
+        else
+        {
+            skipped.Add(new SkippedObject(key,
+                "temporal history/PERIOD ayarı değişiyor — yeniden kurulum riskli; elle gözden geçirin"));
+        }
     }
 
     // --- index ve constraint diff'i ---

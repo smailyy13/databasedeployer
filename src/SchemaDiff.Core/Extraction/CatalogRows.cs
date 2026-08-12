@@ -57,7 +57,8 @@ internal sealed record ColumnRow(
     bool IsNullable, string? Collation, bool IsIdentity, bool IsComputed,
     string? DefaultName, string? DefaultDefinition, bool? DefaultIsSystemNamed,
     string? ComputedDefinition, bool? ComputedIsPersisted,
-    string? IdentitySeed, string? IdentityIncrement);
+    string? IdentitySeed, string? IdentityIncrement,
+    byte GeneratedAlwaysType = 0, bool IsHidden = false);
 
 internal sealed record IndexRow(
     int ObjectId, int IndexId, string? Name, string TypeDesc,

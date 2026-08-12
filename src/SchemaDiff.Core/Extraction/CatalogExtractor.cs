@@ -224,7 +224,8 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
         Rdr.Bool(r, 8), Rdr.NStr(r, 9), Rdr.Bool(r, 10), Rdr.Bool(r, 11),
         Rdr.NStr(r, 12), Rdr.NStr(r, 13), Rdr.NBool(r, 14),
         Rdr.NStr(r, 15), Rdr.NBool(r, 16),
-        Rdr.Variant(r, 17), Rdr.Variant(r, 18));
+        Rdr.Variant(r, 17), Rdr.Variant(r, 18),
+        Rdr.Byte(r, 19), Rdr.Bool(r, 20));
 
     private static IndexRow MapIndex(SqlDataReader r) => new(
         Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.NStr(r, 2), Rdr.Str(r, 3),

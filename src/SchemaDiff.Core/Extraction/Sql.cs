@@ -65,7 +65,8 @@ internal static class Sql
                c.is_nullable, c.collation_name, c.is_identity, c.is_computed,
                dc.name, dc.definition, dc.is_system_named,
                cc.definition, cc.is_persisted,
-               ic.seed_value, ic.increment_value
+               ic.seed_value, ic.increment_value,
+               c.generated_always_type, c.is_hidden
         FROM sys.columns AS c
         INNER JOIN sys.objects AS o
             ON o.object_id = c.object_id AND o.is_ms_shipped = 0 AND o.type IN ('U','V')

@@ -17,6 +17,7 @@ internal sealed class TableScriptSources
     public required Dictionary<int, List<ForeignKeyColumnRow>> FkColumnsBy { get; init; }
     public required Dictionary<long, string> ColumnNames { get; init; }
     public required Dictionary<int, ObjectKey> KeyById { get; init; }
+    public Dictionary<int, TemporalRow> TemporalBy { get; init; } = [];
 }
 
 /// <summary>
@@ -49,10 +50,16 @@ internal static class TableScriptWriter
 
         body.AddRange(WriteTableConstraints(objectId, sources, options));
 
+        // System-versioned temporal tablo: PERIOD satırı body'nin sonuna, SYSTEM_VERSIONING
+        // ise ")" son ekine gelir. Generated-always kolonlar ancak böyle geçerli olur.
+        var temporal = sources.TemporalBy.GetValueOrDefault(objectId);
+        if (temporal is { StartColumn: { } start, EndColumn: { } end })
+            body.Add($"    PERIOD FOR SYSTEM_TIME ([{start}], [{end}])");
+
         for (var i = 0; i < body.Count; i++)
             sb.Append(body[i]).AppendLine(i < body.Count - 1 ? "," : string.Empty);
 
-        sb.AppendLine(");");
+        sb.Append(')').Append(SystemVersioningSuffix(temporal)).AppendLine(";");
 
         foreach (var line in WriteIndexes(key, objectId, sources, options))
         {
@@ -61,6 +68,22 @@ internal static class TableScriptWriter
         }
 
         return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    /// Temporal tablo için <c>) WITH (SYSTEM_VERSIONING = ON [(HISTORY_TABLE = [s].[n])])</c>.
+    /// Otomatik adlı history'de ad ortama göre değiştiği için HISTORY_TABLE yazılmaz —
+    /// SQL Server o durumda history tablosunu kendisi oluşturur.
+    /// </summary>
+    private static string SystemVersioningSuffix(TemporalRow? temporal)
+    {
+        if (temporal is null || temporal.StartColumn is null) return string.Empty;
+        var auto = temporal.HistoryName is null
+            || temporal.HistoryName.StartsWith("MSSQL_TemporalHistoryFor_", StringComparison.OrdinalIgnoreCase);
+        var history = auto
+            ? string.Empty
+            : $" (HISTORY_TABLE = [{temporal.HistorySchema}].[{temporal.HistoryName}])";
+        return $" WITH (SYSTEM_VERSIONING = ON{history})";
     }
 
     // --- kolonlar ---
@@ -87,6 +110,13 @@ internal static class TableScriptWriter
             if (!options.IgnoreIdentitySeed)
                 sb.Append(" (").Append(column.IdentitySeed).Append(", ").Append(column.IdentityIncrement).Append(')');
         }
+
+        // Temporal PERIOD kolonu: GENERATED ALWAYS AS ROW START/END [HIDDEN].
+        // (Geçerli olması için CREATE TABLE'da PERIOD FOR SYSTEM_TIME de bulunmalıdır;
+        //  bu yüzden yalnızca tablo temporal olarak yazılıyorsa üretilir.)
+        if (column.GeneratedAlwaysType == 1) sb.Append(" GENERATED ALWAYS AS ROW START");
+        else if (column.GeneratedAlwaysType == 2) sb.Append(" GENERATED ALWAYS AS ROW END");
+        if (column.GeneratedAlwaysType != 0 && column.IsHidden) sb.Append(" HIDDEN");
 
         sb.Append(column.IsNullable ? " NULL" : " NOT NULL");
 
