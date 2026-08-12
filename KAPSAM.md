@@ -1,6 +1,6 @@
 # KAPSAM — SchemaDiff neyi görür, neyi yazar, neyi görmez
 
-Son güncelleme: 2026-08-12 (Dalga 8 sonrası)
+Son güncelleme: 2026-08-12 (Dalga 9 sonrası)
 
 Bu belge tek soruyu cevaplar: **"Bu araca güvenip deploy edersem neyi kaçırırım?"**
 
@@ -38,7 +38,7 @@ En tehlikeli sonuç "fark yok" demektir; bu yüzden okunamayan her sınıf ayrı
 | Sequence | `CREATE SEQUENCE` (current_value hariç — şema farkı değil) |
 | Synonym | `CREATE SYNONYM` |
 | Alias tipler | `CREATE TYPE … FROM` |
-| Table type | kolon yapısı (constraint/index'leri hariç — bkz. §2) |
+| Table type | kolon yapısı + DEFAULT + PK/UNIQUE/CHECK/index (tip ALTER edilemez, bkz. §2) |
 | Partition function / scheme | `CREATE PARTITION FUNCTION/SCHEME` |
 | Roller ve üyelikler | `CREATE ROLE`, `ALTER ROLE ADD MEMBER` (sabit rollerin ÜYELİĞİ dahil) |
 | İzinler | obje / kolon / şema / **veritabanı** seviyesi `GRANT` / `DENY` |
@@ -62,9 +62,9 @@ Bunlar rapora düşer, script'e girmez. Girmedikleri her seferinde **sebebiyle b
 | `FILESTREAM` / `COLUMN_SET` açma-kapama | ALTER ile yapılamaz, tablo yeniden oluşturulmalı |
 | IDENTITY `NOT FOR REPLICATION` değişimi | ALTER ile yapılamaz |
 | Temporal **açma** / history değişimi | PERIOD kolonları + DEFAULT gerektirir; yarım SQL yerine uyarı |
-| Table type constraint/index'leri | yalnız kolon yapısı kıyaslanır |
 | View üzerindeki istatistikler | fark görünür; script view'ın kendi drop+create'inden gider |
 | Rol sahibi (owner) değişimi | üretilmiyor |
+| Table type **değişimi** | tip ALTER edilemez; fark GÖRÜNÜR, script için bağımlılıkları düşürüp elle drop+recreate gerekir |
 
 ---
 
@@ -93,11 +93,11 @@ Sayılıyor (sayısı > 0 çıkarsa `--coverage` uyarır) ama görülmüyor ve y
 
 | # | Konu | Neden bu sırada |
 |---|---|---|
-| 1 | Table type constraint / index'leri | Kısmi kapsamı tamamlar; TVP kullanan yerlerde davranış farkı |
-| 2 | XML index / Spatial index | Mevcut index altyapısının uzantısı |
-| 3 | `OPTIMIZE_FOR_SEQUENTIAL_KEY` (2019+), `STATISTICS_NORECOMPUTE` | Sürüm koşullu: `Indexes` sorgusu ZORUNLU, eski sunucuda düşerse karşılaştırma tümden biter. Ayrı opsiyonel sorgu gerekir |
-| 4 | XML schema collection | Tipli XML kolonları artık ona başvuruyor; koleksiyonun kendisi hâlâ kapsam dışı |
-| 5 | Full-text stoplist objesi | Index artık stoplist'e ADIYLA başvuruyor; stoplist'in kendisi kapsam dışı |
+| 1 | XML index / Spatial index | Mevcut index altyapısının uzantısı |
+| 2 | `OPTIMIZE_FOR_SEQUENTIAL_KEY` (2019+), `STATISTICS_NORECOMPUTE` | Sürüm koşullu: `Indexes` sorgusu ZORUNLU, eski sunucuda düşerse karşılaştırma tümden biter. Ayrı opsiyonel sorgu gerekir |
+| 3 | XML schema collection | Tipli XML kolonları artık ona başvuruyor; koleksiyonun kendisi hâlâ kapsam dışı |
+| 4 | Full-text stoplist objesi | Index artık stoplist'e ADIYLA başvuruyor; stoplist'in kendisi kapsam dışı |
+| 5 | Table type drop+recreate üretimi | Fark artık görünüyor; bağımlılık (prosedür parametreleri) düşürme sırası gerekir |
 | 6 | Plan guide · DB scoped configuration · legacy `RULE`/`DEFAULT` | Düz `CREATE`/`ALTER`, düşük risk, düşük sıklık |
 | 7 | Parametre / principal seviyesi extended property | Obje/kolon/şema/db kapsandı, kalan uçlar |
 

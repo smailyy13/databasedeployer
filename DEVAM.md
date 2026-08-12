@@ -1,12 +1,12 @@
 # DEVAM — Nerede Kaldık (kapsam genişletme çalışması)
 
 > Bu dosya, başka bir makinede kaldığın yerden devam edebilmen için yazıldı.
-> Son güncelleme: 2026-08-12 (Dalga 8 sonrası)
+> Son güncelleme: 2026-08-12 (Dalga 9 sonrası)
 
 ## Hızlı durum
 - **Repo:** `smailyy13/databasedeployer` (GitHub, private) — proje adı **SchemaDiff**
 - **Branch:** `main`
-- **Testler:** **635 (632 yeşil + 3 atlanan entegrasyon)**
+- **Testler:** **666 (663 yeşil + 3 atlanan entegrasyon)**
 - **Son release:** **v1.4** (portable, 4 parça). **v1.5 HENÜZ ÇIKARILMADI** — aşağıya bak.
 - **Gereken SDK:** .NET 10 (`dotnet-install.sh --channel 10.0`; macOS'ta `~/.dotnet`).
 
@@ -18,7 +18,7 @@ git pull                        # en güncel main
 
 # Derle + test
 dotnet build -c Release
-dotnet test  -c Release --no-build      # 632 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
+dotnet test  -c Release --no-build      # 663 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
 
 # Web arayüzünü çalıştır (yerel, sadece 127.0.0.1)
 dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
@@ -46,7 +46,7 @@ dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
    tam ve güvenli (SET OFF + DROP PERIOD); **AÇMA/yeniden kurulum** riskli olduğu için
    (PERIOD kolonu + DEFAULT gerektirir) elle uygulanmak üzere uyarıyla atlanıyor.
 
-## Bu oturumda tamamlananlar (Dalga 4–8)
+## Bu oturumda tamamlananlar (Dalga 4–9)
 
 Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi eklendi.
 
@@ -121,7 +121,17 @@ Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi ekle
    - `STOPLIST`: `OFF`/`SYSTEM` anahtar kelime, kullanıcı stoplist'i köşeli parantezli.
    - KEY INDEX ya da katalog adı okunamazsa parça HİÇ yazılmıyor — yarım kanonik sahte fark üretir.
 
-10. **Test:** 276 → **635** (632 yeşil + 3 atlanan entegrasyon).
+10. **Dalga 9 — Table type constraint / index / DEFAULT'ları**: tip ALTER edilemediği için
+    buradaki değer script değil **GÖRÜNÜRLÜK** — önceden yalnız kolon yapısı kıyaslandığından,
+    PK'sı ya da CHECK'i farklı iki tip "aynı" görünüyordu.
+    - PK / UNIQUE / CHECK / bağımsız index (SQL 2014+ satır içi `INDEX`) + kolon DEFAULT'ları.
+    - Kanonik ve `CREATE TYPE` gövdesi **aynı listeden** üretiliyor — ikisi ayrışamaz.
+    - Sistem üretimi constraint adları yazılmıyor (table type'ta neredeyse hepsi öyle);
+      kullanıcı adı verdiyse korunuyor.
+    - Ayrı sorgular eklendi (`TableTypeIndexes/IndexColumns/Checks`): mevcut tablo
+      sorgularını gevşetmek yerine açık ve izole tutuldu.
+
+11. **Test:** 276 → **666** (663 yeşil + 3 atlanan entegrasyon).
    - `StatisticsTests` (33): karşılaştırma, sıra, filtre/NORECOMPUTE/INCREMENTAL,
      drop-önce/create-sonra sıralaması, yeni tablo script'i, okunamayan sorgu davranışı.
    - `CatalogQueryTests` (yeni): TÜM katalog sorgularının yapısal denetimi — en önemlisi
@@ -222,6 +232,14 @@ rm -f publish-portable/*.pdb
 - `src/SchemaDiff.Core/Scripting/TableScriptGenerator.cs` — `AppendFullTextDiff`
 - `src/SchemaDiff.Core/Scripting/TypeScriptGenerator.cs` — katalog create/drop/exists
 - Testler: `FullTextTests` (yeni, 22)
+
+## Dalga 9'da değişen dosyalar (table type constraint'leri)
+- `src/SchemaDiff.Core/Extraction/Sql.cs` — `TableTypeIndexes`, `TableTypeIndexColumns`,
+  `TableTypeChecks`; `TableTypeColumns`'a DEFAULT
+- `src/SchemaDiff.Core/Extraction/{CatalogRows,CatalogExtractor}.cs` — satırlar + opsiyonel sorgular
+- `src/SchemaDiff.Core/Extraction/SnapshotBuilder.cs` — `BuildTableTypeConstraints`,
+  `RenderTableType` gövde birleştirme
+- Testler: `TableTypeConstraintTests` (yeni, 16)
 
 ## Dalga 1–3'te değişen ana dosyalar (referans)
 - `src/SchemaDiff.Core/Analysis/CoverageProbe.cs` — sayaçlar (Probes internal)

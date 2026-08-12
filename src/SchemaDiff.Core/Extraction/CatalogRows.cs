@@ -21,7 +21,16 @@ internal sealed record TableTypeRow(int UserTypeId, string SchemaName, string Na
 internal sealed record TableTypeColumnRow(
     int ObjectId, int ColumnId, string Name, string TypeSchema, string TypeName,
     short MaxLength, byte Precision, byte Scale, bool IsNullable, string? Collation,
-    bool IsIdentity, bool IsComputed);
+    bool IsIdentity, bool IsComputed, string? DefaultDefinition = null);
+
+/// <summary>Table type'ın PK/UNIQUE ya da bağımsız index'i. Ad genelde sistem üretimidir.</summary>
+internal sealed record TableTypeIndexRow(
+    int ObjectId, int IndexId, string? Name, string TypeDesc,
+    bool IsUnique, bool IsPrimaryKey, bool IsUniqueConstraint,
+    string? ConstraintName, bool? ConstraintIsSystemNamed);
+
+internal sealed record TableTypeCheckRow(
+    int ObjectId, string Name, bool IsSystemNamed, string? Definition);
 
 internal sealed record PartitionFunctionRow(
     int FunctionId, string Name, bool BoundaryOnRight, string? InputType);

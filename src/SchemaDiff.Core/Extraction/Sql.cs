@@ -320,10 +320,38 @@ internal static class Sql
         SELECT c.object_id, c.column_id, c.name,
                SCHEMA_NAME(tp.schema_id), tp.name,
                c.max_length, c.precision, c.scale,
-               c.is_nullable, c.collation_name, c.is_identity, c.is_computed
+               c.is_nullable, c.collation_name, c.is_identity, c.is_computed,
+               dc.definition
         FROM sys.columns AS c
         INNER JOIN sys.table_types AS tt ON tt.type_table_object_id = c.object_id
-        INNER JOIN sys.types AS tp ON tp.user_type_id = c.user_type_id;
+        INNER JOIN sys.types AS tp ON tp.user_type_id = c.user_type_id
+        LEFT JOIN sys.default_constraints AS dc ON dc.object_id = c.default_object_id;
+        """;
+
+    // Table type'ın PK/UNIQUE ve (SQL 2014+) bağımsız index'leri. Table type ALTER edilemez;
+    // bunlar tipin TANIMININ parçasıdır, farkları görünmezse tip "aynı" sanılır.
+    public const string TableTypeIndexes = """
+        SELECT i.object_id, i.index_id, i.name, i.type_desc,
+               i.is_unique, i.is_primary_key, i.is_unique_constraint,
+               kc.name, kc.is_system_named
+        FROM sys.indexes AS i
+        INNER JOIN sys.table_types AS tt ON tt.type_table_object_id = i.object_id
+        LEFT JOIN sys.key_constraints AS kc
+            ON kc.parent_object_id = i.object_id AND kc.unique_index_id = i.index_id
+        WHERE i.type <> 0;
+        """;
+
+    public const string TableTypeIndexColumns = """
+        SELECT ic.object_id, ic.index_id, ic.index_column_id, ic.column_id,
+               ic.key_ordinal, ic.is_descending_key, ic.is_included_column
+        FROM sys.index_columns AS ic
+        INNER JOIN sys.table_types AS tt ON tt.type_table_object_id = ic.object_id;
+        """;
+
+    public const string TableTypeChecks = """
+        SELECT cc.parent_object_id, cc.name, cc.is_system_named, cc.definition
+        FROM sys.check_constraints AS cc
+        INNER JOIN sys.table_types AS tt ON tt.type_table_object_id = cc.parent_object_id;
         """;
 
     // Kullanıcı tanımlı veritabanı rolleri. Sabit roller (db_owner vb.) ve public dışarıda —

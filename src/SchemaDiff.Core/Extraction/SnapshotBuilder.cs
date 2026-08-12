@@ -300,14 +300,24 @@ internal static class SnapshotBuilder
         // Table type'lar: üst seviye objeler, kolon yapısıyla karşılaştırılır (ALTER edilemez;
         // kolon farkı drop+recreate demektir, ama farkı görmek yine de değerli).
         var tableTypeColumnsBy = GroupBy(catalog.TableTypeColumns, c => c.ObjectId);
+        var tableTypeIndexesBy = GroupBy(catalog.TableTypeIndexes, i => i.ObjectId);
+        var tableTypeIndexColumnsBy = GroupBy(catalog.TableTypeIndexColumns, ic => Pair(ic.ObjectId, ic.IndexId));
+        var tableTypeChecksBy = GroupBy(catalog.TableTypeChecks, c => c.ObjectId);
+        var tableTypeColumnNames = new Dictionary<long, string>(catalog.TableTypeColumns.Count);
+        foreach (var c in catalog.TableTypeColumns) tableTypeColumnNames[Pair(c.ObjectId, c.ColumnId)] = c.Name;
         foreach (var tt in catalog.TableTypes)
         {
             var key = new ObjectKey(tt.SchemaName, tt.Name, ObjectKind.TableType);
             var snapshot = new ObjectSnapshot { Key = key, Hash = UInt128.Zero };
             var ttColumns = tableTypeColumnsBy.GetValueOrDefault(tt.TypeTableObjectId);
+            var ttConstraints = BuildTableTypeConstraints(
+                tt.TypeTableObjectId, tableTypeIndexesBy, tableTypeIndexColumnsBy,
+                tableTypeChecksBy, tableTypeColumnNames, options);
             SetPart(snapshot, "columns", BuildTableTypeColumns(ttColumns, options));
+            // Constraint/index tipin TANIMININ parçası: farkı görünmezse tip "aynı" sanılır.
+            SetPart(snapshot, "constraints", string.Join('\n', ttConstraints));
             if (options.KeepDisplayScripts)
-                snapshot.DisplayScript = RenderTableType(tt, ttColumns, options);
+                snapshot.DisplayScript = RenderTableType(tt, ttColumns, ttConstraints, options);
             Finalize(snapshot);
             objects[key] = snapshot;
         }
@@ -990,20 +1000,85 @@ internal static class SnapshotBuilder
         };
     }
 
-    private static string RenderTableType(TableTypeRow tt, List<TableTypeColumnRow>? columns, SnapshotOptions options)
+    /// <summary>
+    /// Table type'ın PK / UNIQUE / CHECK / index satırları — hem kanonik hem CREATE TYPE
+    /// gövdesi için aynı listeyi üretir, böylece ikisi ayrışamaz.
+    /// Table type constraint adları neredeyse her zaman sistem üretimidir; ad yazılmayınca
+    /// satır tam da SSMS'in ürettiği biçime denk gelir.
+    /// </summary>
+    private static List<string> BuildTableTypeConstraints(
+        int objectId,
+        Dictionary<int, List<TableTypeIndexRow>> indexesBy,
+        Dictionary<long, List<IndexColumnRow>> indexColumnsBy,
+        Dictionary<int, List<TableTypeCheckRow>> checksBy,
+        Dictionary<long, string> columnNames,
+        SnapshotOptions options)
+    {
+        var lines = new List<string>();
+
+        foreach (var index in indexesBy.GetValueOrDefault(objectId) ?? [])
+        {
+            var cols = indexColumnsBy.GetValueOrDefault(Pair(objectId, index.IndexId)) ?? [];
+            var keys = string.Join(", ", cols
+                .Where(c => !c.IsIncluded)
+                .OrderBy(c => c.KeyOrdinal)
+                .Select(c => $"[{Column(columnNames, objectId, c.ColumnId)}] {(c.IsDescending ? "DESC" : "ASC")}"));
+            if (keys.Length == 0) continue;
+
+            var clustered = index.TypeDesc.Contains("CLUSTERED", StringComparison.OrdinalIgnoreCase)
+                            && !index.TypeDesc.StartsWith("NON", StringComparison.OrdinalIgnoreCase)
+                ? "CLUSTERED" : "NONCLUSTERED";
+
+            if (index.IsPrimaryKey || index.IsUniqueConstraint)
+            {
+                var named = index.ConstraintName is { } cn
+                    && !(options.IgnoreSystemNamedConstraints && index.ConstraintIsSystemNamed == true)
+                    ? $"CONSTRAINT [{cn}] " : string.Empty;
+                var kind = index.IsPrimaryKey ? "PRIMARY KEY" : "UNIQUE";
+                lines.Add($"{named}{kind} {clustered} ({keys})");
+            }
+            else if (index.Name is { } name)
+            {
+                // Table type'ta bağımsız index satır içi yazılır (SQL 2014+).
+                var unique = index.IsUnique ? "UNIQUE " : string.Empty;
+                lines.Add($"{unique}INDEX [{name}] {clustered} ({keys})");
+            }
+        }
+
+        foreach (var check in checksBy.GetValueOrDefault(objectId) ?? [])
+        {
+            if (check.Definition is null) continue;
+            var named = !(options.IgnoreSystemNamedConstraints && check.IsSystemNamed)
+                ? $"CONSTRAINT [{check.Name}] " : string.Empty;
+            lines.Add($"{named}CHECK {check.Definition}");
+        }
+
+        lines.Sort(StringComparer.Ordinal);
+        return lines;
+    }
+
+    private static string RenderTableType(
+        TableTypeRow tt, List<TableTypeColumnRow>? columns, List<string> constraints, SnapshotOptions options)
     {
         var sb = new StringBuilder(256);
         sb.Append("CREATE TYPE [").Append(tt.SchemaName).Append("].[").Append(tt.Name).AppendLine("] AS TABLE (");
-        var ordered = (columns ?? []).OrderBy(c => c.ColumnId).ToList();
-        for (var i = 0; i < ordered.Count; i++)
+        var body = new List<string>();
+        foreach (var c in (columns ?? []).OrderBy(c => c.ColumnId))
         {
-            var c = ordered[i];
-            sb.Append("    [").Append(c.Name).Append("] ")
-              .Append(RenderFacetType(c.TypeName, c.MaxLength, c.Precision, c.Scale));
-            if (c.Collation is not null && !options.IgnoreCollation) sb.Append(" COLLATE ").Append(c.Collation);
-            sb.Append(c.IsNullable ? " NULL" : " NOT NULL");
-            sb.AppendLine(i < ordered.Count - 1 ? "," : string.Empty);
+            var line = new StringBuilder("    [").Append(c.Name).Append("] ")
+                .Append(RenderFacetType(c.TypeName, c.MaxLength, c.Precision, c.Scale));
+            if (c.Collation is not null && !options.IgnoreCollation) line.Append(" COLLATE ").Append(c.Collation);
+            if (c.IsIdentity) line.Append(" IDENTITY");
+            line.Append(c.IsNullable ? " NULL" : " NOT NULL");
+            if (c.DefaultDefinition is not null) line.Append(" DEFAULT ").Append(c.DefaultDefinition);
+            body.Add(line.ToString());
         }
+
+        body.AddRange(constraints.Select(c => "    " + c));
+
+        for (var i = 0; i < body.Count; i++)
+            sb.Append(body[i]).AppendLine(i < body.Count - 1 ? "," : string.Empty);
+
         sb.Append(");");
         return sb.ToString();
     }
@@ -1159,6 +1234,7 @@ internal static class SnapshotBuilder
             if (c.Collation is not null && !options.IgnoreCollation) sb.Append("|coll=").Append(c.Collation);
             if (c.IsIdentity) sb.Append("|identity");
             if (c.IsComputed) sb.Append("|computed");
+            if (c.DefaultDefinition is not null) sb.Append("|default=").Append(c.DefaultDefinition);
             sb.Append('\n');
         }
         return sb.ToString();
