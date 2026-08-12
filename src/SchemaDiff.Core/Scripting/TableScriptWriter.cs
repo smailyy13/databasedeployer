@@ -22,6 +22,8 @@ internal sealed class TableScriptSources
     public Dictionary<int, List<StatisticRow>> StatisticsBy { get; init; } = [];
     public Dictionary<long, List<StatisticColumnRow>> StatisticColumnsBy { get; init; } = [];
     public Dictionary<int, FullTextIndexDefinition> FullTextBy { get; init; } = [];
+    public Dictionary<int, List<XmlIndexDefinition>> XmlIndexesBy { get; init; } = [];
+    public Dictionary<int, List<SpatialIndexDefinition>> SpatialIndexesBy { get; init; } = [];
 }
 
 /// <summary>
@@ -72,6 +74,12 @@ internal static class TableScriptWriter
         }
 
         foreach (var line in WriteStatistics(key, objectId, sources, options))
+        {
+            sb.AppendLine();
+            sb.Append(line);
+        }
+
+        foreach (var line in WriteSpecialIndexes(key, objectId, sources))
         {
             sb.AppendLine();
             sb.Append(line);
@@ -300,6 +308,33 @@ internal static class TableScriptWriter
 
             sb.Append(';');
             lines.Add(sb.ToString());
+        }
+
+        return lines;
+    }
+
+    // --- XML / spatial index ---
+
+    /// <summary>
+    /// XML ve spatial index'ler. Primary XML index secondary'lerden ÖNCE yazılmalı
+    /// (secondary ona bağlı); ikisi de tablo oluştuktan sonra, ayrı batch'lerde.
+    /// </summary>
+    private static IEnumerable<string> WriteSpecialIndexes(
+        ObjectKey key, int objectId, TableScriptSources sources)
+    {
+        var qualified = Quote(key.Schema, key.Name);
+        var lines = new List<string>();
+
+        foreach (var idx in (sources.XmlIndexesBy.GetValueOrDefault(objectId) ?? [])
+                     .OrderByDescending(i => i.IsPrimary).ThenBy(i => i.Name, StringComparer.Ordinal))
+        {
+            lines.Add($"GO{Environment.NewLine}{SpecialIndexScript.Create(qualified, idx)}");
+        }
+
+        foreach (var idx in (sources.SpatialIndexesBy.GetValueOrDefault(objectId) ?? [])
+                     .OrderBy(i => i.Name, StringComparer.Ordinal))
+        {
+            lines.Add($"GO{Environment.NewLine}{SpecialIndexScript.Create(qualified, idx)}");
         }
 
         return lines;

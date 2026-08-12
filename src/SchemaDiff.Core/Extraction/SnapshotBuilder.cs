@@ -132,6 +132,9 @@ internal static class SnapshotBuilder
                 "Hedefteki istatistikler için sahte DROP üretmemek adına bu sınıf sessizce boş sayılmadı.");
         }
 
+        var xmlIndexesBy = GroupBy(catalog.XmlIndexes, i => i.ObjectId);
+        var spatialIndexesBy = GroupBy(catalog.SpatialIndexes, i => i.ObjectId);
+
         var fullTextById = catalog.FullTextIndexes
             .GroupBy(f => f.ObjectId).ToDictionary(g => g.Key, g => g.First());
         var fullTextColumnsBy = GroupBy(catalog.FullTextIndexColumns, f => f.ObjectId);
@@ -185,6 +188,10 @@ internal static class SnapshotBuilder
                     f.ObjectId, fullTextById, fullTextColumnsBy, columnNames)))
                 .Where(x => x.Definition is not null)
                 .ToDictionary(x => x.ObjectId, x => x.Definition!),
+            XmlIndexesBy = xmlIndexesBy.Keys.ToDictionary(
+                id => id, id => BuildXmlIndexDefinitions(id, xmlIndexesBy, indexColumnsBy, columnNames)),
+            SpatialIndexesBy = spatialIndexesBy.Keys.ToDictionary(
+                id => id, id => BuildSpatialIndexDefinitions(id, spatialIndexesBy, indexColumnsBy, columnNames)),
         };
 
         var comparer = options.CaseSensitiveNames
@@ -423,11 +430,22 @@ internal static class SnapshotBuilder
                             obj.ObjectId, statisticsBy, statisticColumnsBy, columnNames, options);
                         snapshot.FullTextIndex = BuildFullTextDefinition(
                             obj.ObjectId, fullTextById, fullTextColumnsBy, columnNames);
+                        snapshot.XmlIndexes = BuildXmlIndexDefinitions(
+                            obj.ObjectId, xmlIndexesBy, indexColumnsBy, columnNames);
+                        snapshot.SpatialIndexes = BuildSpatialIndexDefinitions(
+                            obj.ObjectId, spatialIndexesBy, indexColumnsBy, columnNames);
                     }
                     SetPart(snapshot, "columns", BuildColumns(columnsBy.GetValueOrDefault(obj.ObjectId), xmlCollections, options));
                     SetPart(snapshot, "indexes", BuildIndexes(obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, columnNames, options));
                     SetPart(snapshot, "statistics", BuildStatistics(obj.ObjectId, statisticsBy, statisticColumnsBy, columnNames, options));
                     SetPart(snapshot, "fullText", BuildFullText(obj.ObjectId, fullTextById, fullTextColumnsBy, columnNames));
+                    SetPart(snapshot, "xmlIndexes", BuildSpecialIndexes(
+                        BuildXmlIndexDefinitions(obj.ObjectId, xmlIndexesBy, indexColumnsBy, columnNames)
+                            .Select(x => $"xmlIdx|{x.Name}|col={x.Column}|primary={(x.IsPrimary ? '1' : '0')}" +
+                                         $"|for={x.SecondaryType ?? "-"}|using={x.PrimaryIndexName ?? "-"}")));
+                    SetPart(snapshot, "spatialIndexes", BuildSpecialIndexes(
+                        BuildSpatialIndexDefinitions(obj.ObjectId, spatialIndexesBy, indexColumnsBy, columnNames)
+                            .Select(SpatialCanonical)));
                     SetPart(snapshot, "checks", BuildChecks(checksBy.GetValueOrDefault(obj.ObjectId), options));
                     SetPart(snapshot, "foreignKeys", BuildForeignKeys(foreignKeysBy.GetValueOrDefault(obj.ObjectId), fkColumnsBy, columnNames, keyById, options));
                     if (temporalById.TryGetValue(obj.ObjectId, out var temporal))
@@ -753,6 +771,80 @@ internal static class SnapshotBuilder
 
         lines.Sort(StringComparer.Ordinal);
         return string.Join('\n', lines);
+    }
+
+    /// <summary>Özel index satırlarını deterministik (sıralı) kanoniğe çevirir.</summary>
+    private static string BuildSpecialIndexes(IEnumerable<string> lines)
+    {
+        var ordered = lines.ToList();
+        if (ordered.Count == 0) return string.Empty;
+        ordered.Sort(StringComparer.Ordinal);
+        return string.Join('\n', ordered);
+    }
+
+    private static string SpatialCanonical(SpatialIndexDefinition s)
+    {
+        var box = s.HasBoundingBox
+            ? $"|box={Num(s.BoundingXMin)},{Num(s.BoundingYMin)},{Num(s.BoundingXMax)},{Num(s.BoundingYMax)}"
+            : string.Empty;
+        var grids = s.IsAutoGrid || s.Level1 is null
+            ? string.Empty
+            : $"|grids={s.Level1},{s.Level2},{s.Level3},{s.Level4}";
+        return $"spatialIdx|{s.Name}|col={s.Column}|using={s.Tessellation}{box}{grids}" +
+               $"|cells={s.CellsPerObject?.ToString(CultureInfo.InvariantCulture) ?? "-"}";
+    }
+
+    private static string Num(double? value) =>
+        (value ?? 0).ToString("0.############################", CultureInfo.InvariantCulture);
+
+    private static List<XmlIndexDefinition> BuildXmlIndexDefinitions(
+        int objectId,
+        Dictionary<int, List<XmlIndexRow>> xmlIndexesBy,
+        Dictionary<long, List<IndexColumnRow>> indexColumnsBy,
+        Dictionary<long, string> columnNames)
+    {
+        var result = new List<XmlIndexDefinition>();
+        foreach (var idx in xmlIndexesBy.GetValueOrDefault(objectId) ?? [])
+        {
+            var column = SingleIndexColumn(objectId, idx.IndexId, indexColumnsBy, columnNames);
+            if (column is null) continue;
+            var primary = idx.UsingXmlIndexId is null;
+            // Secondary'nin bağlı olduğu primary okunamadıysa script geçersiz olur — atla.
+            if (!primary && (idx.PrimaryIndexName is null || idx.SecondaryType is null)) continue;
+            result.Add(new XmlIndexDefinition(
+                idx.Name, column, primary, idx.SecondaryType, idx.PrimaryIndexName));
+        }
+        return result;
+    }
+
+    private static List<SpatialIndexDefinition> BuildSpatialIndexDefinitions(
+        int objectId,
+        Dictionary<int, List<SpatialIndexRow>> spatialIndexesBy,
+        Dictionary<long, List<IndexColumnRow>> indexColumnsBy,
+        Dictionary<long, string> columnNames)
+    {
+        var result = new List<SpatialIndexDefinition>();
+        foreach (var idx in spatialIndexesBy.GetValueOrDefault(objectId) ?? [])
+        {
+            var column = SingleIndexColumn(objectId, idx.IndexId, indexColumnsBy, columnNames);
+            if (column is null) continue;
+            result.Add(new SpatialIndexDefinition(
+                idx.Name, column, idx.TessellationScheme,
+                idx.BoundingXMin, idx.BoundingYMin, idx.BoundingXMax, idx.BoundingYMax,
+                idx.Level1, idx.Level2, idx.Level3, idx.Level4, idx.CellsPerObject));
+        }
+        return result;
+    }
+
+    /// <summary>XML ve spatial index tek kolon üzerinedir; kolon okunamazsa index script'lenemez.</summary>
+    private static string? SingleIndexColumn(
+        int objectId, int indexId,
+        Dictionary<long, List<IndexColumnRow>> indexColumnsBy,
+        Dictionary<long, string> columnNames)
+    {
+        var first = (indexColumnsBy.GetValueOrDefault(Pair(objectId, indexId)) ?? [])
+            .OrderBy(c => c.KeyOrdinal).FirstOrDefault();
+        return first is null ? null : Column(columnNames, objectId, first.ColumnId);
     }
 
     /// <summary>

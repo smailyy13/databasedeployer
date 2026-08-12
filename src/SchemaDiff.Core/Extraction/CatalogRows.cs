@@ -93,6 +93,17 @@ internal sealed record IndexRow(
     string? DataCompression = null,
     bool AllowRowLocks = true, bool AllowPageLocks = true);
 
+/// <summary><paramref name="UsingXmlIndexId"/> null ise primary XML index, aksi hâlde
+/// <paramref name="PrimaryIndexName"/> adlı primary'ye bağlı secondary'dir.</summary>
+internal sealed record XmlIndexRow(
+    int ObjectId, int IndexId, string Name, int? UsingXmlIndexId,
+    string? SecondaryType, string? PrimaryIndexName);
+
+internal sealed record SpatialIndexRow(
+    int ObjectId, int IndexId, string Name, string TessellationScheme,
+    double? BoundingXMin, double? BoundingYMin, double? BoundingXMax, double? BoundingYMax,
+    string? Level1, string? Level2, string? Level3, string? Level4, int? CellsPerObject);
+
 internal sealed record IndexColumnRow(
     int ObjectId, int IndexId, int IndexColumnId, int ColumnId,
     byte KeyOrdinal, bool IsDescending, bool IsIncluded);
@@ -162,6 +173,7 @@ internal static class Rdr
     public static long Long(SqlDataReader r, int i) => r.GetInt64(i);
     public static byte Byte(SqlDataReader r, int i) => r.IsDBNull(i) ? (byte)0 : r.GetByte(i);
     public static DateTime Date(SqlDataReader r, int i) => r.GetDateTime(i);
+    public static double? NDbl(SqlDataReader r, int i) => r.IsDBNull(i) ? null : r.GetDouble(i);
 
     /// <summary>sql_variant kolonları (identity seed/increment) için.</summary>
     public static string? Variant(SqlDataReader r, int i) =>

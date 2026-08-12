@@ -305,6 +305,7 @@ public static class TableScriptGenerator
         AppendIndexConstraintDiff(qualified, source, target, pre, post, fkDrops, fkAdds, options.ValidateNewConstraints);
         AppendStatisticsDiff(qualified, source, target, pre, post);
         AppendFullTextDiff(qualified, source, target, pre, post);
+        AppendSpecialIndexDiff(qualified, source, target, pre, post);
         AppendDefaultDiff(qualified, sourceByName, targetByName, pre, post);
 
         // Temporal (system-versioning): KAPATMA güvenli ve tam üretilir (en başta, çünkü
@@ -525,6 +526,41 @@ public static class TableScriptGenerator
     }
 
     /// <summary>
+    /// XML ve spatial index farkları. Genel index yolundan ayrı, çünkü sözdizimleri farklı.
+    ///
+    /// XML'de SIRA zorunlu: secondary primary'ye bağlıdır → drop'ta önce secondary,
+    /// create'te önce primary. Ters sıra "cannot drop, it is used by …" hatası verir.
+    /// </summary>
+    private static void AppendSpecialIndexDiff(
+        string qualified, ObjectSnapshot source, ObjectSnapshot target,
+        List<string> pre, List<string> post)
+    {
+        var srcXml = ByName(source.XmlIndexes, x => x.Name);
+        var tgtXml = ByName(target.XmlIndexes, x => x.Name);
+
+        // Drop: önce secondary'ler, sonra primary'ler.
+        foreach (var (name, idx) in tgtXml.OrderBy(p => p.Value.IsPrimary))
+            if (!srcXml.TryGetValue(name, out var s) || Sig(s) != Sig(idx))
+                pre.Add(SpecialIndexScript.Drop(qualified, name));
+
+        // Create: önce primary'ler, sonra secondary'ler.
+        foreach (var (name, idx) in srcXml.OrderByDescending(p => p.Value.IsPrimary))
+            if (!tgtXml.TryGetValue(name, out var t) || Sig(t) != Sig(idx))
+                post.Add(SpecialIndexScript.Create(qualified, idx));
+
+        var srcSpatial = ByName(source.SpatialIndexes, x => x.Name);
+        var tgtSpatial = ByName(target.SpatialIndexes, x => x.Name);
+
+        foreach (var (name, idx) in tgtSpatial)
+            if (!srcSpatial.TryGetValue(name, out var s) || Sig(s) != Sig(idx))
+                pre.Add(SpecialIndexScript.Drop(qualified, name));
+
+        foreach (var (name, idx) in srcSpatial)
+            if (!tgtSpatial.TryGetValue(name, out var t) || Sig(t) != Sig(idx))
+                post.Add(SpecialIndexScript.Create(qualified, idx));
+    }
+
+    /// <summary>
     /// Full-text index. Tablo başına en fazla bir tane olduğu için "değişti" hâli yoktur:
     /// ya eklenir, ya düşürülür, ya da baştan kurulur. KEY INDEX'e bağlı olduğundan
     /// drop'u index değişikliklerinden ÖNCE (pre), create'i SONRA (post) gelir.
@@ -699,6 +735,14 @@ public static class TableScriptGenerator
         $"keys={string.Join(",", i.KeyColumns.Select(k => $"{k.Column}:{(k.Descending ? "D" : "A")}"))}|" +
         $"inc={string.Join(",", i.IncludedColumns)}|f={i.FilterDefinition ?? ""}|" +
         $"comp={i.ExplicitCompression ?? ""}|rowLocks={i.AllowRowLocks}|pageLocks={i.AllowPageLocks}";
+
+    private static string Sig(XmlIndexDefinition x) =>
+        $"col={x.Column}|primary={x.IsPrimary}|for={x.SecondaryType}|using={x.PrimaryIndexName}";
+
+    private static string Sig(SpatialIndexDefinition s) =>
+        $"col={s.Column}|using={s.Tessellation}|box={s.BoundingXMin},{s.BoundingYMin}," +
+        $"{s.BoundingXMax},{s.BoundingYMax}|grids={s.Level1},{s.Level2},{s.Level3},{s.Level4}|" +
+        $"cells={s.CellsPerObject}";
 
     private static string Sig(FullTextIndexDefinition? f) => f is null ? string.Empty :
         $"key={f.KeyIndexName}|catalog={f.CatalogName}|" +

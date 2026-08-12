@@ -1,6 +1,6 @@
 # KAPSAM — SchemaDiff neyi görür, neyi yazar, neyi görmez
 
-Son güncelleme: 2026-08-12 (Dalga 9 sonrası)
+Son güncelleme: 2026-08-12 (Dalga 10 sonrası)
 
 Bu belge tek soruyu cevaplar: **"Bu araca güvenip deploy edersem neyi kaçırırım?"**
 
@@ -46,6 +46,8 @@ En tehlikeli sonuç "fark yok" demektir; bu yüzden okunamayan her sınıf ayrı
 | Veritabanı kullanıcıları | `CREATE USER` (login/SID eşlemesi ortama özgü, kıyasa girmez) |
 | Temporal (system-versioned) | `CREATE TABLE` tam üretir; **kapatma** tam ve güvenli |
 | Full-text katalog | `CREATE FULLTEXT CATALOG` — accent sensitivity, `AS DEFAULT` |
+| XML index | `CREATE PRIMARY XML INDEX` / secondary `USING XML INDEX … FOR PATH\|VALUE\|PROPERTY` |
+| Spatial index | `CREATE SPATIAL INDEX … USING …` — `BOUNDING_BOX`, `GRIDS`, `CELLS_PER_OBJECT` |
 | Full-text index | `CREATE FULLTEXT INDEX` — KEY INDEX, katalog, `TYPE COLUMN`, `LANGUAGE`, `CHANGE_TRACKING`, `STOPLIST`, pasiflik |
 
 ---
@@ -93,13 +95,12 @@ Sayılıyor (sayısı > 0 çıkarsa `--coverage` uyarır) ama görülmüyor ve y
 
 | # | Konu | Neden bu sırada |
 |---|---|---|
-| 1 | XML index / Spatial index | Mevcut index altyapısının uzantısı |
-| 2 | `OPTIMIZE_FOR_SEQUENTIAL_KEY` (2019+), `STATISTICS_NORECOMPUTE` | Sürüm koşullu: `Indexes` sorgusu ZORUNLU, eski sunucuda düşerse karşılaştırma tümden biter. Ayrı opsiyonel sorgu gerekir |
-| 3 | XML schema collection | Tipli XML kolonları artık ona başvuruyor; koleksiyonun kendisi hâlâ kapsam dışı |
-| 4 | Full-text stoplist objesi | Index artık stoplist'e ADIYLA başvuruyor; stoplist'in kendisi kapsam dışı |
-| 5 | Table type drop+recreate üretimi | Fark artık görünüyor; bağımlılık (prosedür parametreleri) düşürme sırası gerekir |
-| 6 | Plan guide · DB scoped configuration · legacy `RULE`/`DEFAULT` | Düz `CREATE`/`ALTER`, düşük risk, düşük sıklık |
-| 7 | Parametre / principal seviyesi extended property | Obje/kolon/şema/db kapsandı, kalan uçlar |
+| 1 | `OPTIMIZE_FOR_SEQUENTIAL_KEY` (2019+), `STATISTICS_NORECOMPUTE` | Sürüm koşullu: `Indexes` sorgusu ZORUNLU, eski sunucuda düşerse karşılaştırma tümden biter. Ayrı opsiyonel sorgu gerekir |
+| 2 | XML schema collection | Tipli XML kolonları artık ona başvuruyor; koleksiyonun kendisi hâlâ kapsam dışı |
+| 3 | Full-text stoplist objesi | Index artık stoplist'e ADIYLA başvuruyor; stoplist'in kendisi kapsam dışı |
+| 4 | Table type drop+recreate üretimi | Fark artık görünüyor; bağımlılık (prosedür parametreleri) düşürme sırası gerekir |
+| 5 | Plan guide · DB scoped configuration · legacy `RULE`/`DEFAULT` | Düz `CREATE`/`ALTER`, düşük risk, düşük sıklık |
+| 6 | Parametre / principal seviyesi extended property | Obje/kolon/şema/db kapsandı, kalan uçlar |
 
 **Bilinçli ertelenen:** fiziksel yerleşim — `ON [filegroup]`, `TEXTIMAGE_ON`,
 `FILESTREAM_ON`, tablo/index'in partition scheme üzerine yerleşimi. Filegroup'ları biz

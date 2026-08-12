@@ -14,6 +14,8 @@ internal sealed class CatalogSet
     public List<IndexRow> Indexes { get; set; } = [];
     public List<IndexColumnRow> IndexColumns { get; set; } = [];
     public List<XmlSchemaCollectionRow> XmlSchemaCollections { get; set; } = [];
+    public List<XmlIndexRow> XmlIndexes { get; set; } = [];
+    public List<SpatialIndexRow> SpatialIndexes { get; set; } = [];
     public List<FullTextCatalogRow> FullTextCatalogs { get; set; } = [];
     public List<FullTextIndexRow> FullTextIndexes { get; set; } = [];
     public List<FullTextIndexColumnRow> FullTextIndexColumns { get; set; } = [];
@@ -97,6 +99,11 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
             // Tipli XML kolonlarının koleksiyon adı; yoksa kolon düz "xml" script'lenirdi.
             Run("xmlSchemaCollections", Sql.XmlSchemaCollections, MapXmlSchemaCollection,
                 rows => catalog.XmlSchemaCollections = rows, optional: true),
+
+            // XML / spatial index'ler: genel index yolundan ayrı, kendi sözdizimleri var.
+            Run("xmlIndexes", Sql.XmlIndexes, MapXmlIndex, rows => catalog.XmlIndexes = rows, optional: true),
+            Run("spatialIndexes", Sql.SpatialIndexes, MapSpatialIndex,
+                rows => catalog.SpatialIndexes = rows, optional: true),
 
             // Full-text: sunucuda FTS kurulu değilse ya da yetki yoksa düşebilir.
             Run("fullTextCatalogs", Sql.FullTextCatalogs, MapFullTextCatalog,
@@ -276,6 +283,14 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
     private static IndexColumnRow MapIndexColumn(SqlDataReader r) => new(
         Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.Int(r, 2), Rdr.Int(r, 3),
         Rdr.Byte(r, 4), Rdr.Bool(r, 5), Rdr.Bool(r, 6));
+
+    private static XmlIndexRow MapXmlIndex(SqlDataReader r) => new(
+        Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.Str(r, 2), Rdr.NInt(r, 3), Rdr.NStr(r, 4), Rdr.NStr(r, 5));
+
+    private static SpatialIndexRow MapSpatialIndex(SqlDataReader r) => new(
+        Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.Str(r, 2), Rdr.Str(r, 3),
+        Rdr.NDbl(r, 4), Rdr.NDbl(r, 5), Rdr.NDbl(r, 6), Rdr.NDbl(r, 7),
+        Rdr.NStr(r, 8), Rdr.NStr(r, 9), Rdr.NStr(r, 10), Rdr.NStr(r, 11), Rdr.NInt(r, 12));
 
     private static FullTextCatalogRow MapFullTextCatalog(SqlDataReader r) => new(
         Rdr.Int(r, 0), Rdr.Str(r, 1), Rdr.Bool(r, 2), Rdr.Bool(r, 3));

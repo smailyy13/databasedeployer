@@ -101,7 +101,34 @@ internal static class Sql
             ON o.object_id = i.object_id AND o.is_ms_shipped = 0 AND o.type IN ('U','V')
         LEFT JOIN sys.partitions AS p
             ON p.object_id = i.object_id AND p.index_id = i.index_id AND p.partition_number = 1
-        WHERE i.type <> 0;
+        WHERE i.type NOT IN (0, 3, 4);
+        """;
+
+    // XML index'ler (type 3). Genel index yolundan AYRI tutulur: sözdizimi tamamen farklıdır
+    // (primary'de PRIMARY, secondary'de USING XML INDEX ... FOR ...), kolonlarda ASC/DESC yoktur.
+    // using_xml_index_id NULL ise primary, aksi hâlde o primary'ye bağlı secondary'dir.
+    public const string XmlIndexes = """
+        SELECT xi.object_id, xi.index_id, xi.name, xi.using_xml_index_id,
+               xi.secondary_type_desc, pi.name
+        FROM sys.xml_indexes AS xi
+        INNER JOIN sys.objects AS o
+            ON o.object_id = xi.object_id AND o.is_ms_shipped = 0
+        LEFT JOIN sys.xml_indexes AS pi
+            ON pi.object_id = xi.object_id AND pi.index_id = xi.using_xml_index_id;
+        """;
+
+    // Spatial index'ler (type 4) + tessellation ayarları. GEOMETRY_GRID BOUNDING_BOX ister,
+    // GEOGRAPHY_GRID istemez; AUTO_GRID çeşitlerinde GRIDS yazılmaz.
+    public const string SpatialIndexes = """
+        SELECT si.object_id, si.index_id, si.name, si.spatial_index_type_desc,
+               t.bounding_box_xmin, t.bounding_box_ymin, t.bounding_box_xmax, t.bounding_box_ymax,
+               t.level_1_grid_desc, t.level_2_grid_desc, t.level_3_grid_desc, t.level_4_grid_desc,
+               t.cells_per_object
+        FROM sys.spatial_indexes AS si
+        INNER JOIN sys.objects AS o
+            ON o.object_id = si.object_id AND o.is_ms_shipped = 0
+        LEFT JOIN sys.spatial_index_tessellations AS t
+            ON t.object_id = si.object_id AND t.index_id = si.index_id;
         """;
 
     public const string IndexColumns = """

@@ -1,12 +1,12 @@
 # DEVAM — Nerede Kaldık (kapsam genişletme çalışması)
 
 > Bu dosya, başka bir makinede kaldığın yerden devam edebilmen için yazıldı.
-> Son güncelleme: 2026-08-12 (Dalga 9 sonrası)
+> Son güncelleme: 2026-08-12 (Dalga 10 sonrası)
 
 ## Hızlı durum
 - **Repo:** `smailyy13/databasedeployer` (GitHub, private) — proje adı **SchemaDiff**
 - **Branch:** `main`
-- **Testler:** **666 (663 yeşil + 3 atlanan entegrasyon)**
+- **Testler:** **693 (690 yeşil + 3 atlanan entegrasyon)**
 - **Son release:** **v1.4** (portable, 4 parça). **v1.5 HENÜZ ÇIKARILMADI** — aşağıya bak.
 - **Gereken SDK:** .NET 10 (`dotnet-install.sh --channel 10.0`; macOS'ta `~/.dotnet`).
 
@@ -18,7 +18,7 @@ git pull                        # en güncel main
 
 # Derle + test
 dotnet build -c Release
-dotnet test  -c Release --no-build      # 663 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
+dotnet test  -c Release --no-build      # 690 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
 
 # Web arayüzünü çalıştır (yerel, sadece 127.0.0.1)
 dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
@@ -46,7 +46,7 @@ dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
    tam ve güvenli (SET OFF + DROP PERIOD); **AÇMA/yeniden kurulum** riskli olduğu için
    (PERIOD kolonu + DEFAULT gerektirir) elle uygulanmak üzere uyarıyla atlanıyor.
 
-## Bu oturumda tamamlananlar (Dalga 4–9)
+## Bu oturumda tamamlananlar (Dalga 4–10)
 
 Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi eklendi.
 
@@ -131,7 +131,19 @@ Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi ekle
     - Ayrı sorgular eklendi (`TableTypeIndexes/IndexColumns/Checks`): mevcut tablo
       sorgularını gevşetmek yerine açık ve izole tutuldu.
 
-11. **Test:** 276 → **666** (663 yeşil + 3 atlanan entegrasyon).
+11. **Dalga 10 — XML ve spatial index'ler**: bu bir eksik DEĞİL, **bozuk SQL üretimi**ydi.
+    `sys.indexes` bunları da döndürdüğü için genel index yoluna düşüyorlar ve
+    `CREATE XML INDEX [x] ON t ([col] ASC);` üretiliyordu — geçersiz T-SQL (XML index'te
+    ASC/DESC yok, primary'de `PRIMARY`, secondary'de `USING XML INDEX` zorunlu).
+    - `Sql.Indexes` artık `type NOT IN (0, 3, 4)`; ikisi kendi sorgularından geliyor.
+    - XML: primary/secondary ayrımı, `FOR PATH|VALUE|PROPERTY`. **Sıra zorunlu:** create'te
+      primary önce, drop'ta secondary önce — tersi "cannot drop, it is used by…" verir.
+    - Spatial: `BOUNDING_BOX` yalnız GEOMETRY'de, `GRIDS` yalnız AUTO_GRID DEĞİLKEN,
+      `CELLS_PER_OBJECT`. Koordinatlar InvariantCulture ile yazılıyor — Türkçe kültürde
+      "0,5" SQL'i bozardı.
+    - Primary'si okunamayan secondary atlanıyor (USING yazılamaz).
+
+12. **Test:** 276 → **693** (690 yeşil + 3 atlanan entegrasyon).
    - `StatisticsTests` (33): karşılaştırma, sıra, filtre/NORECOMPUTE/INCREMENTAL,
      drop-önce/create-sonra sıralaması, yeni tablo script'i, okunamayan sorgu davranışı.
    - `CatalogQueryTests` (yeni): TÜM katalog sorgularının yapısal denetimi — en önemlisi
@@ -240,6 +252,16 @@ rm -f publish-portable/*.pdb
 - `src/SchemaDiff.Core/Extraction/SnapshotBuilder.cs` — `BuildTableTypeConstraints`,
   `RenderTableType` gövde birleştirme
 - Testler: `TableTypeConstraintTests` (yeni, 16)
+
+## Dalga 10'da değişen dosyalar (XML / spatial index)
+- `src/SchemaDiff.Core/Extraction/Sql.cs` — `Indexes`'ten type 3,4 dışlandı; `XmlIndexes`,
+  `SpatialIndexes` eklendi
+- `src/SchemaDiff.Core/Extraction/{CatalogRows,CatalogExtractor}.cs` — satırlar, `Rdr.NDbl`
+- `src/SchemaDiff.Core/Model/Snapshot.cs` — `XmlIndexDefinition`, `SpatialIndexDefinition`
+- `src/SchemaDiff.Core/Extraction/SnapshotBuilder.cs` — `xmlIndexes`/`spatialIndexes` parçaları
+- `src/SchemaDiff.Core/Scripting/SpecialIndexScript.cs` — **yeni**: CREATE/DROP (tek kaynak)
+- `src/SchemaDiff.Core/Scripting/{TableScriptWriter,TableScriptGenerator}.cs` — yeni tablo + diff
+- Testler: `SpecialIndexTests` (yeni, 17)
 
 ## Dalga 1–3'te değişen ana dosyalar (referans)
 - `src/SchemaDiff.Core/Analysis/CoverageProbe.cs` — sayaçlar (Probes internal)

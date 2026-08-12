@@ -78,6 +78,11 @@ public sealed class ObjectSnapshot
 
     /// <summary>Tablonun full-text index'i (en fazla bir tane) — script üretimi için.</summary>
     public FullTextIndexDefinition? FullTextIndex { get; set; }
+
+    /// <summary>XML ve spatial index'ler — sözdizimleri genel index'ten tamamen farklı.</summary>
+    public IReadOnlyList<XmlIndexDefinition>? XmlIndexes { get; set; }
+
+    public IReadOnlyList<SpatialIndexDefinition>? SpatialIndexes { get; set; }
 }
 
 /// <summary>
@@ -116,6 +121,31 @@ public sealed record IndexDefinition(
 }
 
 public sealed record IndexKeyColumn(string Column, bool Descending);
+
+/// <summary>
+/// XML index. Primary'de <c>CREATE PRIMARY XML INDEX</c>, secondary'de
+/// <c>CREATE XML INDEX … USING XML INDEX [primary] FOR PATH|VALUE|PROPERTY</c> yazılır.
+/// Kolonlarda ASC/DESC YOKTUR — genel index yazımı burada geçersiz SQL üretir.
+/// </summary>
+public sealed record XmlIndexDefinition(
+    string Name, string Column, bool IsPrimary, string? SecondaryType, string? PrimaryIndexName);
+
+/// <summary>
+/// Spatial index. GEOMETRY_GRID <c>BOUNDING_BOX</c> ister, GEOGRAPHY_GRID istemez;
+/// AUTO_GRID çeşitlerinde <c>GRIDS</c> yazılmaz (SQL Server kendisi seçer).
+/// </summary>
+public sealed record SpatialIndexDefinition(
+    string Name, string Column, string Tessellation,
+    double? BoundingXMin, double? BoundingYMin, double? BoundingXMax, double? BoundingYMax,
+    string? Level1, string? Level2, string? Level3, string? Level4, int? CellsPerObject)
+{
+    public bool IsAutoGrid => Tessellation.Contains("AUTO_GRID", StringComparison.OrdinalIgnoreCase);
+
+    public bool HasBoundingBox =>
+        BoundingXMin is not null && BoundingYMin is not null &&
+        BoundingXMax is not null && BoundingYMax is not null &&
+        Tessellation.StartsWith("GEOMETRY", StringComparison.OrdinalIgnoreCase);
+}
 
 /// <summary>
 /// Tablonun full-text index'i. Tablo başına en fazla bir tane olduğu için ayrı obje değil,
