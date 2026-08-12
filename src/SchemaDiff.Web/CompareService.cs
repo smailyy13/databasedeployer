@@ -127,10 +127,10 @@ public sealed class CompareService
     public ObjectDetailDto? Detail(CompareSession session, string schema, string name, string kind)
     {
         if (session.Comparison is not { } comparison) return null;
-        if (!Enum.TryParse<ObjectKind>(kind.Replace(" ", ""), ignoreCase: true, out var objectKind))
-            objectKind = KindFromLabel(kind);
 
-        var key = new ObjectKey(schema, name, objectKind);
+        // Seçimle AYNI çevrimi kullan: iki yerde iki farklı ayrıştırma, birinde çalışıp
+        // ötekinde çalışmayan tür demekti (tire içeren adlarda tam da bu oluyordu).
+        var key = new ObjectKey(schema, name, ResolveKind(kind));
         comparison.Source.Objects.TryGetValue(key, out var source);
         comparison.Target.Objects.TryGetValue(key, out var target);
         if (source is null && target is null) return null;
@@ -141,22 +141,8 @@ public sealed class CompareService
             source?.DisplayScript, target?.DisplayScript);
     }
 
-    private static ObjectKind KindFromLabel(string label) => label switch
-    {
-        "Scalar Function" => ObjectKind.ScalarFunction,
-        "Inline Function" => ObjectKind.InlineTableFunction,
-        "Table Function" => ObjectKind.TableFunction,
-        _ => ObjectKind.Unknown,
-    };
-
-    /// <summary>Arayüzdeki görünen tür adını ("Table", "Scalar Function", "Role" …) ObjectKind'e çevirir.</summary>
-    public static ObjectKind ResolveKind(string label)
-    {
-        if (Enum.TryParse<ObjectKind>(label.Replace(" ", ""), ignoreCase: true, out var kind)
-            && kind != ObjectKind.Unknown)
-            return kind;
-        return KindFromLabel(label);
-    }
+    /// <summary>Arayüzdeki görünen tür adını ObjectKind'e çevirir (seçim + detay paneli).</summary>
+    public static ObjectKind ResolveKind(string label) => ObjectKindLabels.Resolve(label);
 
     private static CompareResultDto Map(CompareSession session, CompareResult comparison, TimeSpan duration)
     {

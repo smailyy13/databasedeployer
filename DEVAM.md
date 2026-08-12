@@ -6,7 +6,7 @@
 ## Hızlı durum
 - **Repo:** `smailyy13/databasedeployer` (GitHub, private) — proje adı **SchemaDiff**
 - **Branch:** `main`
-- **Testler:** **693 (690 yeşil + 3 atlanan entegrasyon)**
+- **Testler:** **718 (715 yeşil + 3 atlanan entegrasyon)**
 - **Son release:** **v1.4** (portable, 4 parça). **v1.5 HENÜZ ÇIKARILMADI** — aşağıya bak.
 - **Gereken SDK:** .NET 10 (`dotnet-install.sh --channel 10.0`; macOS'ta `~/.dotnet`).
 
@@ -18,7 +18,7 @@ git pull                        # en güncel main
 
 # Derle + test
 dotnet build -c Release
-dotnet test  -c Release --no-build      # 690 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
+dotnet test  -c Release --no-build      # 715 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
 
 # Web arayüzünü çalıştır (yerel, sadece 127.0.0.1)
 dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
@@ -143,7 +143,18 @@ Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi ekle
       "0,5" SQL'i bozardı.
     - Primary'si okunamayan secondary atlanıyor (USING yazılamaz).
 
-12. **Test:** 276 → **693** (690 yeşil + 3 atlanan entegrasyon).
+12. **Dalga 11 — Arayüz/rapor uçlarının bağlanması** ("eksik kalan var mı?" taraması):
+    - **Tür adı ↔ ObjectKind çevrimi kopuktu.** Ağaçtaki ad kullanıcı kutuyu işaretleyince
+      sunucuya dönüyor ve türe çevriliyor; çevrim yalnız BOŞLUK atıyordu, tire atmıyordu.
+      Sonuç: `User-Defined Type` (eskiden beri) ve `Full-Text Catalog` (Dalga 8) çözülemiyor,
+      obje işaretlense bile script'e SESSİZCE girmiyor ve detay paneli boş dönüyordu.
+      İki yön artık tek dosyada (`ObjectKindLabels`), her tür için gidiş-dönüş test ediliyor.
+    - **`HandledElsewhere` kümesi Web ve CLI'de elle kopyalanmıştı**, `FullTextCatalog` ikisinde
+      de eksikti: katalog script'e giriyor ama başlıkta "kapsam dışı" listeleniyordu.
+      Artık `TypeScriptGenerator.HandledKinds` tek kaynak.
+    - Detay paneli ile seçim artık AYNI çevrimi kullanıyor (önce iki ayrı ayrıştırma vardı).
+
+13. **Test:** 276 → **718** (715 yeşil + 3 atlanan entegrasyon).
    - `StatisticsTests` (33): karşılaştırma, sıra, filtre/NORECOMPUTE/INCREMENTAL,
      drop-önce/create-sonra sıralaması, yeni tablo script'i, okunamayan sorgu davranışı.
    - `CatalogQueryTests` (yeni): TÜM katalog sorgularının yapısal denetimi — en önemlisi

@@ -214,11 +214,10 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
                 GeneratedAt = generatedAt,
                 TablesHandledElsewhere = wantTables,
                 IncludeDrops = request.DropNotInSource,
-                HandledElsewhere = new HashSet<ObjectKind>
+                // Tip üretecinin listesinden türetilir; elle kopyalanınca sürekli ayrışıyordu.
+                HandledElsewhere = new HashSet<ObjectKind>(TypeScriptGenerator.HandledKinds)
                 {
-                    ObjectKind.Role, ObjectKind.User, ObjectKind.UserDefinedType, ObjectKind.TableType,
-                    ObjectKind.Sequence, ObjectKind.Synonym,
-                    ObjectKind.PartitionFunction, ObjectKind.PartitionScheme,
+                    ObjectKind.Role, ObjectKind.User,
                 },
             });
             sb.AppendLine(module.Sql);

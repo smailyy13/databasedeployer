@@ -527,28 +527,6 @@ public static class ChangeCatalog
         return cols is not null ? cols[5..] : fields[2];
     }
 
-    /// <summary>SSDT çıktısıyla aynı okunsun diye tür adları İngilizce.</summary>
-    private static string TypeName(ObjectKind kind) => kind switch
-    {
-        ObjectKind.Schema => "Schema",
-        ObjectKind.Table => "Table",
-        ObjectKind.View => "View",
-        ObjectKind.Procedure => "Procedure",
-        ObjectKind.ScalarFunction => "Scalar Function",
-        ObjectKind.InlineTableFunction => "Inline Function",
-        ObjectKind.TableFunction => "Table Function",
-        ObjectKind.Trigger => "Trigger",
-        ObjectKind.Synonym => "Synonym",
-        ObjectKind.Sequence => "Sequence",
-        ObjectKind.Role => "Role",
-        ObjectKind.User => "User",
-        ObjectKind.UserDefinedType => "User-Defined Type",
-        ObjectKind.TableType => "Table Type",
-        ObjectKind.PartitionFunction => "Partition Function",
-        ObjectKind.PartitionScheme => "Partition Scheme",
-        ObjectKind.DdlTrigger => "DDL Trigger",
-        ObjectKind.FullTextCatalog => "Full-Text Catalog",
-        ObjectKind.Database => "Database",
-        _ => kind.ToString(),
-    };
+    /// <summary>Ağaçta görünen tür adı. Ters çevrimiyle birlikte <see cref="ObjectKindLabels"/>'da.</summary>
+    private static string TypeName(ObjectKind kind) => ObjectKindLabels.Display(kind);
 }

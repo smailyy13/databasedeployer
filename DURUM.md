@@ -1,6 +1,6 @@
 # Durum ve Yol Haritası
 
-Son güncelleme: 2026-08-12 · 5 proje (Core, Cli, Web, Bench, Tests) · 693 test (690 yeşil + 3 atlanan entegrasyon)
+Son güncelleme: 2026-08-12 · 5 proje (Core, Cli, Web, Bench, Tests) · 718 test (715 yeşil + 3 atlanan entegrasyon)
 
 ---
 
@@ -133,7 +133,7 @@ roller + üyelikleri · obje/şema/**db** izinleri (GRANT/DENY) · alias tipler 
 - Parametre/principal seviyesi extended property (obje/kolon/şema/db kapsandı)
 - PRIMARY dışı filegroup'lar
 
-### 3. Otomatik test — ✅ kuruldu (693 test: 690 birim + 3 entegrasyon)
+### 3. Otomatik test — ✅ kuruldu (718 test: 715 birim + 3 entegrasyon)
 
 Entegrasyon testleri (`IntegrationTests`, `[SkippableFact]`) canlı SQL Server'a karşı koşar,
 DB yoksa ATLANIR (CI'da derleme yeşil kalır): küçük fixture 5 fark (2/1/2), Big 359 fark,

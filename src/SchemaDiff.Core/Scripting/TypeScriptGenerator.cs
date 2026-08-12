@@ -38,6 +38,19 @@ public sealed record TypeScriptResult(
 /// </summary>
 public static class TypeScriptGenerator
 {
+    /// <summary>
+    /// Bu üretecin ele aldığı obje sınıfları. Modül üreteci "kapsam dışı" listesini bundan
+    /// kurar: liste elle kopyalandığında yeni bir sınıf eklenince script'e GİRİYOR ama
+    /// başlıkta "kapsam dışı" diye görünüyordu — rapor script'le çelişiyordu.
+    /// </summary>
+    public static readonly IReadOnlySet<ObjectKind> HandledKinds = new HashSet<ObjectKind>
+    {
+        ObjectKind.UserDefinedType, ObjectKind.TableType,
+        ObjectKind.Sequence, ObjectKind.Synonym,
+        ObjectKind.PartitionFunction, ObjectKind.PartitionScheme,
+        ObjectKind.FullTextCatalog,
+    };
+
     public static TypeScriptResult Generate(
         CompareResult result, ISet<ObjectKey>? selection = null, TypeScriptOptions? options = null)
     {
@@ -51,10 +64,7 @@ public static class TypeScriptGenerator
 
         foreach (var diff in result.Differences)
         {
-            if (diff.Key.Kind is not (ObjectKind.UserDefinedType or ObjectKind.TableType
-                or ObjectKind.Sequence or ObjectKind.Synonym
-                or ObjectKind.PartitionFunction or ObjectKind.PartitionScheme
-                or ObjectKind.FullTextCatalog)) continue;
+            if (!HandledKinds.Contains(diff.Key.Kind)) continue;
             if (selection is not null && !selection.Contains(diff.Key)) continue;
 
             switch (diff.Kind)

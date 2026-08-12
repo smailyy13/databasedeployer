@@ -304,11 +304,10 @@ static (string Sql, ScriptResult? Module, TableScriptResult? Table, RoleScriptRe
         {
             GeneratedAt = generatedAt,
             TablesHandledElsewhere = wantTables,
-            HandledElsewhere = new HashSet<ObjectKind>
+            // Tip üretecinin listesinden türetilir; elle kopyalanınca sürekli ayrışıyordu.
+            HandledElsewhere = new HashSet<ObjectKind>(TypeScriptGenerator.HandledKinds)
             {
-                ObjectKind.Role, ObjectKind.User, ObjectKind.UserDefinedType, ObjectKind.TableType,
-                ObjectKind.Sequence, ObjectKind.Synonym,
-                ObjectKind.PartitionFunction, ObjectKind.PartitionScheme,
+                ObjectKind.Role, ObjectKind.User,
             },
         });
         sb.AppendLine(moduleScript.Sql);
