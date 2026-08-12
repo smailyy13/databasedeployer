@@ -115,7 +115,8 @@ public sealed record IndexDefinition(
 public sealed record IndexKeyColumn(string Column, bool Descending);
 
 public sealed record CheckDefinition(
-    string Name, string Definition, bool IsSystemNamed, bool NotForReplication = false);
+    string Name, string Definition, bool IsSystemNamed, bool NotForReplication = false,
+    bool IsDisabled = false, bool IsNotTrusted = false);
 
 public sealed record ForeignKeyDefinition(
     string Name,
@@ -125,7 +126,9 @@ public sealed record ForeignKeyDefinition(
     IReadOnlyList<ForeignKeyColumnPair> Columns,
     byte DeleteAction,
     byte UpdateAction,
-    bool NotForReplication = false);
+    bool NotForReplication = false,
+    bool IsDisabled = false,
+    bool IsNotTrusted = false);
 
 public sealed record ForeignKeyColumnPair(string Parent, string Referenced);
 

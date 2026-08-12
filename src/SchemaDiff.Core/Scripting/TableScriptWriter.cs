@@ -76,6 +76,12 @@ internal static class TableScriptWriter
             sb.Append(line);
         }
 
+        foreach (var line in WriteConstraintState(key, objectId, sources))
+        {
+            sb.AppendLine();
+            sb.Append(line);
+        }
+
         return sb.ToString().TrimEnd();
     }
 
@@ -290,6 +296,29 @@ internal static class TableScriptWriter
         }
 
         return lines;
+    }
+
+    // --- pasif constraint'ler ---
+
+    /// <summary>
+    /// CREATE TABLE içindeki constraint'ler her zaman AKTİF doğar; pasif olanlar ancak
+    /// tablo oluştuktan sonra kapatılabilir. Yazılmazsa hedefte constraint sessizce
+    /// etkinleşir ve kaynakta bilerek kapatılmış bir kural devreye girer.
+    /// </summary>
+    private static IEnumerable<string> WriteConstraintState(
+        ObjectKey key, int objectId, TableScriptSources sources)
+    {
+        var qualified = Quote(key.Schema, key.Name);
+        var names = new List<string>();
+
+        names.AddRange((sources.ChecksBy.GetValueOrDefault(objectId) ?? [])
+            .Where(c => c.IsDisabled).Select(c => c.Name));
+        names.AddRange((sources.ForeignKeysBy.GetValueOrDefault(objectId) ?? [])
+            .Where(f => f.IsDisabled).Select(f => f.Name));
+
+        names.Sort(StringComparer.Ordinal);
+        return names.Select(n =>
+            $"GO{Environment.NewLine}ALTER TABLE {qualified} NOCHECK CONSTRAINT [{n}];");
     }
 
     // --- kullanıcı istatistikleri ---

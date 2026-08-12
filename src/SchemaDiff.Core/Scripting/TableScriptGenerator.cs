@@ -387,7 +387,8 @@ public static class TableScriptGenerator
     {
         // WITH CHECK: mevcut veri doğrulanır (SSDT varsayılanı). WITH NOCHECK: doğrulama
         // atlanır — dolu tabloya constraint eklenebilir ama "not trusted" olur.
-        var checkClause = validateConstraints ? "WITH CHECK" : "WITH NOCHECK";
+        // WITH CHECK: mevcut veri doğrulanır. Kaynaktaki constraint pasif/güvenilmezse
+        // AddClause bu tercihi ezer — bkz. AddClause.
         // NOT: record eşitliği liste üyelerini referansla karşılaştırır, değerle değil —
         // bu yüzden yapısal İMZA üzerinden karşılaştırıyoruz. Aksi hâlde özdeş bir PK bile
         // "değişti" sanılıp gereksiz DROP+ADD üretilir (FK referansı varsa deploy patlar).
@@ -400,8 +401,18 @@ public static class TableScriptGenerator
             if (!srcFk.TryGetValue(name, out var s) || Sig(s) != Sig(fk))
                 fkDrops.Add($"ALTER TABLE {qualified} DROP CONSTRAINT [{name}];");
         foreach (var (name, fk) in srcFk)
+        {
             if (!tgtFk.TryGetValue(name, out var t) || Sig(t) != Sig(fk))
-                fkAdds.Add(AddForeignKey(qualified, fk, checkClause));
+            {
+                fkAdds.Add(AddForeignKey(qualified, fk, AddClause(fk.IsDisabled, fk.IsNotTrusted, validateConstraints)));
+                if (fk.IsDisabled) fkAdds.Add(ConstraintState(qualified, name, disabled: true, notTrusted: true));
+            }
+            else if (t.IsDisabled != fk.IsDisabled || t.IsNotTrusted != fk.IsNotTrusted)
+            {
+                // Tanım aynı, yalnız DURUM farklı: drop+recreate gereksiz ve risklidir.
+                fkAdds.Add(ConstraintState(qualified, name, fk.IsDisabled, fk.IsNotTrusted));
+            }
+        }
 
         // Check constraint'ler.
         var srcChk = ByName(source.CheckDefinitions, c => c.Name);
@@ -411,9 +422,19 @@ public static class TableScriptGenerator
                 pre.Add($"ALTER TABLE {qualified} DROP CONSTRAINT [{name}];");
         var chkAdds = new List<string>();
         foreach (var (name, chk) in srcChk)
+        {
             if (!tgtChk.TryGetValue(name, out var t) || Sig(t) != Sig(chk))
-                chkAdds.Add($"ALTER TABLE {qualified} {checkClause} ADD CONSTRAINT [{chk.Name}] CHECK " +
+            {
+                chkAdds.Add($"ALTER TABLE {qualified} {AddClause(chk.IsDisabled, chk.IsNotTrusted, validateConstraints)} " +
+                            $"ADD CONSTRAINT [{chk.Name}] CHECK " +
                             $"{(chk.NotForReplication ? "NOT FOR REPLICATION " : string.Empty)}{chk.Definition};");
+                if (chk.IsDisabled) chkAdds.Add(ConstraintState(qualified, name, disabled: true, notTrusted: true));
+            }
+            else if (t.IsDisabled != chk.IsDisabled || t.IsNotTrusted != chk.IsNotTrusted)
+            {
+                chkAdds.Add(ConstraintState(qualified, name, chk.IsDisabled, chk.IsNotTrusted));
+            }
+        }
 
         // Index'ler (PK/UQ dahil).
         var srcIdx = ByName(source.IndexDefinitions, i => i.Name);
@@ -555,6 +576,27 @@ public static class TableScriptGenerator
             }
         }
     }
+
+    /// <summary>
+    /// Constraint EKLENİRKEN doğrulama yapılsın mı. Kaynakta constraint zaten güvenilmez
+    /// (not trusted) ya da pasifse mevcut veri onu ihlal ediyor olabilir — WITH CHECK ile
+    /// eklemek deploy'u patlatır. Bu yüzden kaynağın durumu her hâlükârda kullanıcının
+    /// "yeni constraint'leri doğrula" seçeneğinden önce gelir.
+    /// </summary>
+    private static string AddClause(bool disabled, bool notTrusted, bool validateConstraints) =>
+        disabled || notTrusted || !validateConstraints ? "WITH NOCHECK" : "WITH CHECK";
+
+    /// <summary>
+    /// Constraint'i kaynaktaki DURUMA getiren ifade. Üç ayrı hâl vardır ve T-SQL'de
+    /// üçünün yazımı farklıdır:
+    ///   • pasif                       → NOCHECK CONSTRAINT (aynı zamanda güvenilmez yapar)
+    ///   • aktif ama güvenilmez        → CHECK CONSTRAINT (doğrulama yapmadan açar)
+    ///   • aktif ve güvenilir          → WITH CHECK CHECK CONSTRAINT (mevcut veriyi tarar)
+    /// </summary>
+    private static string ConstraintState(string qualified, string name, bool disabled, bool notTrusted) =>
+        disabled ? $"ALTER TABLE {qualified} NOCHECK CONSTRAINT [{name}];"
+        : notTrusted ? $"ALTER TABLE {qualified} CHECK CONSTRAINT [{name}];"
+        : $"ALTER TABLE {qualified} WITH CHECK CHECK CONSTRAINT [{name}];";
 
     private static string DropIndex(string qualified, IndexDefinition idx) => idx.IsConstraint
         ? $"ALTER TABLE {qualified} DROP CONSTRAINT [{idx.Name}];"

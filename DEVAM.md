@@ -1,12 +1,12 @@
 # DEVAM — Nerede Kaldık (kapsam genişletme çalışması)
 
 > Bu dosya, başka bir makinede kaldığın yerden devam edebilmen için yazıldı.
-> Son güncelleme: 2026-08-12 (Dalga 4 sonrası)
+> Son güncelleme: 2026-08-12 (Dalga 7 sonrası)
 
 ## Hızlı durum
 - **Repo:** `smailyy13/databasedeployer` (GitHub, private) — proje adı **SchemaDiff**
 - **Branch:** `main`
-- **Testler:** **536 (533 yeşil + 3 atlanan entegrasyon)**
+- **Testler:** **598 (595 yeşil + 3 atlanan entegrasyon)**
 - **Son release:** **v1.4** (portable, 4 parça). **v1.5 HENÜZ ÇIKARILMADI** — aşağıya bak.
 - **Gereken SDK:** .NET 10 (`dotnet-install.sh --channel 10.0`; macOS'ta `~/.dotnet`).
 
@@ -18,7 +18,7 @@ git pull                        # en güncel main
 
 # Derle + test
 dotnet build -c Release
-dotnet test  -c Release --no-build      # 533 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
+dotnet test  -c Release --no-build      # 595 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
 
 # Web arayüzünü çalıştır (yerel, sadece 127.0.0.1)
 dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
@@ -46,7 +46,7 @@ dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
    tam ve güvenli (SET OFF + DROP PERIOD); **AÇMA/yeniden kurulum** riskli olduğu için
    (PERIOD kolonu + DEFAULT gerektirir) elle uygulanmak üzere uyarıyla atlanıyor.
 
-## Bu oturumda tamamlananlar (Dalga 4 — henüz COMMIT EDİLMEDİ)
+## Bu oturumda tamamlananlar (Dalga 4–7)
 
 Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi eklendi.
 
@@ -94,7 +94,21 @@ Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi ekle
      `optimize_for_sequential_key` (2019+) bilinçli ALINMADI: `Indexes` sorgusu zorunlu,
      eski sunucuda düşerse karşılaştırma tümden biter.
 
-8. **Test:** 276 → **582** (579 yeşil + 3 atlanan entegrasyon).
+8. **Dalga 7 — Constraint DURUMU script'te**: `is_disabled` / `is_not_trusted` zaten
+   karşılaştırılıyordu ama üretilen script'e yansımıyordu — kaynakta bilerek kapatılmış bir
+   CHECK hedefte AKTİF kuruluyordu. Script farkı doğru görüp yanlış tarafa taşıyordu.
+   - Üç hâlin T-SQL yazımı farklı, üçü de üretiliyor: pasif → `NOCHECK CONSTRAINT`,
+     aktif+güvenilmez → `CHECK CONSTRAINT`, aktif+güvenilir → `WITH CHECK CHECK CONSTRAINT`
+     (mevcut veriyi tarar).
+   - **Yalnız durum değiştiyse drop+recreate YOK** — hedef ifade tek satır. (Gereksiz
+     DROP+ADD, FK referansı olan bir constraint'te deploy'u patlatırdı.)
+   - Yeni eklenen pasif/güvenilmez constraint `WITH NOCHECK` ile ekleniyor: kaynakta
+     kapalıysa mevcut veri onu ihlal ediyor olabilir, `WITH CHECK` deploy'u patlatırdı.
+     Bu, kullanıcının "yeni constraint'leri doğrula" seçeneğini bilinçli olarak ezer.
+   - Yeni tabloda da: `CREATE TABLE` içindeki constraint hep AKTİF doğar, pasif olanlar
+     tablo oluştuktan sonra ayrı batch'te kapatılıyor.
+
+9. **Test:** 276 → **598** (595 yeşil + 3 atlanan entegrasyon).
    - `StatisticsTests` (33): karşılaştırma, sıra, filtre/NORECOMPUTE/INCREMENTAL,
      drop-önce/create-sonra sıralaması, yeni tablo script'i, okunamayan sorgu davranışı.
    - `CatalogQueryTests` (yeni): TÜM katalog sorgularının yapısal denetimi — en önemlisi
@@ -104,14 +118,15 @@ Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi ekle
    - `ColumnAttributeTests` (22): nitelik farkı, CREATE/ADD COLUMN yazımı, gramer sırası
      (FILESTREAM → SPARSE), aç/kapa ifadeleri, tip değişimiyle birlikte davranış,
      FILESTREAM/COLUMN_SET'in script yerine uyarıya düşmesi.
+   - `TypedXmlAndReplicationTests` (19): koleksiyonun ADLA karşılaştırılması, CONTENT/DOCUMENT,
+     NFR yazımı, ADD COLUMN'da IDENTITY, tek WITH listesi.
+   - `ConstraintStateTests` (16): üç durum ifadesi, durum-farkında drop+recreate olmaması,
+     yeni constraint'in WITH NOCHECK ile eklenmesi, yeni tabloda kapatma sırası.
 
 ### Sıradaki adım
 Commit + push, sonra **v1.5 release** (aşağıdaki publish adımları).
 
 ### Kalan scriptlenebilir maddeler (düşük öncelik)
-- Constraint DURUMU script'te: `is_disabled` / `is_not_trusted` karşılaştırılıyor ama
-  üretilen script'e yansımıyor — kaynakta disabled bir CHECK hedefte enabled kuruluyor.
-  (Düzeltmesi küçük: `NOCHECK` + `ALTER TABLE … NOCHECK CONSTRAINT`.)
 - `OPTIMIZE_FOR_SEQUENTIAL_KEY` (2019+) ve `STATISTICS_NORECOMPUTE` (index istatistiği)
 - Full-text katalog + index — ayrı obje sınıfı
 - Table type constraint/index'leri (şu an yalnız kolon yapısı)
@@ -174,6 +189,14 @@ rm -f publish-portable/*.pdb
 - `src/SchemaDiff.Core/Scripting/TableScriptGenerator.cs` — `WithOptions`, XML RenderType,
   ADD COLUMN IDENTITY, NFR imzaları
 - Testler: `TypedXmlAndReplicationTests` (yeni)
+
+## Dalga 7'de değişen dosyalar (constraint durumu)
+- `src/SchemaDiff.Core/Model/Snapshot.cs` — Check/ForeignKeyDefinition `IsDisabled`/`IsNotTrusted`
+- `src/SchemaDiff.Core/Extraction/SnapshotBuilder.cs` — tanımlara durum aktarımı
+- `src/SchemaDiff.Core/Scripting/TableScriptGenerator.cs` — `AddClause`, `ConstraintState`,
+  durum-farkı yolu (drop+recreate yerine tek ifade)
+- `src/SchemaDiff.Core/Scripting/TableScriptWriter.cs` — `WriteConstraintState` (yeni tablo)
+- Testler: `ConstraintStateTests` (yeni)
 
 ## Dalga 1–3'te değişen ana dosyalar (referans)
 - `src/SchemaDiff.Core/Analysis/CoverageProbe.cs` — sayaçlar (Probes internal)

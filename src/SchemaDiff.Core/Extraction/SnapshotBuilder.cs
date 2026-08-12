@@ -1003,7 +1003,8 @@ internal static class SnapshotBuilder
         {
             if (options.IgnoreSystemNamedConstraints && c.IsSystemNamed) continue;
             if (c.Definition is null) continue;
-            result.Add(new CheckDefinition(c.Name, c.Definition, c.IsSystemNamed, c.IsNotForReplication));
+            result.Add(new CheckDefinition(
+                c.Name, c.Definition, c.IsSystemNamed, c.IsNotForReplication, c.IsDisabled, c.IsNotTrusted));
         }
         return result;
     }
@@ -1033,7 +1034,7 @@ internal static class SnapshotBuilder
 
             result.Add(new ForeignKeyDefinition(
                 fk.Name, fk.IsSystemNamed, referenced.Schema, referenced.Name, cols,
-                fk.DeleteAction, fk.UpdateAction, fk.IsNotForReplication));
+                fk.DeleteAction, fk.UpdateAction, fk.IsNotForReplication, fk.IsDisabled, fk.IsNotTrusted));
         }
         return result;
     }
