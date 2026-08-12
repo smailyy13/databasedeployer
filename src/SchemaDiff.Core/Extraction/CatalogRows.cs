@@ -104,6 +104,10 @@ internal sealed record SpatialIndexRow(
     double? BoundingXMin, double? BoundingYMin, double? BoundingXMax, double? BoundingYMax,
     string? Level1, string? Level2, string? Level3, string? Level4, int? CellsPerObject);
 
+/// <summary>Index'in sürüme bağlı ek seçenekleri; ayrı opsiyonel sorgudan gelir.</summary>
+internal sealed record IndexExtraRow(
+    int ObjectId, int IndexId, bool OptimizeForSequentialKey, bool StatisticsNoRecompute);
+
 internal sealed record IndexColumnRow(
     int ObjectId, int IndexId, int IndexColumnId, int ColumnId,
     byte KeyOrdinal, bool IsDescending, bool IsIncluded);

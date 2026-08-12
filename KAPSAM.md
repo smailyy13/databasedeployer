@@ -1,6 +1,6 @@
 # KAPSAM — SchemaDiff neyi görür, neyi yazar, neyi görmez
 
-Son güncelleme: 2026-08-12 (Dalga 10 sonrası)
+Son güncelleme: 2026-08-12 (Dalga 12 sonrası)
 
 Bu belge tek soruyu cevaplar: **"Bu araca güvenip deploy edersem neyi kaçırırım?"**
 
@@ -27,7 +27,7 @@ En tehlikeli sonuç "fark yok" demektir; bu yüzden okunamayan her sınıf ayrı
 | IDENTITY | seed/increment + `NOT FOR REPLICATION` (ADD COLUMN dahil) |
 | Kolon depolama nitelikleri | `SPARSE`, `FILESTREAM`, `ROWGUIDCOL`, `COLUMN_SET` |
 | Tipli XML kolonları | `xml(CONTENT\|DOCUMENT [şema].[koleksiyon])` — koleksiyon ADIYLA kıyaslanır |
-| Index'ler | key/`INCLUDE`/filtered/columnstore, `DATA_COMPRESSION`, `ALLOW_ROW_LOCKS`, `ALLOW_PAGE_LOCKS`, fill factor |
+| Index'ler | key/`INCLUDE`/filtered/columnstore, `DATA_COMPRESSION`, `ALLOW_ROW_LOCKS`, `ALLOW_PAGE_LOCKS`, fill factor, `STATISTICS_NORECOMPUTE`, `OPTIMIZE_FOR_SEQUENTIAL_KEY` |
 | PK / UNIQUE | `ALTER TABLE ADD CONSTRAINT`, clustered/nonclustered, compression |
 | CHECK | tanım + `NOT FOR REPLICATION` + **durum** (pasif / güvenilmez) |
 | FOREIGN KEY | çok kolonlu, `ON DELETE/UPDATE`, `NOT FOR REPLICATION` + **durum** |
@@ -95,12 +95,11 @@ Sayılıyor (sayısı > 0 çıkarsa `--coverage` uyarır) ama görülmüyor ve y
 
 | # | Konu | Neden bu sırada |
 |---|---|---|
-| 1 | `OPTIMIZE_FOR_SEQUENTIAL_KEY` (2019+), `STATISTICS_NORECOMPUTE` | Sürüm koşullu: `Indexes` sorgusu ZORUNLU, eski sunucuda düşerse karşılaştırma tümden biter. Ayrı opsiyonel sorgu gerekir |
-| 2 | XML schema collection | Tipli XML kolonları artık ona başvuruyor; koleksiyonun kendisi hâlâ kapsam dışı |
-| 3 | Full-text stoplist objesi | Index artık stoplist'e ADIYLA başvuruyor; stoplist'in kendisi kapsam dışı |
-| 4 | Table type drop+recreate üretimi | Fark artık görünüyor; bağımlılık (prosedür parametreleri) düşürme sırası gerekir |
-| 5 | Plan guide · DB scoped configuration · legacy `RULE`/`DEFAULT` | Düz `CREATE`/`ALTER`, düşük risk, düşük sıklık |
-| 6 | Parametre / principal seviyesi extended property | Obje/kolon/şema/db kapsandı, kalan uçlar |
+| 1 | XML schema collection | Tipli XML kolonları artık ona başvuruyor; koleksiyonun kendisi hâlâ kapsam dışı |
+| 2 | Full-text stoplist objesi | Index artık stoplist'e ADIYLA başvuruyor; stoplist'in kendisi kapsam dışı |
+| 3 | Table type drop+recreate üretimi | Fark artık görünüyor; bağımlılık (prosedür parametreleri) düşürme sırası gerekir |
+| 4 | Plan guide · DB scoped configuration · legacy `RULE`/`DEFAULT` | Düz `CREATE`/`ALTER`, düşük risk, düşük sıklık |
+| 5 | Parametre / principal seviyesi extended property | Obje/kolon/şema/db kapsandı, kalan uçlar |
 
 **Bilinçli ertelenen:** fiziksel yerleşim — `ON [filegroup]`, `TEXTIMAGE_ON`,
 `FILESTREAM_ON`, tablo/index'in partition scheme üzerine yerleşimi. Filegroup'ları biz

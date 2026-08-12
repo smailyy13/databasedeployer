@@ -14,6 +14,7 @@ internal sealed class CatalogSet
     public List<IndexRow> Indexes { get; set; } = [];
     public List<IndexColumnRow> IndexColumns { get; set; } = [];
     public List<XmlSchemaCollectionRow> XmlSchemaCollections { get; set; } = [];
+    public List<IndexExtraRow> IndexExtras { get; set; } = [];
     public List<XmlIndexRow> XmlIndexes { get; set; } = [];
     public List<SpatialIndexRow> SpatialIndexes { get; set; } = [];
     public List<FullTextCatalogRow> FullTextCatalogs { get; set; } = [];
@@ -99,6 +100,10 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
             // Tipli XML kolonlarının koleksiyon adı; yoksa kolon düz "xml" script'lenirdi.
             Run("xmlSchemaCollections", Sql.XmlSchemaCollections, MapXmlSchemaCollection,
                 rows => catalog.XmlSchemaCollections = rows, optional: true),
+
+            // optimize_for_sequential_key SQL 2019+; eski sunucuda bu sorgu düşer,
+            // karşılaştırma yalnız bu iki ayar olmadan sürer.
+            Run("indexExtras", Sql.IndexExtras, MapIndexExtra, rows => catalog.IndexExtras = rows, optional: true),
 
             // XML / spatial index'ler: genel index yolundan ayrı, kendi sözdizimleri var.
             Run("xmlIndexes", Sql.XmlIndexes, MapXmlIndex, rows => catalog.XmlIndexes = rows, optional: true),
@@ -283,6 +288,9 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
     private static IndexColumnRow MapIndexColumn(SqlDataReader r) => new(
         Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.Int(r, 2), Rdr.Int(r, 3),
         Rdr.Byte(r, 4), Rdr.Bool(r, 5), Rdr.Bool(r, 6));
+
+    private static IndexExtraRow MapIndexExtra(SqlDataReader r) => new(
+        Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.NBool(r, 2) == true, Rdr.NBool(r, 3) == true);
 
     private static XmlIndexRow MapXmlIndex(SqlDataReader r) => new(
         Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.Str(r, 2), Rdr.NInt(r, 3), Rdr.NStr(r, 4), Rdr.NStr(r, 5));

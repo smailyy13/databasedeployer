@@ -693,6 +693,9 @@ public static class TableScriptGenerator
         if (idx.ExplicitCompression is { } compression) options.Add($"DATA_COMPRESSION = {compression}");
         if (!idx.AllowRowLocks) options.Add("ALLOW_ROW_LOCKS = OFF");
         if (!idx.AllowPageLocks) options.Add("ALLOW_PAGE_LOCKS = OFF");
+        if (idx.StatisticsNoRecompute) options.Add("STATISTICS_NORECOMPUTE = ON");
+        // SQL Server 2019+ ayarı; yalnız kaynakta AÇIKSA yazılır, eski hedefte hata vermesin.
+        if (idx.OptimizeForSequentialKey) options.Add("OPTIMIZE_FOR_SEQUENTIAL_KEY = ON");
         return options.Count == 0 ? string.Empty : $" WITH ({string.Join(", ", options)})";
     }
 
@@ -734,7 +737,8 @@ public static class TableScriptGenerator
         $"pk={i.IsPrimaryKey}|uq={i.IsUniqueConstraint}|u={i.IsUnique}|t={i.TypeDesc}|" +
         $"keys={string.Join(",", i.KeyColumns.Select(k => $"{k.Column}:{(k.Descending ? "D" : "A")}"))}|" +
         $"inc={string.Join(",", i.IncludedColumns)}|f={i.FilterDefinition ?? ""}|" +
-        $"comp={i.ExplicitCompression ?? ""}|rowLocks={i.AllowRowLocks}|pageLocks={i.AllowPageLocks}";
+        $"comp={i.ExplicitCompression ?? ""}|rowLocks={i.AllowRowLocks}|pageLocks={i.AllowPageLocks}|" +
+        $"seqKey={i.OptimizeForSequentialKey}|statsNoRecompute={i.StatisticsNoRecompute}";
 
     private static string Sig(XmlIndexDefinition x) =>
         $"col={x.Column}|primary={x.IsPrimary}|for={x.SecondaryType}|using={x.PrimaryIndexName}";

@@ -104,6 +104,21 @@ internal static class Sql
         WHERE i.type NOT IN (0, 3, 4);
         """;
 
+    // Index'in EK seçenekleri, AYRI ve opsiyonel sorguda:
+    //   • optimize_for_sequential_key  SQL Server 2019 ile geldi
+    //   • no_recompute (STATISTICS_NORECOMPUTE)  index'i taşıyan istatistikten okunur
+    // Zorunlu Indexes sorgusuna konsaydı 2016/2017'de o sorgu düşer ve karşılaştırma
+    // tümden biterdi. Burada düşerse yalnız bu iki ayar karşılaştırma dışı kalır.
+    public const string IndexExtras = """
+        SELECT i.object_id, i.index_id, i.optimize_for_sequential_key, st.no_recompute
+        FROM sys.indexes AS i
+        INNER JOIN sys.objects AS o
+            ON o.object_id = i.object_id AND o.is_ms_shipped = 0 AND o.type IN ('U','V')
+        LEFT JOIN sys.stats AS st
+            ON st.object_id = i.object_id AND st.stats_id = i.index_id
+        WHERE i.type NOT IN (0, 3, 4);
+        """;
+
     // XML index'ler (type 3). Genel index yolundan AYRI tutulur: sözdizimi tamamen farklıdır
     // (primary'de PRIMARY, secondary'de USING XML INDEX ... FOR ...), kolonlarda ASC/DESC yoktur.
     // using_xml_index_id NULL ise primary, aksi hâlde o primary'ye bağlı secondary'dir.

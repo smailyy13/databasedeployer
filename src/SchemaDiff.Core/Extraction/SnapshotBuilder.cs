@@ -132,6 +132,20 @@ internal static class SnapshotBuilder
                 "Hedefteki istatistikler için sahte DROP üretmemek adına bu sınıf sessizce boş sayılmadı.");
         }
 
+        // Ek index seçenekleri okunamadıysa (2019 öncesi sunucu) "kapalı" DEĞİL "bilinmiyor"
+        // demektir: karışık sürümlü karşılaştırmada boş saymak sahte fark üretir.
+        var indexExtrasUnreadable = report.FailedQueries.Contains("indexExtras");
+        if (indexExtrasUnreadable && catalog.Indexes.Count > 0)
+        {
+            report.Warnings.Add(
+                "Index ek seçenekleri (OPTIMIZE_FOR_SEQUENTIAL_KEY / STATISTICS_NORECOMPUTE) " +
+                "okunamadı — karşılaştırma dışı bırakıldı (SQL Server 2019 öncesi sürüm ya da yetki).");
+        }
+
+        var indexExtrasBy = indexExtrasUnreadable
+            ? []
+            : catalog.IndexExtras.ToDictionary(e => Pair(e.ObjectId, e.IndexId));
+
         var xmlIndexesBy = GroupBy(catalog.XmlIndexes, i => i.ObjectId);
         var spatialIndexesBy = GroupBy(catalog.SpatialIndexes, i => i.ObjectId);
 
@@ -183,6 +197,7 @@ internal static class SnapshotBuilder
             StatisticsBy = statisticsBy,
             StatisticColumnsBy = statisticColumnsBy,
             XmlCollections = xmlCollections,
+            IndexExtrasBy = indexExtrasBy,
             FullTextBy = catalog.FullTextIndexes
                 .Select(f => (f.ObjectId, Definition: BuildFullTextDefinition(
                     f.ObjectId, fullTextById, fullTextColumnsBy, columnNames)))
@@ -422,7 +437,8 @@ internal static class SnapshotBuilder
                     {
                         snapshot.DisplayScript = Scripting.TableScriptWriter.Write(key, obj.ObjectId, scriptSources, options);
                         snapshot.IndexDefinitions = BuildIndexDefinitions(
-                            obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, columnNames, options);
+                            obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, columnNames,
+                            indexExtrasBy, options);
                         snapshot.CheckDefinitions = BuildCheckDefinitions(checksBy.GetValueOrDefault(obj.ObjectId), options);
                         snapshot.ForeignKeyDefinitions = BuildForeignKeyDefinitions(
                             foreignKeysBy.GetValueOrDefault(obj.ObjectId), fkColumnsBy, columnNames, keyById, options);
@@ -436,7 +452,7 @@ internal static class SnapshotBuilder
                             obj.ObjectId, spatialIndexesBy, indexColumnsBy, columnNames);
                     }
                     SetPart(snapshot, "columns", BuildColumns(columnsBy.GetValueOrDefault(obj.ObjectId), xmlCollections, options));
-                    SetPart(snapshot, "indexes", BuildIndexes(obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, columnNames, options));
+                    SetPart(snapshot, "indexes", BuildIndexes(obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, columnNames, indexExtrasBy, options));
                     SetPart(snapshot, "statistics", BuildStatistics(obj.ObjectId, statisticsBy, statisticColumnsBy, columnNames, options));
                     SetPart(snapshot, "fullText", BuildFullText(obj.ObjectId, fullTextById, fullTextColumnsBy, columnNames));
                     SetPart(snapshot, "xmlIndexes", BuildSpecialIndexes(
@@ -455,7 +471,7 @@ internal static class SnapshotBuilder
                 case ObjectKind.View:
                     ApplyModule(snapshot, obj.ObjectId, modulesById, normalizedBodies, options);
                     SetPart(snapshot, "columns", BuildColumns(columnsBy.GetValueOrDefault(obj.ObjectId), xmlCollections, options));
-                    SetPart(snapshot, "indexes", BuildIndexes(obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, columnNames, options));
+                    SetPart(snapshot, "indexes", BuildIndexes(obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, columnNames, indexExtrasBy, options));
                     // Indexed view'larda kullanıcı istatistiği olabilir: farkı GÖRÜNÜR kılıyoruz.
                     // Script'i view'ın kendi drop+create'i üzerinden gider (tablo yolu değil).
                     SetPart(snapshot, "statistics", BuildStatistics(obj.ObjectId, statisticsBy, statisticColumnsBy, columnNames, options));
@@ -677,6 +693,7 @@ internal static class SnapshotBuilder
         Dictionary<long, List<IndexColumnRow>> indexColumnsBy,
         Dictionary<long, KeyConstraintRow> keyConstraintByIndex,
         Dictionary<long, string> columnNames,
+        Dictionary<long, IndexExtraRow> indexExtrasBy,
         SnapshotOptions options)
     {
         if (!indexesBy.TryGetValue(objectId, out var indexes) || indexes.Count == 0) return string.Empty;
@@ -712,6 +729,11 @@ internal static class SnapshotBuilder
                 // Varsayılan ON; yalnızca KAPALI olduğunda yazılır ki mevcut hash'ler değişmesin.
                 if (!index.AllowRowLocks) sb.Append("|rowLocks=0");
                 if (!index.AllowPageLocks) sb.Append("|pageLocks=0");
+
+                // Varsayılan KAPALI; yalnız açıkken yazılır ki mevcut hash'ler değişmesin.
+                var extra = indexExtrasBy.GetValueOrDefault(pairKey);
+                if (extra?.OptimizeForSequentialKey == true) sb.Append("|seqKey=1");
+                if (extra?.StatisticsNoRecompute == true) sb.Append("|statsNoRecompute=1");
             }
             if (!options.IgnoreDataCompression && ExplicitCompression(index.DataCompression) is { } comp)
                 sb.Append("|compression=").Append(comp);
@@ -1183,6 +1205,7 @@ internal static class SnapshotBuilder
         Dictionary<long, List<IndexColumnRow>> indexColumnsBy,
         Dictionary<long, KeyConstraintRow> keyConstraintByIndex,
         Dictionary<long, string> columnNames,
+        Dictionary<long, IndexExtraRow> indexExtrasBy,
         SnapshotOptions options)
     {
         var result = new List<IndexDefinition>();
@@ -1225,7 +1248,11 @@ internal static class SnapshotBuilder
                 options.IgnoreDataCompression ? null : index.DataCompression,
                 // Fiziksel ayarlar yok sayılıyorsa script'e de varsayılan (ON) girsin.
                 options.IgnoreIndexPhysicalOptions || index.AllowRowLocks,
-                options.IgnoreIndexPhysicalOptions || index.AllowPageLocks));
+                options.IgnoreIndexPhysicalOptions || index.AllowPageLocks,
+                !options.IgnoreIndexPhysicalOptions
+                    && indexExtrasBy.GetValueOrDefault(pairKey)?.OptimizeForSequentialKey == true,
+                !options.IgnoreIndexPhysicalOptions
+                    && indexExtrasBy.GetValueOrDefault(pairKey)?.StatisticsNoRecompute == true));
         }
 
         return result;

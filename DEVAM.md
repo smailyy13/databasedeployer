@@ -1,12 +1,12 @@
 # DEVAM — Nerede Kaldık (kapsam genişletme çalışması)
 
 > Bu dosya, başka bir makinede kaldığın yerden devam edebilmen için yazıldı.
-> Son güncelleme: 2026-08-12 (Dalga 10 sonrası)
+> Son güncelleme: 2026-08-12 (Dalga 12 sonrası)
 
 ## Hızlı durum
 - **Repo:** `smailyy13/databasedeployer` (GitHub, private) — proje adı **SchemaDiff**
 - **Branch:** `main`
-- **Testler:** **718 (715 yeşil + 3 atlanan entegrasyon)**
+- **Testler:** **736 (733 yeşil + 3 atlanan entegrasyon)**
 - **Son release:** **v1.4** (portable, 4 parça). **v1.5 HENÜZ ÇIKARILMADI** — aşağıya bak.
 - **Gereken SDK:** .NET 10 (`dotnet-install.sh --channel 10.0`; macOS'ta `~/.dotnet`).
 
@@ -18,7 +18,7 @@ git pull                        # en güncel main
 
 # Derle + test
 dotnet build -c Release
-dotnet test  -c Release --no-build      # 715 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
+dotnet test  -c Release --no-build      # 733 geçer, 3 atlanır (entegrasyon, canlı SQL ister)
 
 # Web arayüzünü çalıştır (yerel, sadece 127.0.0.1)
 dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
@@ -46,7 +46,7 @@ dotnet run -c Release --project src/SchemaDiff.Web -- --port 5290
    tam ve güvenli (SET OFF + DROP PERIOD); **AÇMA/yeniden kurulum** riskli olduğu için
    (PERIOD kolonu + DEFAULT gerektirir) elle uygulanmak üzere uyarıyla atlanıyor.
 
-## Bu oturumda tamamlananlar (Dalga 4–10)
+## Bu oturumda tamamlananlar (Dalga 4–12)
 
 Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi eklendi.
 
@@ -154,7 +154,16 @@ Karar noktasında **(B)** seçildi: kullanıcı istatistikleri scriptlemesi ekle
       Artık `TypeScriptGenerator.HandledKinds` tek kaynak.
     - Detay paneli ile seçim artık AYNI çevrimi kullanıyor (önce iki ayrı ayrıştırma vardı).
 
-13. **Test:** 276 → **718** (715 yeşil + 3 atlanan entegrasyon).
+13. **Dalga 12 — `STATISTICS_NORECOMPUTE` + `OPTIMIZE_FOR_SEQUENTIAL_KEY`**: Dalga 6'da
+    bilinçli ertelenmişti (2019+ kolon, zorunlu `Indexes` sorgusuna konamaz).
+    - Ayrı ve **opsiyonel** `Sql.IndexExtras` sorgusu: düşerse yalnız bu iki ayar kapsam
+      dışı kalır, karşılaştırma sürer.
+    - Düştüğünde "kapalı" DEĞİL "bilinmiyor" sayılıyor + uyarı. 2019 kaynak ↔ 2016 hedef
+      karşılaştırmasında boş saymak her index için sahte fark ve gereksiz DROP+CREATE üretirdi.
+    - İkisi de varsayılan KAPALI, yalnız açıkken yazılıyor → mevcut hash'ler ve script'ler
+      değişmedi.
+
+14. **Test:** 276 → **736** (733 yeşil + 3 atlanan entegrasyon).
    - `StatisticsTests` (33): karşılaştırma, sıra, filtre/NORECOMPUTE/INCREMENTAL,
      drop-önce/create-sonra sıralaması, yeni tablo script'i, okunamayan sorgu davranışı.
    - `CatalogQueryTests` (yeni): TÜM katalog sorgularının yapısal denetimi — en önemlisi
@@ -273,6 +282,14 @@ rm -f publish-portable/*.pdb
 - `src/SchemaDiff.Core/Scripting/SpecialIndexScript.cs` — **yeni**: CREATE/DROP (tek kaynak)
 - `src/SchemaDiff.Core/Scripting/{TableScriptWriter,TableScriptGenerator}.cs` — yeni tablo + diff
 - Testler: `SpecialIndexTests` (yeni, 17)
+
+## Dalga 12'de değişen dosyalar (index ek seçenekleri)
+- `src/SchemaDiff.Core/Extraction/Sql.cs` — `IndexExtras` (yeni, opsiyonel)
+- `src/SchemaDiff.Core/Extraction/{CatalogRows,CatalogExtractor}.cs` — `IndexExtraRow`
+- `src/SchemaDiff.Core/Model/Snapshot.cs` — `IndexDefinition` iki yeni alan
+- `src/SchemaDiff.Core/Extraction/SnapshotBuilder.cs` — okunamama koruması + kanonik
+- `src/SchemaDiff.Core/Scripting/{TableScriptWriter,TableScriptGenerator}.cs` — WITH listesi
+- Testler: `IndexExtraOptionTests` (yeni, 13)
 
 ## Dalga 1–3'te değişen ana dosyalar (referans)
 - `src/SchemaDiff.Core/Analysis/CoverageProbe.cs` — sayaçlar (Probes internal)

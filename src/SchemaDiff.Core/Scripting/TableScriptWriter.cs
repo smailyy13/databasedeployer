@@ -22,6 +22,7 @@ internal sealed class TableScriptSources
     public Dictionary<int, List<StatisticRow>> StatisticsBy { get; init; } = [];
     public Dictionary<long, List<StatisticColumnRow>> StatisticColumnsBy { get; init; } = [];
     public Dictionary<int, FullTextIndexDefinition> FullTextBy { get; init; } = [];
+    public Dictionary<long, IndexExtraRow> IndexExtrasBy { get; init; } = [];
     public Dictionary<int, List<XmlIndexDefinition>> XmlIndexesBy { get; init; } = [];
     public Dictionary<int, List<SpatialIndexDefinition>> SpatialIndexesBy { get; init; } = [];
 }
@@ -297,11 +298,15 @@ internal static class TableScriptWriter
             // Fiziksel seçenekler tek WITH listesinde toplanır; varsayılandan sapanlar yazılır.
             if (!options.IgnoreIndexPhysicalOptions)
             {
-                var withOptions = new List<string>(3);
+                var withOptions = new List<string>(5);
                 if (index.FillFactor > 0)
                     withOptions.Add($"FILLFACTOR = {index.FillFactor.ToString(CultureInfo.InvariantCulture)}");
                 if (!index.AllowRowLocks) withOptions.Add("ALLOW_ROW_LOCKS = OFF");
                 if (!index.AllowPageLocks) withOptions.Add("ALLOW_PAGE_LOCKS = OFF");
+
+                var extra = sources.IndexExtrasBy.GetValueOrDefault(Pair(objectId, index.IndexId));
+                if (extra?.StatisticsNoRecompute == true) withOptions.Add("STATISTICS_NORECOMPUTE = ON");
+                if (extra?.OptimizeForSequentialKey == true) withOptions.Add("OPTIMIZE_FOR_SEQUENTIAL_KEY = ON");
                 if (withOptions.Count > 0)
                     sb.AppendLine().Append("    WITH (").Append(string.Join(", ", withOptions)).Append(')');
             }

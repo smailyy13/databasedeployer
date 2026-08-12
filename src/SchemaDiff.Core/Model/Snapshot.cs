@@ -110,7 +110,9 @@ public sealed record IndexDefinition(
     string? FilterDefinition,
     string? DataCompression = null,
     bool AllowRowLocks = true,
-    bool AllowPageLocks = true)
+    bool AllowPageLocks = true,
+    bool OptimizeForSequentialKey = false,
+    bool StatisticsNoRecompute = false)
 {
     /// <summary>PK ve UNIQUE constraint'ler ALTER TABLE ADD CONSTRAINT ile yazılır; ötekiler CREATE INDEX.</summary>
     public bool IsConstraint => IsPrimaryKey || IsUniqueConstraint;
