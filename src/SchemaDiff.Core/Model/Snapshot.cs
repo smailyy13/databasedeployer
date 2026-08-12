@@ -72,7 +72,22 @@ public sealed class ObjectSnapshot
     public IReadOnlyList<CheckDefinition>? CheckDefinitions { get; set; }
 
     public IReadOnlyList<ForeignKeyDefinition>? ForeignKeyDefinitions { get; set; }
+
+    /// <summary>Kullanıcı istatistikleri (CREATE STATISTICS) — script üretimi için.</summary>
+    public IReadOnlyList<StatisticsDefinition>? StatisticsDefinitions { get; set; }
 }
+
+/// <summary>
+/// Kullanıcı tanımlı istatistik. Örnekleme oranı (FULLSCAN / SAMPLE n PERCENT) katalogda
+/// TUTULMAZ — yalnızca verinin o anki hâlini anlatan DMV'lerde bulunur ve şema farkı
+/// değildir; bu yüzden script'te de yer almaz (SSDT de yazmaz).
+/// </summary>
+public sealed record StatisticsDefinition(
+    string Name,
+    IReadOnlyList<string> Columns,
+    string? FilterDefinition,
+    bool NoRecompute,
+    bool IsIncremental);
 
 /// <summary>Script üretimi için index'in yapısal tanımı.</summary>
 public sealed record IndexDefinition(
@@ -124,7 +139,11 @@ public sealed record ColumnInfo(
     bool IsComputed,
     string? DefaultDefinition,
     string? DefaultName = null,
-    bool DefaultIsSystemNamed = false)
+    bool DefaultIsSystemNamed = false,
+    bool IsSparse = false,
+    bool IsFileStream = false,
+    bool IsRowGuidCol = false,
+    bool IsColumnSet = false)
 {
     public string TypeDisplay => MaxLength switch
     {
@@ -167,6 +186,13 @@ public sealed class ExtractionReport
 {
     public Dictionary<string, TimeSpan> QueryTimings { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, int> RowCounts { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Çalıştırılamayan (opsiyonel) sorguların adları. "Veri yok" ile "veriyi okuyamadık"
+    /// ayrımı kritiktir: okunamayan bir sınıfı boş saymak, hedefte var olan objeler için
+    /// DROP üretmeye kadar gider.
+    /// </summary>
+    public HashSet<string> FailedQueries { get; } = new(StringComparer.Ordinal);
     public TimeSpan TotalExtraction { get; set; }
     public TimeSpan Normalization { get; set; }
     public List<string> Warnings { get; } = [];

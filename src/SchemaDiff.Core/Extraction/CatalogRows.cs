@@ -58,7 +58,8 @@ internal sealed record ColumnRow(
     string? DefaultName, string? DefaultDefinition, bool? DefaultIsSystemNamed,
     string? ComputedDefinition, bool? ComputedIsPersisted,
     string? IdentitySeed, string? IdentityIncrement,
-    byte GeneratedAlwaysType = 0, bool IsHidden = false);
+    byte GeneratedAlwaysType = 0, bool IsHidden = false,
+    bool IsSparse = false, bool IsFileStream = false, bool IsRowGuidCol = false, bool IsColumnSet = false);
 
 internal sealed record IndexRow(
     int ObjectId, int IndexId, string? Name, string TypeDesc,
@@ -69,6 +70,15 @@ internal sealed record IndexRow(
 internal sealed record IndexColumnRow(
     int ObjectId, int IndexId, int IndexColumnId, int ColumnId,
     byte KeyOrdinal, bool IsDescending, bool IsIncluded);
+
+/// <summary>
+/// Kullanıcının CREATE STATISTICS ile oluşturduğu istatistik. Otomatik üretilenler
+/// (auto_created) ve index'in taşıdıkları şema farkı değildir — sorgu onları getirmez.
+/// </summary>
+internal sealed record StatisticRow(
+    int ObjectId, int StatsId, string Name, bool NoRecompute, string? FilterDefinition, bool IsIncremental);
+
+internal sealed record StatisticColumnRow(int ObjectId, int StatsId, int StatsColumnId, int ColumnId);
 
 internal sealed record KeyConstraintRow(
     int ParentObjectId, int? UniqueIndexId, string Name, string Type, bool IsSystemNamed);

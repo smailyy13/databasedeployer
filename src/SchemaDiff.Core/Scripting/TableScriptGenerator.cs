@@ -230,7 +230,8 @@ public static class TableScriptGenerator
             }
 
             var def = column.DefaultDefinition is not null ? $" DEFAULT {column.DefaultDefinition}" : string.Empty;
-            var sql = $"ALTER TABLE {qualified} ADD [{column.Name}] {RenderType(column)} {Nullability(column)}{def};";
+            var sql = $"ALTER TABLE {qualified} ADD [{column.Name}] {RenderType(column)}" +
+                      $"{AddColumnAttributes(column)} {Nullability(column)}{def};";
 
             // Dolu tabloya DEFAULT'suz NOT NULL kolon eklemek başarısız olur.
             if (!column.IsNullable && column.DefaultDefinition is null && rows is > 0)
@@ -257,6 +258,7 @@ public static class TableScriptGenerator
         }
 
         // ALTER: iki tarafta da var ama farklı.
+        var retyped = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var column in source.Columns)
         {
             if (!targetByName.TryGetValue(column.Name, out var current)) continue;
@@ -268,7 +270,11 @@ public static class TableScriptGenerator
                 continue;
             }
 
-            var sql = $"ALTER TABLE {qualified} ALTER COLUMN [{column.Name}] {RenderType(column)} {Nullability(column)};";
+            // ALTER COLUMN grameri SPARSE'ı NULL/NOT NULL'dan SONRA ister; yazmazsak
+            // kolonun sparse'lığının korunacağı garanti değildir, bu yüzden açıkça yazıyoruz.
+            var sparse = column.IsSparse ? " SPARSE" : string.Empty;
+            retyped.Add(column.Name);
+            var sql = $"ALTER TABLE {qualified} ALTER COLUMN [{column.Name}] {RenderType(column)} {Nullability(column)}{sparse};";
             var risk = ClassifyAlter(column, current, rows);
 
             switch (risk)
@@ -290,11 +296,14 @@ public static class TableScriptGenerator
             }
         }
 
+        AppendColumnAttributeDiff(qualified, source.Columns, targetByName, retyped, statements, localSkips);
+
         // Index ve constraint değişiklikleri: drop'lar kolon değişikliğinden ÖNCE
         // (kolonu kilitleyen index önce düşmeli), add'ler SONRA.
         var pre = new List<string>();
         var post = new List<string>();
         AppendIndexConstraintDiff(qualified, source, target, pre, post, fkDrops, fkAdds, options.ValidateNewConstraints);
+        AppendStatisticsDiff(qualified, source, target, pre, post);
         AppendDefaultDiff(qualified, sourceByName, targetByName, pre, post);
 
         // Temporal (system-versioning): KAPATMA güvenli ve tam üretilir (en başta, çünkü
@@ -422,6 +431,84 @@ public static class TableScriptGenerator
     }
 
     /// <summary>
+    /// Yeni kolonun depolama nitelikleri. Sıra T-SQL grameriyle aynı; COLLATE zaten
+    /// <see cref="RenderType"/> içinde ve FILESTREAM kolonları (varbinary(max)) collation almaz,
+    /// dolayısıyla çakışma olmaz.
+    /// </summary>
+    private static string AddColumnAttributes(ColumnInfo c)
+    {
+        var sb = new StringBuilder();
+        if (c.IsFileStream) sb.Append(" FILESTREAM");
+        if (c.IsSparse) sb.Append(" SPARSE");
+        if (c.IsColumnSet) sb.Append(" COLUMN_SET FOR ALL_SPARSE_COLUMNS");
+        if (c.IsRowGuidCol) sb.Append(" ROWGUIDCOL");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// İki tarafta da var olan kolonların depolama niteliği farkları.
+    ///
+    /// SPARSE ve ROWGUIDCOL <c>ALTER COLUMN … {ADD|DROP}</c> ile açılıp kapatılabilir.
+    /// FILESTREAM ve COLUMN_SET kapatılamaz/açılamaz — tablo yeniden oluşturulmalı, bu yüzden
+    /// üretmek yerine açıkça bildiriyoruz.
+    /// </summary>
+    /// <param name="retyped">Zaten tip seviyesinde ALTER edilen kolonlar: SPARSE'ı o ifade taşır.</param>
+    private static void AppendColumnAttributeDiff(
+        string qualified,
+        IReadOnlyList<ColumnInfo> sourceColumns,
+        Dictionary<string, ColumnInfo> targetByName,
+        HashSet<string> retyped,
+        List<string> statements,
+        List<string> localSkips)
+    {
+        foreach (var column in sourceColumns)
+        {
+            if (!targetByName.TryGetValue(column.Name, out var current)) continue;
+
+            if (column.IsRowGuidCol != current.IsRowGuidCol)
+                statements.Add($"ALTER TABLE {qualified} ALTER COLUMN [{column.Name}] " +
+                               $"{(column.IsRowGuidCol ? "ADD" : "DROP")} ROWGUIDCOL;");
+
+            // Kolon tip seviyesinde ALTER edildiyse SPARSE zaten o ifadede; kapatma ise
+            // orada ifade edilemez (yazmamak "kaldır" demek değildir) — açıkça DROP ediyoruz.
+            if (column.IsSparse != current.IsSparse && !(retyped.Contains(column.Name) && column.IsSparse))
+                statements.Add($"ALTER TABLE {qualified} ALTER COLUMN [{column.Name}] " +
+                               $"{(column.IsSparse ? "ADD" : "DROP")} SPARSE;");
+
+            if (column.IsFileStream != current.IsFileStream)
+                localSkips.Add($"[{column.Name}] — FILESTREAM {(column.IsFileStream ? "ekleniyor" : "kaldırılıyor")}, " +
+                               "ALTER ile yapılamaz: tablo yeniden oluşturulmalı");
+
+            if (column.IsColumnSet != current.IsColumnSet)
+                localSkips.Add($"[{column.Name}] — COLUMN_SET değişimi ALTER ile yapılamaz: tablo yeniden oluşturulmalı");
+        }
+    }
+
+    /// <summary>
+    /// Kullanıcı istatistikleri (CREATE STATISTICS). ALTER STATISTICS yalnızca NORECOMPUTE'u
+    /// değiştirebilir; kolon listesi ya da filtre değiştiğinde drop + recreate şarttır — tek
+    /// yol olsun diye her değişimde aynısını yapıyoruz.
+    ///
+    /// Sıra index'lerle aynı: drop'lar kolon değişikliklerinden ÖNCE (silinecek kolonun
+    /// üstündeki istatistik ALTER'ı engeller), create'ler SONRA (yeni kolon artık vardır).
+    /// </summary>
+    private static void AppendStatisticsDiff(
+        string qualified, ObjectSnapshot source, ObjectSnapshot target,
+        List<string> pre, List<string> post)
+    {
+        var srcStats = ByName(source.StatisticsDefinitions, s => s.Name);
+        var tgtStats = ByName(target.StatisticsDefinitions, s => s.Name);
+
+        foreach (var (name, stat) in tgtStats)
+            if (!srcStats.TryGetValue(name, out var s) || Sig(s) != Sig(stat))
+                pre.Add(StatisticsScript.Drop(qualified, name));
+
+        foreach (var (name, stat) in srcStats)
+            if (!tgtStats.TryGetValue(name, out var t) || Sig(t) != Sig(stat))
+                post.Add(StatisticsScript.Create(qualified, stat));
+    }
+
+    /// <summary>
     /// Var olan kolonlarda DEFAULT constraint değişimi: eski default drop, yeni default add.
     /// Yeni kolonların default'u zaten ADD COLUMN içinde satır içi verilir; burada yalnızca
     /// iki tarafta da olan kolonların default farkı ele alınır.
@@ -519,6 +606,10 @@ public static class TableScriptGenerator
         $"keys={string.Join(",", i.KeyColumns.Select(k => $"{k.Column}:{(k.Descending ? "D" : "A")}"))}|" +
         $"inc={string.Join(",", i.IncludedColumns)}|f={i.FilterDefinition ?? ""}|" +
         $"comp={i.ExplicitCompression ?? ""}";
+
+    private static string Sig(StatisticsDefinition s) =>
+        $"cols={string.Join(",", s.Columns)}|f={s.FilterDefinition ?? ""}|" +
+        $"norecompute={s.NoRecompute}|incremental={s.IsIncremental}";
 
     private static string Sig(ForeignKeyDefinition f) =>
         $"ref={f.ReferencedSchema}.{f.ReferencedName}|" +

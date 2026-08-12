@@ -103,7 +103,7 @@ public static class ChangeCatalog
                 $"{column.TypeDisplay} {(column.IsNullable ? "NULL" : "NOT NULL")}"));
         }
 
-        foreach (var part in new[] { "indexes", "checks", "foreignKeys" })
+        foreach (var part in new[] { "indexes", "statistics", "checks", "foreignKeys" })
         {
             foreach (var (name, line) in LinesByName(snapshot.PartCanonical.GetValueOrDefault(part)))
             {
@@ -158,6 +158,7 @@ public static class ChangeCatalog
                     break;
 
                 case "indexes":
+                case "statistics":
                 case "checks":
                 case "foreignKeys":
                     children.AddRange(CompareLines(key, source, target, part));
@@ -262,6 +263,19 @@ public static class ChangeCatalog
 
         if (target.IsComputed != source.IsComputed)
             parts.Add(source.IsComputed ? "computed oluyor" : "computed olmaktan çıkıyor");
+
+        // Depolama nitelikleri: kanonikte fark üretirler, burada da adlarıyla görünmeliler —
+        // aksi hâlde tablo "değişti" görünür ama hiçbir alt satır sebebi göstermez.
+        foreach (var (name, from, to) in new[]
+                 {
+                     ("SPARSE", target.IsSparse, source.IsSparse),
+                     ("FILESTREAM", target.IsFileStream, source.IsFileStream),
+                     ("ROWGUIDCOL", target.IsRowGuidCol, source.IsRowGuidCol),
+                     ("COLUMN_SET", target.IsColumnSet, source.IsColumnSet),
+                 })
+        {
+            if (from != to) parts.Add(to ? $"{name} ekleniyor" : $"{name} kaldırılıyor");
+        }
 
         if (!string.Equals(target.Collation, source.Collation, StringComparison.OrdinalIgnoreCase))
             parts.Add($"collation {target.Collation ?? "-"} → {source.Collation ?? "-"}");
@@ -442,6 +456,7 @@ public static class ChangeCatalog
     private static (string Category, string ItemType) Classify(string part, string line) => part switch
     {
         "checks" => ("Check Constraints", "Check Constraint"),
+        "statistics" => ("Statistics", "Statistics"),
         "foreignKeys" => ("Foreign Keys", "Foreign Key"),
         "indexes" when line.Contains("|pk=1", StringComparison.Ordinal) => ("Primary Key", "Primary Key"),
         "indexes" when line.Contains("|uq=1", StringComparison.Ordinal) => ("Unique Constraints", "Unique Constraint"),

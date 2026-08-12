@@ -66,7 +66,8 @@ internal static class Sql
                dc.name, dc.definition, dc.is_system_named,
                cc.definition, cc.is_persisted,
                ic.seed_value, ic.increment_value,
-               c.generated_always_type, c.is_hidden
+               c.generated_always_type, c.is_hidden,
+               c.is_sparse, c.is_filestream, c.is_rowguidcol, c.is_column_set
         FROM sys.columns AS c
         INNER JOIN sys.objects AS o
             ON o.object_id = c.object_id AND o.is_ms_shipped = 0 AND o.type IN ('U','V')
@@ -98,6 +99,30 @@ internal static class Sql
         FROM sys.index_columns AS ic
         INNER JOIN sys.objects AS o
             ON o.object_id = ic.object_id AND o.is_ms_shipped = 0 AND o.type IN ('U','V');
+        """;
+
+    // Kullanıcı istatistikleri (CREATE STATISTICS). ÜÇ tür istatistik vardır:
+    //   • index'in taşıdığı (user_created=0, auto_created=0) → index'in parçası, ayrı script'lenmez
+    //   • otomatik üretilen (auto_created=1)                 → optimizer artefaktı, şema farkı değil
+    //   • kullanıcının yazdığı (user_created=1)              → GERÇEK şema objesi, burada yalnız bu
+    // is_incremental SQL Server 2014 ile geldi; sorgu opsiyonel çalışır.
+    public const string Statistics = """
+        SELECT st.object_id, st.stats_id, st.name, st.no_recompute, st.filter_definition, st.is_incremental
+        FROM sys.stats AS st
+        INNER JOIN sys.objects AS o
+            ON o.object_id = st.object_id AND o.is_ms_shipped = 0 AND o.type IN ('U','V')
+        WHERE st.user_created = 1;
+        """;
+
+    // İstatistik kolonları, sıralı (stats_column_id istatistikteki kolon sırasıdır —
+    // ilk kolon histogramı taşır, bu yüzden sıra anlamlıdır ve korunmalıdır).
+    public const string StatisticColumns = """
+        SELECT sc.object_id, sc.stats_id, sc.stats_column_id, sc.column_id
+        FROM sys.stats_columns AS sc
+        INNER JOIN sys.stats AS st ON st.object_id = sc.object_id AND st.stats_id = sc.stats_id
+        INNER JOIN sys.objects AS o
+            ON o.object_id = sc.object_id AND o.is_ms_shipped = 0 AND o.type IN ('U','V')
+        WHERE st.user_created = 1;
         """;
 
     // PK/UQ constraint adları için: sistem tarafından üretilmiş adlar (PK__Tbl__A1B2C3)

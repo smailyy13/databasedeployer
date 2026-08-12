@@ -61,7 +61,8 @@ public static class CoverageProbe
         ("Depolama", "Filegroup'lar (PRIMARY dışı)", false, "SELECT COUNT(*) FROM sys.filegroups WHERE data_space_id > 1"),
         ("Index", "XML index'ler", false, "SELECT COUNT(*) FROM sys.xml_indexes"),
         ("Index", "Spatial index'ler", false, "SELECT COUNT(*) FROM sys.spatial_indexes"),
-        ("Index", "Kullanıcı istatistikleri", false, "SELECT COUNT(*) FROM sys.stats WHERE user_created = 1"),
+        ("Index", "Kullanıcı istatistikleri", true, "SELECT COUNT(*) FROM sys.stats WHERE user_created = 1"),
+        ("Index", "Otomatik istatistikler (kapsam dışı — runtime artefaktı)", false, "SELECT COUNT(*) FROM sys.stats WHERE auto_created = 1"),
         ("Full-text", "Full-text katalogları", false, "SELECT COUNT(*) FROM sys.fulltext_catalogs"),
         ("Full-text", "Full-text index'ler", false, "SELECT COUNT(*) FROM sys.fulltext_indexes"),
         ("CLR", "Assembly'ler", false, "SELECT COUNT(*) FROM sys.assemblies WHERE is_user_defined = 1"),
@@ -75,7 +76,7 @@ public static class CoverageProbe
 
         // --- yeni sayaçlar (Dalga 1: her boşluk artık ölçülüyor) ---
         ("Depolama", "Sıkıştırılmış partition'lar (DATA_COMPRESSION)", true, "SELECT COUNT(*) FROM sys.partitions p JOIN sys.objects o ON o.object_id = p.object_id WHERE o.is_ms_shipped = 0 AND p.data_compression <> 0"),
-        ("Tablo", "Sparse / column set / FILESTREAM / ROWGUIDCOL kolonlar", false, "SELECT COUNT(*) FROM sys.columns c JOIN sys.objects o ON o.object_id = c.object_id WHERE o.is_ms_shipped = 0 AND (c.is_sparse = 1 OR c.is_column_set = 1 OR c.is_filestream = 1 OR c.is_rowguidcol = 1)"),
+        ("Tablo", "Sparse / column set / FILESTREAM / ROWGUIDCOL kolonlar", true,"SELECT COUNT(*) FROM sys.columns c JOIN sys.objects o ON o.object_id = c.object_id WHERE o.is_ms_shipped = 0 AND (c.is_sparse = 1 OR c.is_column_set = 1 OR c.is_filestream = 1 OR c.is_rowguidcol = 1)"),
         ("Güvenlik", "Application role'ler", false, "SELECT COUNT(*) FROM sys.database_principals WHERE type = 'A'"),
         ("Güvenlik", "Row-Level Security (security policy)", false, "SELECT COUNT(*) FROM sys.security_policies"),
         ("Güvenlik", "Dynamic Data Masking kolonları", false, "SELECT COUNT(*) FROM sys.masked_columns"),

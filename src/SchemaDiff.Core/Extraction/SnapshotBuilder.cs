@@ -30,6 +30,13 @@ public sealed record SnapshotOptions
     /// <summary>Index/tablo DATA_COMPRESSION farkını yok say (SSDT: "Ignore data compression options").</summary>
     public bool IgnoreDataCompression { get; init; }
 
+    /// <summary>
+    /// Kullanıcı istatistiklerini (CREATE STATISTICS) karşılaştırma dışında bırak.
+    /// Varsayılan kapalı: bunlar DBA'in bilerek oluşturduğu şema objeleridir ve
+    /// hedefte eksikse sorgu planı farklı çıkar.
+    /// </summary>
+    public bool IgnoreStatistics { get; init; }
+
     /// <summary>SET ANSI_NULLS farkını yok say (SSDT: "Ignore ANSI NULLS").</summary>
     public bool IgnoreAnsiNulls { get; init; }
 
@@ -107,6 +114,22 @@ internal static class SnapshotBuilder
         var columnsBy = GroupBy(catalog.Columns, c => c.ObjectId);
         var indexesBy = GroupBy(catalog.Indexes, i => i.ObjectId);
         var indexColumnsBy = GroupBy(catalog.IndexColumns, ic => Pair(ic.ObjectId, ic.IndexId));
+        // İstatistik sorgusu çalıştırılamadıysa (sys.stats.is_incremental SQL Server 2014 ile
+        // geldi) "istatistik yok" DEĞİL, "okuyamadık" demektir: boş saymak hedefteki
+        // istatistikler için sahte DROP üretir. Bu yüzden karşılaştırma dışı bırakıyoruz.
+        var statisticsUnreadable =
+            report.FailedQueries.Contains("statistics") || report.FailedQueries.Contains("statisticColumns");
+        if (statisticsUnreadable)
+        {
+            report.Warnings.Add(
+                "Kullanıcı istatistikleri okunamadı — karşılaştırma dışı bırakıldı. " +
+                "Hedefteki istatistikler için sahte DROP üretmemek adına bu sınıf sessizce boş sayılmadı.");
+        }
+
+        var statisticsBy = statisticsUnreadable ? [] : GroupBy(catalog.Statistics, s => s.ObjectId);
+        var statisticColumnsBy = statisticsUnreadable
+            ? []
+            : GroupBy(catalog.StatisticColumns, s => Pair(s.ObjectId, s.StatsId));
         var checksBy = GroupBy(catalog.CheckConstraints, c => c.ParentObjectId);
         var foreignKeysBy = GroupBy(catalog.ForeignKeys, f => f.ParentObjectId);
         var fkColumnsBy = GroupBy(catalog.ForeignKeyColumns, f => f.ConstraintObjectId);
@@ -144,6 +167,8 @@ internal static class SnapshotBuilder
             ColumnNames = columnNames,
             KeyById = keyById,
             TemporalBy = temporalById,
+            StatisticsBy = statisticsBy,
+            StatisticColumnsBy = statisticColumnsBy,
         };
 
         var comparer = options.CaseSensitiveNames
@@ -356,9 +381,12 @@ internal static class SnapshotBuilder
                         snapshot.CheckDefinitions = BuildCheckDefinitions(checksBy.GetValueOrDefault(obj.ObjectId), options);
                         snapshot.ForeignKeyDefinitions = BuildForeignKeyDefinitions(
                             foreignKeysBy.GetValueOrDefault(obj.ObjectId), fkColumnsBy, columnNames, keyById, options);
+                        snapshot.StatisticsDefinitions = BuildStatisticsDefinitions(
+                            obj.ObjectId, statisticsBy, statisticColumnsBy, columnNames, options);
                     }
                     SetPart(snapshot, "columns", BuildColumns(columnsBy.GetValueOrDefault(obj.ObjectId), options));
                     SetPart(snapshot, "indexes", BuildIndexes(obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, columnNames, options));
+                    SetPart(snapshot, "statistics", BuildStatistics(obj.ObjectId, statisticsBy, statisticColumnsBy, columnNames, options));
                     SetPart(snapshot, "checks", BuildChecks(checksBy.GetValueOrDefault(obj.ObjectId), options));
                     SetPart(snapshot, "foreignKeys", BuildForeignKeys(foreignKeysBy.GetValueOrDefault(obj.ObjectId), fkColumnsBy, columnNames, keyById, options));
                     if (temporalById.TryGetValue(obj.ObjectId, out var temporal))
@@ -369,6 +397,9 @@ internal static class SnapshotBuilder
                     ApplyModule(snapshot, obj.ObjectId, modulesById, normalizedBodies, options);
                     SetPart(snapshot, "columns", BuildColumns(columnsBy.GetValueOrDefault(obj.ObjectId), options));
                     SetPart(snapshot, "indexes", BuildIndexes(obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, columnNames, options));
+                    // Indexed view'larda kullanıcı istatistiği olabilir: farkı GÖRÜNÜR kılıyoruz.
+                    // Script'i view'ın kendi drop+create'i üzerinden gider (tablo yolu değil).
+                    SetPart(snapshot, "statistics", BuildStatistics(obj.ObjectId, statisticsBy, statisticColumnsBy, columnNames, options));
                     break;
 
                 case ObjectKind.Trigger:
@@ -507,7 +538,8 @@ internal static class SnapshotBuilder
             .Select(c => new ColumnInfo(
                 c.Name, c.TypeSchema, c.TypeName, c.MaxLength, c.Precision, c.Scale,
                 c.IsNullable, c.Collation, c.IsIdentity, c.IsComputed, c.DefaultDefinition,
-                c.DefaultName, c.DefaultIsSystemNamed == true))
+                c.DefaultName, c.DefaultIsSystemNamed == true,
+                c.IsSparse, c.IsFileStream, c.IsRowGuidCol, c.IsColumnSet))
             .ToList();
 
     private static string BuildColumns(List<ColumnRow>? columns, SnapshotOptions options)
@@ -545,6 +577,13 @@ internal static class SnapshotBuilder
             // Temporal PERIOD kolonları: GENERATED ALWAYS AS ROW START(1)/END(2) + HIDDEN.
             if (c.GeneratedAlwaysType != 0)
                 sb.Append("|genAlways=").Append(c.GeneratedAlwaysType).Append(";hidden=").Append(Flag(c.IsHidden));
+
+            // Depolama nitelikleri: tablonun fiziksel tanımının parçası, yoksa yazılmaz
+            // (varsayılan durumda kanonik metin değişmesin — eski snapshot'larla aynı kalsın).
+            if (c.IsSparse) sb.Append("|sparse");
+            if (c.IsFileStream) sb.Append("|filestream");
+            if (c.IsRowGuidCol) sb.Append("|rowguidcol");
+            if (c.IsColumnSet) sb.Append("|columnSet");
 
             if (c.DefaultDefinition is not null)
             {
@@ -625,6 +664,32 @@ internal static class SnapshotBuilder
 
             lines.Add(sb.ToString());
         }
+
+        lines.Sort(StringComparer.Ordinal);
+        return string.Join('\n', lines);
+    }
+
+    /// <summary>
+    /// Kullanıcı istatistiklerinin kanoniği. Kolon SIRASI korunur (stats_column_id): ilk kolon
+    /// histogramı taşır, sıra değişirse istatistik gerçekten başkadır.
+    /// </summary>
+    private static string BuildStatistics(
+        int objectId,
+        Dictionary<int, List<StatisticRow>> statisticsBy,
+        Dictionary<long, List<StatisticColumnRow>> statisticColumnsBy,
+        Dictionary<long, string> columnNames,
+        SnapshotOptions options)
+    {
+        if (options.IgnoreStatistics) return string.Empty;
+        if (!statisticsBy.TryGetValue(objectId, out var statistics) || statistics.Count == 0) return string.Empty;
+
+        var lines = statistics.Select(st =>
+        {
+            var columns = StatisticColumnNames(objectId, st.StatsId, statisticColumnsBy, columnNames);
+            var filter = st.FilterDefinition is not null ? $"|filter={st.FilterDefinition}" : string.Empty;
+            return $"stat|{st.Name}|cols={string.Join(',', columns)}{filter}" +
+                   $"|noRecompute={Flag(st.NoRecompute)}|incremental={Flag(st.IsIncremental)}";
+        }).ToList();
 
         lines.Sort(StringComparer.Ordinal);
         return string.Join('\n', lines);
@@ -867,6 +932,38 @@ internal static class SnapshotBuilder
 
         return result;
     }
+
+    private static List<StatisticsDefinition> BuildStatisticsDefinitions(
+        int objectId,
+        Dictionary<int, List<StatisticRow>> statisticsBy,
+        Dictionary<long, List<StatisticColumnRow>> statisticColumnsBy,
+        Dictionary<long, string> columnNames,
+        SnapshotOptions options)
+    {
+        var result = new List<StatisticsDefinition>();
+        if (options.IgnoreStatistics) return result;
+
+        foreach (var st in statisticsBy.GetValueOrDefault(objectId) ?? [])
+        {
+            var columns = StatisticColumnNames(objectId, st.StatsId, statisticColumnsBy, columnNames);
+            // Kolonsuz istatistik olamaz; satırı okuyamadıysak script üretmek yerine atlıyoruz.
+            if (columns.Count == 0) continue;
+            result.Add(new StatisticsDefinition(
+                st.Name, columns, st.FilterDefinition, st.NoRecompute, st.IsIncremental));
+        }
+
+        return result;
+    }
+
+    /// <summary>İstatistiğin kolonları, tanımdaki sırayla (stats_column_id).</summary>
+    private static List<string> StatisticColumnNames(
+        int objectId, int statsId,
+        Dictionary<long, List<StatisticColumnRow>> statisticColumnsBy,
+        Dictionary<long, string> columnNames) =>
+        (statisticColumnsBy.GetValueOrDefault(Pair(objectId, statsId)) ?? [])
+            .OrderBy(c => c.StatsColumnId)
+            .Select(c => Column(columnNames, objectId, c.ColumnId))
+            .ToList();
 
     private static List<CheckDefinition> BuildCheckDefinitions(List<CheckConstraintRow>? checks, SnapshotOptions options)
     {

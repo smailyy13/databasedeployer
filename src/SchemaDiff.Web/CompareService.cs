@@ -89,6 +89,7 @@ public sealed class CompareService
             IgnoreFillFactor = options.IgnoreFillFactor,
             IgnoreIndexPadding = options.IgnoreIndexPadding,
             IgnoreDataCompression = options.IgnoreDataCompression,
+            IgnoreStatistics = options.IgnoreStatistics,
             IgnoreColumnOrder = options.IgnoreColumnOrder,
             IgnoreCollation = options.IgnoreCollation,
             IgnoreIdentitySeed = options.IgnoreIdentitySeed,

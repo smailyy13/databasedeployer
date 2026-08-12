@@ -18,6 +18,8 @@ internal sealed class TableScriptSources
     public required Dictionary<long, string> ColumnNames { get; init; }
     public required Dictionary<int, ObjectKey> KeyById { get; init; }
     public Dictionary<int, TemporalRow> TemporalBy { get; init; } = [];
+    public Dictionary<int, List<StatisticRow>> StatisticsBy { get; init; } = [];
+    public Dictionary<long, List<StatisticColumnRow>> StatisticColumnsBy { get; init; } = [];
 }
 
 /// <summary>
@@ -67,6 +69,12 @@ internal static class TableScriptWriter
             sb.Append(line);
         }
 
+        foreach (var line in WriteStatistics(key, objectId, sources, options))
+        {
+            sb.AppendLine();
+            sb.Append(line);
+        }
+
         return sb.ToString().TrimEnd();
     }
 
@@ -101,8 +109,15 @@ internal static class TableScriptWriter
         var sb = new StringBuilder("    ");
         sb.Append(name).Append(' ').Append(FormatType(column).PadRight(typeWidth));
 
+        // Sıra T-SQL grameriyle aynı: FILESTREAM → COLLATE → SPARSE → COLUMN_SET → ROWGUIDCOL.
+        if (column.IsFileStream) sb.Append(" FILESTREAM");
+
         if (column.Collation is not null && !options.IgnoreCollation)
             sb.Append(" COLLATE ").Append(column.Collation);
+
+        if (column.IsSparse) sb.Append(" SPARSE");
+        if (column.IsColumnSet) sb.Append(" COLUMN_SET FOR ALL_SPARSE_COLUMNS");
+        if (column.IsRowGuidCol) sb.Append(" ROWGUIDCOL");
 
         if (column.IsIdentity)
         {
@@ -249,6 +264,37 @@ internal static class TableScriptWriter
 
             sb.Append(';');
             lines.Add(sb.ToString());
+        }
+
+        return lines;
+    }
+
+    // --- kullanıcı istatistikleri ---
+
+    /// <summary>
+    /// Yeni tablonun script'ine CREATE STATISTICS satırlarını ekler. Index'lerin ardından
+    /// gelir: ikisi de tablo oluştuktan sonra, ayrı batch'lerde çalışır.
+    /// </summary>
+    private static IEnumerable<string> WriteStatistics(
+        ObjectKey key, int objectId, TableScriptSources sources, SnapshotOptions options)
+    {
+        var lines = new List<string>();
+        if (options.IgnoreStatistics) return lines;
+
+        var qualified = Quote(key.Schema, key.Name);
+
+        foreach (var stat in (sources.StatisticsBy.GetValueOrDefault(objectId) ?? [])
+                     .OrderBy(s => s.Name, StringComparer.Ordinal))
+        {
+            var columns = (sources.StatisticColumnsBy.GetValueOrDefault(Pair(objectId, stat.StatsId)) ?? [])
+                .OrderBy(c => c.StatsColumnId)
+                .Select(c => ColumnName(sources, objectId, c.ColumnId))
+                .ToList();
+            if (columns.Count == 0) continue;
+
+            var definition = new StatisticsDefinition(
+                stat.Name, columns, stat.FilterDefinition, stat.NoRecompute, stat.IsIncremental);
+            lines.Add($"GO{Environment.NewLine}{StatisticsScript.Create(qualified, definition)}");
         }
 
         return lines;
