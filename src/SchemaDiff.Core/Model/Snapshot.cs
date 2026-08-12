@@ -84,10 +84,15 @@ public sealed record IndexDefinition(
     bool IsSystemNamed,
     IReadOnlyList<IndexKeyColumn> KeyColumns,
     IReadOnlyList<string> IncludedColumns,
-    string? FilterDefinition)
+    string? FilterDefinition,
+    string? DataCompression = null)
 {
     /// <summary>PK ve UNIQUE constraint'ler ALTER TABLE ADD CONSTRAINT ile yazılır; ötekiler CREATE INDEX.</summary>
     public bool IsConstraint => IsPrimaryKey || IsUniqueConstraint;
+
+    /// <summary>Script'e açıkça yazılacak compression (ROW/PAGE/COLUMNSTORE_ARCHIVE); yoksa null.</summary>
+    public string? ExplicitCompression =>
+        DataCompression is "ROW" or "PAGE" or "COLUMNSTORE_ARCHIVE" ? DataCompression : null;
 }
 
 public sealed record IndexKeyColumn(string Column, bool Descending);

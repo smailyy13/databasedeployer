@@ -40,6 +40,7 @@ public sealed record CompareOptionsDto(
     bool IgnoreIndexPhysical = false,
     bool IgnoreFillFactor = true,
     bool IgnoreIndexPadding = false,
+    bool IgnoreDataCompression = false,
     bool IgnoreAnsiNulls = true,
     bool IgnoreQuotedIdentifiers = true,
     bool IgnoreDmlTriggerState = false,

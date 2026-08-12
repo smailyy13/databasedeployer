@@ -422,7 +422,12 @@ public static class TableScriptGenerator
         if (idx.IsConstraint)
         {
             var kind = idx.IsPrimaryKey ? "PRIMARY KEY" : "UNIQUE";
-            return $"ALTER TABLE {qualified} ADD CONSTRAINT [{idx.Name}] {kind} {Clustered(idx.TypeDesc)} ({KeyList(idx, ordered: true)});";
+            var pkc = new StringBuilder(
+                $"ALTER TABLE {qualified} ADD CONSTRAINT [{idx.Name}] {kind} {Clustered(idx.TypeDesc)} ({KeyList(idx, ordered: true)})");
+            if (idx.ExplicitCompression is { } pkComp)
+                pkc.Append(" WITH (DATA_COMPRESSION = ").Append(pkComp).Append(')');
+            pkc.Append(';');
+            return pkc.ToString();
         }
 
         var columnstore = idx.TypeDesc.Contains("COLUMNSTORE", StringComparison.OrdinalIgnoreCase);
@@ -432,6 +437,8 @@ public static class TableScriptGenerator
             sb.Append(" INCLUDE (").Append(string.Join(", ", idx.IncludedColumns.Select(c => $"[{c}]"))).Append(')');
         if (idx.FilterDefinition is not null)
             sb.Append(" WHERE ").Append(idx.FilterDefinition);
+        if (idx.ExplicitCompression is { } comp)
+            sb.Append(" WITH (DATA_COMPRESSION = ").Append(comp).Append(')');
         sb.Append(';');
         return sb.ToString();
     }
@@ -472,7 +479,8 @@ public static class TableScriptGenerator
     private static string Sig(IndexDefinition i) =>
         $"pk={i.IsPrimaryKey}|uq={i.IsUniqueConstraint}|u={i.IsUnique}|t={i.TypeDesc}|" +
         $"keys={string.Join(",", i.KeyColumns.Select(k => $"{k.Column}:{(k.Descending ? "D" : "A")}"))}|" +
-        $"inc={string.Join(",", i.IncludedColumns)}|f={i.FilterDefinition ?? ""}";
+        $"inc={string.Join(",", i.IncludedColumns)}|f={i.FilterDefinition ?? ""}|" +
+        $"comp={i.ExplicitCompression ?? ""}";
 
     private static string Sig(ForeignKeyDefinition f) =>
         $"ref={f.ReferencedSchema}.{f.ReferencedName}|" +

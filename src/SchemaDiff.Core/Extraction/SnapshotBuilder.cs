@@ -27,6 +27,9 @@ public sealed record SnapshotOptions
     /// <summary>Yalnızca index padding'i yok say (SSDT: "Ignore index padding").</summary>
     public bool IgnoreIndexPadding { get; init; }
 
+    /// <summary>Index/tablo DATA_COMPRESSION farkını yok say (SSDT: "Ignore data compression options").</summary>
+    public bool IgnoreDataCompression { get; init; }
+
     /// <summary>SET ANSI_NULLS farkını yok say (SSDT: "Ignore ANSI NULLS").</summary>
     public bool IgnoreAnsiNulls { get; init; }
 
@@ -588,6 +591,8 @@ internal static class SnapshotBuilder
                 sb.Append("|padded=").Append(Flag(index.IsPadded));
             if (!options.IgnoreIndexPhysicalOptions)
                 sb.Append("|ignoreDupKey=").Append(Flag(index.IgnoreDupKey));
+            if (!options.IgnoreDataCompression && ExplicitCompression(index.DataCompression) is { } comp)
+                sb.Append("|compression=").Append(comp);
 
             if (index.FilterDefinition is not null) sb.Append("|filter=").Append(index.FilterDefinition);
 
@@ -851,7 +856,8 @@ internal static class SnapshotBuilder
 
             result.Add(new IndexDefinition(
                 name, index.IsPrimaryKey, index.IsUniqueConstraint, index.IsUnique,
-                index.TypeDesc, systemNamed, keys, included, index.FilterDefinition));
+                index.TypeDesc, systemNamed, keys, included, index.FilterDefinition,
+                options.IgnoreDataCompression ? null : index.DataCompression));
         }
 
         return result;
@@ -1026,6 +1032,13 @@ internal static class SnapshotBuilder
         names.GetValueOrDefault(Pair(objectId, columnId), $"#{columnId}");
 
     private static char Flag(bool value) => value ? '1' : '0';
+
+    /// <summary>
+    /// Yalnızca AÇIKÇA yazılması gereken compression değerini döndürür. NONE (varsayılan)
+    /// ve düz COLUMNSTORE (tipin doğasında var) atlanır; ROW/PAGE/COLUMNSTORE_ARCHIVE kalır.
+    /// </summary>
+    internal static string? ExplicitCompression(string? desc) =>
+        desc is "ROW" or "PAGE" or "COLUMNSTORE_ARCHIVE" ? desc : null;
 
     private static long Pair(int high, int low) => ((long)high << 32) | (uint)low;
 

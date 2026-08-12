@@ -20,6 +20,9 @@ public class TableIndexConstraintTests
     private static IndexRow Idx(int indexId, string name, bool pk = false, bool uq = false, string? filter = null) =>
         new(CustomerId, indexId, name, pk ? "CLUSTERED" : "NONCLUSTERED", uq, pk, uq, 0, false, false, filter);
 
+    private static IndexRow IdxC(int indexId, string name, string? compression, bool pk = false) =>
+        new(CustomerId, indexId, name, pk ? "CLUSTERED" : "NONCLUSTERED", pk, pk, false, 0, false, false, null, compression);
+
     private static IndexColumnRow Key(int indexId, int columnId, byte ordinal, bool included = false) =>
         new(CustomerId, indexId, columnId, columnId, included ? (byte)0 : ordinal, false, included);
 
@@ -243,5 +246,61 @@ public class TableIndexConstraintTests
         var fkIdx = script.Sql.IndexOf("ADD CONSTRAINT [FK_Orders_Customer]", StringComparison.Ordinal);
         Assert.True(colIdx >= 0 && fkIdx >= 0 && colIdx < fkIdx, "FK add kolon değişikliğinden sonra gelmeli");
         Assert.Contains("Foreign key''ler ekleniyor", script.Sql);
+    }
+
+    // --- DATA_COMPRESSION (Dalga 2) ---
+
+    [Fact]
+    public void Added_index_with_page_compression_emits_with_clause()
+    {
+        var source = Build(Table([IdxC(2, "IX_C", "PAGE")], [Key(2, 3, 1)]));
+        var script = Generate(source, Build(Table([], [])));
+
+        Assert.Contains(
+            "CREATE NONCLUSTERED INDEX [IX_C] ON [dbo].[Customer] ([Email] ASC) WITH (DATA_COMPRESSION = PAGE);",
+            script.Sql);
+    }
+
+    [Fact]
+    public void Compression_change_none_to_page_recreates_index_with_clause()
+    {
+        var source = Build(Table([IdxC(2, "IX_C", "PAGE")], [Key(2, 3, 1)]));
+        var target = Build(Table([IdxC(2, "IX_C", "NONE")], [Key(2, 3, 1)]));
+
+        var script = Generate(source, target);
+
+        Assert.Contains("DROP INDEX [IX_C] ON [dbo].[Customer];", script.Sql);
+        Assert.Contains("WITH (DATA_COMPRESSION = PAGE)", script.Sql);
+    }
+
+    [Fact]
+    public void Primary_key_with_page_compression_emits_with_clause()
+    {
+        var source = Build(Table([IdxC(1, "PK_Customer", "PAGE", pk: true)], [Key(1, 1, 1)]));
+        var script = Generate(source, Build(Table([], [])));
+
+        Assert.Contains(
+            "ADD CONSTRAINT [PK_Customer] PRIMARY KEY CLUSTERED ([Id] ASC) WITH (DATA_COMPRESSION = PAGE);",
+            script.Sql);
+    }
+
+    [Fact]
+    public void Plain_columnstore_is_not_emitted_as_explicit_compression()
+    {
+        // Düz COLUMNSTORE tipin doğasında; WITH (DATA_COMPRESSION = COLUMNSTORE) yazılmamalı.
+        var source = Build(Table([IdxC(2, "IX_C", "COLUMNSTORE")], [Key(2, 3, 1)]));
+        var script = Generate(source, Build(Table([], [])));
+
+        Assert.DoesNotContain("DATA_COMPRESSION = COLUMNSTORE", script.Sql);
+    }
+
+    [Fact]
+    public void Ignore_data_compression_option_suppresses_diff()
+    {
+        var opts = SnapshotOptions.Default with { KeepDisplayScripts = true, IgnoreDataCompression = true };
+        var source = SnapshotBuilder.Build(Table([IdxC(2, "IX_C", "PAGE")], [Key(2, 3, 1)]), new ExtractionReport(), opts);
+        var target = SnapshotBuilder.Build(Table([IdxC(2, "IX_C", "NONE")], [Key(2, 3, 1)]), new ExtractionReport(), opts);
+
+        Assert.Empty(SchemaComparer.Compare(source, target).Differences);
     }
 }

@@ -62,7 +62,8 @@ internal sealed record ColumnRow(
 internal sealed record IndexRow(
     int ObjectId, int IndexId, string? Name, string TypeDesc,
     bool IsUnique, bool IsPrimaryKey, bool IsUniqueConstraint,
-    byte FillFactor, bool IsPadded, bool IgnoreDupKey, string? FilterDefinition);
+    byte FillFactor, bool IsPadded, bool IgnoreDupKey, string? FilterDefinition,
+    string? DataCompression = null);
 
 internal sealed record IndexColumnRow(
     int ObjectId, int IndexId, int IndexColumnId, int ColumnId,

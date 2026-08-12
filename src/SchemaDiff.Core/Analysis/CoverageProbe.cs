@@ -28,7 +28,7 @@ public sealed record CoverageReport(
 /// </summary>
 public static class CoverageProbe
 {
-    private static readonly (string Category, string Item, bool Covered, string Sql)[] Probes =
+    internal static readonly (string Category, string Item, bool Covered, string Sql)[] Probes =
     [
         // --- kapsananlar ---
         ("Şema", "Şemalar", true, "SELECT COUNT(*) FROM sys.schemas WHERE schema_id > 4 AND schema_id < 16384"),
@@ -72,6 +72,24 @@ public static class CoverageProbe
         ("Güvenlik", "Always Encrypted kolonlar", false, "SELECT COUNT(*) FROM sys.columns WHERE encryption_type IS NOT NULL"),
         ("Trigger", "DDL trigger'ları", true, "SELECT COUNT(*) FROM sys.triggers WHERE parent_class = 0 AND is_ms_shipped = 0"),
         ("Modül", "Şifrelenmiş modüller (okunamaz)", false, "SELECT COUNT(*) FROM sys.sql_modules m JOIN sys.objects o ON o.object_id = m.object_id WHERE o.is_ms_shipped = 0 AND m.definition IS NULL"),
+
+        // --- yeni sayaçlar (Dalga 1: her boşluk artık ölçülüyor) ---
+        ("Depolama", "Sıkıştırılmış partition'lar (DATA_COMPRESSION)", true, "SELECT COUNT(*) FROM sys.partitions p JOIN sys.objects o ON o.object_id = p.object_id WHERE o.is_ms_shipped = 0 AND p.data_compression <> 0"),
+        ("Tablo", "Sparse / column set / FILESTREAM / ROWGUIDCOL kolonlar", false, "SELECT COUNT(*) FROM sys.columns c JOIN sys.objects o ON o.object_id = c.object_id WHERE o.is_ms_shipped = 0 AND (c.is_sparse = 1 OR c.is_column_set = 1 OR c.is_filestream = 1 OR c.is_rowguidcol = 1)"),
+        ("Güvenlik", "Application role'ler", false, "SELECT COUNT(*) FROM sys.database_principals WHERE type = 'A'"),
+        ("Güvenlik", "Row-Level Security (security policy)", false, "SELECT COUNT(*) FROM sys.security_policies"),
+        ("Güvenlik", "Dynamic Data Masking kolonları", false, "SELECT COUNT(*) FROM sys.masked_columns"),
+        ("Güvenlik", "Sertifikalar", false, "SELECT COUNT(*) FROM sys.certificates"),
+        ("Güvenlik", "Simetrik anahtarlar", false, "SELECT COUNT(*) FROM sys.symmetric_keys WHERE name NOT LIKE '##%'"),
+        ("Güvenlik", "Asimetrik anahtarlar", false, "SELECT COUNT(*) FROM sys.asymmetric_keys"),
+        ("Güvenlik", "Database scoped credential'lar", false, "SELECT COUNT(*) FROM sys.database_scoped_credentials"),
+        ("Güvenlik", "Column Master/Encryption Key (Always Encrypted)", false, "SELECT (SELECT COUNT(*) FROM sys.column_master_keys) + (SELECT COUNT(*) FROM sys.column_encryption_keys)"),
+        ("Programlanabilirlik", "Service Broker (queue/service/contract)", false, "SELECT (SELECT COUNT(*) FROM sys.service_queues WHERE is_ms_shipped = 0) + (SELECT COUNT(*) FROM sys.services WHERE service_id > 5) + (SELECT COUNT(*) FROM sys.service_contracts WHERE service_contract_id > 5)"),
+        ("Programlanabilirlik", "XML schema collection'lar", false, "SELECT COUNT(*) FROM sys.xml_schema_collections WHERE schema_id <> 4"),
+        ("Programlanabilirlik", "Plan guide'lar", false, "SELECT COUNT(*) FROM sys.plan_guides"),
+        ("Entegrasyon", "External data source/table (PolyBase)", false, "SELECT (SELECT COUNT(*) FROM sys.external_data_sources) + (SELECT COUNT(*) FROM sys.external_tables)"),
+        ("Ayar", "Database scoped configuration'lar", false, "SELECT COUNT(*) FROM sys.database_scoped_configurations WHERE is_value_default = 0"),
+        ("Legacy", "CREATE RULE / CREATE DEFAULT (bağlı objeler)", false, "SELECT COUNT(*) FROM sys.objects WHERE is_ms_shipped = 0 AND type IN ('R', 'D') AND parent_object_id = 0"),
     ];
 
     public static async Task<CoverageReport> RunAsync(string connectionString, CancellationToken ct = default)

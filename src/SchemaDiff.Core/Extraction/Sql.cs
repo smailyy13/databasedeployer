@@ -81,10 +81,13 @@ internal static class Sql
     public const string Indexes = """
         SELECT i.object_id, i.index_id, i.name, i.type_desc,
                i.is_unique, i.is_primary_key, i.is_unique_constraint,
-               i.fill_factor, i.is_padded, i.ignore_dup_key, i.filter_definition
+               i.fill_factor, i.is_padded, i.ignore_dup_key, i.filter_definition,
+               p.data_compression_desc
         FROM sys.indexes AS i
         INNER JOIN sys.objects AS o
             ON o.object_id = i.object_id AND o.is_ms_shipped = 0 AND o.type IN ('U','V')
+        LEFT JOIN sys.partitions AS p
+            ON p.object_id = i.object_id AND p.index_id = i.index_id AND p.partition_number = 1
         WHERE i.type <> 0;
         """;
 
