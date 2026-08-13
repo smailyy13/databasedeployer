@@ -19,15 +19,18 @@ const I18N = {
     generateScriptTip: 'Generate a deployment script from selected changes',
     options: 'Comparison options', toggleTheme: 'Toggle theme', toggleLang: 'Language',
     pickTwo: 'Select two connections to compare.', allTypes: 'All types',
-    searchPh: 'search schema or object…', copySelected: 'Copy selected',
+    searchPh: 'search schema or object…',
     tabDiff: 'Differences', tabRisk: 'Deployment risk', tabTriggers: 'Triggers',
     type: 'Type', objectDefinitions: 'Object Definitions',
     prevDiff: 'Previous difference', nextDiff: 'Next difference', canonicalText: 'canonical text',
     selectRow: 'Select a row above.', connect: 'Connect', recentConnections: 'Recent connections',
     none: 'None.', connectionProperties: 'Connection properties', serverName: 'Server name',
     authentication: 'Authentication', username: 'Username', password: 'Password',
-    rememberPassword: 'Remember password', database: 'Database', listFirst: '— list first —',
-    list: 'List', trustCert: 'Trust server certificate', testConnection: 'Test connection',
+    rememberPassword: 'Remember password', database: 'Database', listFirst: '— enter server —',
+    authWindows: 'Windows Authentication', authSql: 'SQL Server Authentication',
+    encrypt: 'Encrypt', encOptional: 'Optional (False)', encMandatory: 'Mandatory (True)',
+    trustTrue: 'True', trustFalse: 'False',
+    trustCert: 'Trust server certificate', testConnection: 'Test connection',
     cancel: 'Cancel', comparisonOptions: 'Comparison options', resetDefaults: 'Reset to defaults', ok: 'OK',
     connectSource: 'Source connection', connectTarget: 'Target connection',
     pwSaved: ' · password saved', listUnreadable: 'Could not read list.',
@@ -36,15 +39,14 @@ const I18N = {
     couldNotList: 'Could not list.', selectOpt: '— select —', databasesFound: '{n} databases found.',
     testing: 'testing…', couldNotConnect: 'Could not connect.',
     connectedAs: 'Connected — {server} ({version}), user {login}',
-    serverRequired: 'Server name is required.', databaseRequired: 'Select a database — use "List".',
+    serverRequired: 'Server name is required.', databaseRequired: 'Select a database.',
     startingCompare: 'starting comparison…', couldNotStart: 'Could not start.',
     comparing: 'comparing {source} → {target}…', connectionLost: 'Connection lost.',
     notComparedYet: 'No comparison yet.', noDiffForFilters: 'No differences to show with these filters.',
     listLimited: 'List limited to {n} records — there are more.',
     flagBlock: 'WILL BLOCK', flagIndeterminate: 'INDETERMINATE',
     pickInfo: '{n} objects selected → Generate Script writes only these · Shift+click for range',
-    pickInfoAll: 'Nothing selected → Generate Script writes ALL changes',
-    collapseAllTip: 'Collapse / expand all sub-sections',
+    pickInfoAll: 'Nothing selected → the script will be empty',
     generatedScript: 'Generated script', downloadSql: 'Download .sql', copy: 'Copy',
     scriptReady: 'Script ready — review/edit, then download', scriptCopied: 'Script copied to clipboard',
     sqlDownloaded: 'Downloaded {file}', selectGroupTip: 'Select / clear all {g}',
@@ -67,12 +69,11 @@ const I18N = {
     noDiff: 'no differences', diffOfTotal: '{i} / {n} differences',
     generatingScript: 'generating script…', scriptFailed: 'Could not generate script.',
     scriptIncluded: '{n} objects written ({sel} of selected)',
-    scriptIncludedAll: '{n} objects written (ALL — nothing selected)',
+    scriptIncludedAll: 'Nothing selected — the script is empty',
     dataLossIncluded: '⚠ DATA-LOSS steps (drop column/table, narrowing) INCLUDED',
     blockingWarned: '⚠ {n} full table(s) will block — see the warning header at the top of the script',
     stillGated: '{n} steps still gated', outOfScopeN: '{n} objects out of scope (sequence/synonym etc.)',
     skippedN: '{n} objects skipped', downloaded: '{file} downloaded · {parts}',
-    copiedN: '{n} rows copied to clipboard.',
     optgText: 'Text / normalization', optgColumn: 'Columns & types', optgIndex: 'Indexes',
     optgObject: 'Objects & constraints', optgScope: 'Scope', optgScript: 'Script / deployment (affects generated SQL)',
     opt_blockDataLoss: 'Block on possible data loss', optn_blockDataLoss: 'Data-loss steps (drop column/table, narrowing) are left out of the generated script and only reported.',
@@ -109,15 +110,18 @@ const I18N = {
     generateScriptTip: 'Seçili değişikliklerden dağıtım script\'i üret',
     options: 'Karşılaştırma seçenekleri', toggleTheme: 'Temayı değiştir', toggleLang: 'Dil',
     pickTwo: 'Karşılaştırmak için iki bağlantı seçin.', allTypes: 'Tüm türler',
-    searchPh: 'şema veya obje ara…', copySelected: 'Seçilenleri kopyala',
+    searchPh: 'şema veya obje ara…',
     tabDiff: 'Farklar', tabRisk: 'Deployment riski', tabTriggers: 'Trigger\'lar',
     type: 'Tür', objectDefinitions: 'Obje Tanımları',
     prevDiff: 'Önceki fark', nextDiff: 'Sonraki fark', canonicalText: 'kanonik metin',
     selectRow: 'Üstteki listeden bir satır seçin.', connect: 'Bağlan', recentConnections: 'Son bağlantılar',
     none: 'Kayıt yok.', connectionProperties: 'Bağlantı özellikleri', serverName: 'Sunucu adı',
     authentication: 'Kimlik doğrulama', username: 'Kullanıcı adı', password: 'Parola',
-    rememberPassword: 'Parolayı hatırla', database: 'Veritabanı', listFirst: '— önce listele —',
-    list: 'Listele', trustCert: 'Sunucu sertifikasına güven', testConnection: 'Bağlantıyı sına',
+    rememberPassword: 'Parolayı hatırla', database: 'Veritabanı', listFirst: '— sunucu girin —',
+    authWindows: 'Windows Kimlik Doğrulaması', authSql: 'SQL Server Kimlik Doğrulaması',
+    encrypt: 'Şifreleme', encOptional: 'İsteğe bağlı (False)', encMandatory: 'Zorunlu (True)',
+    trustTrue: 'Evet', trustFalse: 'Hayır',
+    trustCert: 'Sunucu sertifikasına güven', testConnection: 'Bağlantıyı sına',
     cancel: 'İptal', comparisonOptions: 'Karşılaştırma seçenekleri', resetDefaults: 'Varsayılana dön', ok: 'Tamam',
     connectSource: 'Kaynak bağlantısı', connectTarget: 'Hedef bağlantısı',
     pwSaved: ' · parola kayıtlı', listUnreadable: 'Liste okunamadı.',
@@ -126,15 +130,14 @@ const I18N = {
     couldNotList: 'Listelenemedi.', selectOpt: '— seçin —', databasesFound: '{n} veritabanı bulundu.',
     testing: 'sınanıyor…', couldNotConnect: 'Bağlanılamadı.',
     connectedAs: 'Bağlandı — {server} ({version}), kullanıcı {login}',
-    serverRequired: 'Sunucu adı zorunlu.', databaseRequired: 'Veritabanı seçilmeli — "Listele" ile doldurun.',
+    serverRequired: 'Sunucu adı zorunlu.', databaseRequired: 'Bir veritabanı seçin.',
     startingCompare: 'karşılaştırma başlatılıyor…', couldNotStart: 'Başlatılamadı.',
     comparing: '{source} → {target} karşılaştırılıyor…', connectionLost: 'Bağlantı koptu.',
     notComparedYet: 'Henüz karşılaştırma yapılmadı.', noDiffForFilters: 'Bu filtrelerle gösterilecek fark yok.',
     listLimited: 'Liste {n} kayıtla sınırlandı — daha fazlası var.',
     flagBlock: 'BLOKLANIR', flagIndeterminate: 'BELİRSİZ',
     pickInfo: '{n} obje seçili → Script üret yalnızca bunları yazar · Shift+tık ile aralık seç',
-    pickInfoAll: 'Hiçbiri seçili değil → Script üret TÜMÜNÜ yazar',
-    collapseAllTip: 'Tüm alt bölümleri kapat / aç',
+    pickInfoAll: 'Hiçbiri seçili değil → script boş olur',
     generatedScript: 'Üretilen script', downloadSql: '.sql indir', copy: 'Kopyala',
     scriptReady: 'Script hazır — gözden geçir/düzenle, sonra indir', scriptCopied: 'Script panoya kopyalandı',
     sqlDownloaded: 'İndirildi: {file}', selectGroupTip: 'Tüm {g} objelerini seç / kaldır',
@@ -157,12 +160,11 @@ const I18N = {
     noDiff: 'fark yok', diffOfTotal: '{i} / {n} fark',
     generatingScript: 'script üretiliyor…', scriptFailed: 'Script üretilemedi.',
     scriptIncluded: '{n} obje script\'e girdi ({sel} seçiliden)',
-    scriptIncludedAll: '{n} obje script\'e girdi (TÜMÜ — hiçbir şey seçilmedi)',
+    scriptIncludedAll: 'Hiçbiri seçili değil — script boş',
     dataLossIncluded: '⚠ VERİ KAYBI adımları (kolon/tablo silme, tip daraltma) DAHİL',
     blockingWarned: '⚠ {n} dolu tablo bloklanacak — script başındaki uyarı bloğuna bakın',
     stillGated: '{n} adım yine de gated', outOfScopeN: '{n} obje kapsam dışı (sequence/synonym vb.)',
     skippedN: '{n} obje atlandı', downloaded: '{file} indirildi · {parts}',
-    copiedN: '{n} satır panoya kopyalandı.',
     optgText: 'Metin / normalizasyon', optgColumn: 'Kolon ve tipler', optgIndex: 'Index\'ler',
     optgObject: 'Nesne ve constraint\'ler', optgScope: 'Kapsam', optgScript: 'Script / dağıtım (üretilen SQL\'e etki eder)',
     opt_blockDataLoss: 'Olası veri kaybında durdur', optn_blockDataLoss: 'Veri kaybı adımları (kolon/tablo silme, tip daraltma) üretilen script\'e girmez, yalnızca raporlanır.',
@@ -352,6 +354,8 @@ const state = {
   eventSource: null,
   hunks: [],                // fark bloklarının başladığı satır indeksleri
   hunkIndex: -1,
+  diffRowCount: 0,          // alt panelde toplam satır (minimap konumlaması için)
+  wordTerm: '',             // alt panelde sarı vurgulanan kelime (toggle için)
 };
 
 // Ağaçtaki klasör sırası — SSDT'nin gösterdiği sırayla aynı.
@@ -381,6 +385,7 @@ function openConnect(which) {
   $('connStatus').className = 'conn-status';
   $('cDatabase').dataset.recentId = existing?.id ?? '';
 
+  dbLoadedSig = null;   // yeni diyalog → veritabanı listesi guard'ını sıfırla (ilk tıklamada taze getir)
   syncAuthRows();
   loadRecent();
 
@@ -472,7 +477,7 @@ function setConnStatus(text, kind = '') {
 
 async function loadDatabases() {
   const connection = readDialogConnection();
-  if (!connection.server) { setConnStatus(t('enterServerFirst'), 'error'); return; }
+  if (!connection.server) { setConnStatus(t('enterServerFirst'), 'error'); return false; }
 
   setConnStatus(t('listingDatabases'));
   try {
@@ -481,14 +486,16 @@ async function loadDatabases() {
       body: JSON.stringify(connection),
     });
     const data = await response.json();
-    if (!response.ok) { setConnStatus(data.error ?? t('couldNotList'), 'error'); return; }
+    if (!response.ok) { setConnStatus(data.error ?? t('couldNotList'), 'error'); return false; }
 
     const current = $('cDatabase').value;
     $('cDatabase').innerHTML = `<option value="">${esc(t('selectOpt'))}</option>` +
       data.map((d) => `<option value="${esc(d)}" ${d === current ? 'selected' : ''}>${esc(d)}</option>`).join('');
     setConnStatus(t('databasesFound', { n: data.length }), 'ok');
+    return true;
   } catch (error) {
     setConnStatus(error.message, 'error');
+    return false;
   }
 }
 
@@ -626,14 +633,8 @@ function visibleChanges() {
   if (!state.result) return [];
   const term = $('search').value.trim().toLowerCase();
   const type = $('typeFilter').value;
-  const allowed = new Set([
-    ...($('fAdd').checked ? ['Add'] : []),
-    ...($('fChange').checked ? ['Change'] : []),
-    ...($('fDelete').checked ? ['Delete'] : []),
-  ]);
 
   return state.result.changes.filter((c) =>
-    allowed.has(c.action) &&
     (!type || c.objectType === type) &&
     (!term || `${c.schema}.${c.name}`.toLowerCase().includes(term)));
 }
@@ -737,6 +738,7 @@ function findChange(objKey) {
 
 // Bir tiki ayarla. Obje-seviyesi tikse (içinde › yok) tüm alt öğelerini de aynı duruma getir.
 function setPick(key, on) {
+  if (!key) return;   // güvenlik: geçersiz anahtar state'i bozmasın
   on ? state.checked.add(key) : state.checked.delete(key);
   if (!key.includes('›')) {
     for (const ch of findChange(key)?.children ?? []) {
@@ -822,14 +824,14 @@ function bindTree(tree) {
 
   // İşaret kutuları satır seçimini tetiklemesin. Shift+tık: son tıklanan kutu ile
   // şimdiki arasındaki tüm kutuları (alt alta olanları) toplu olarak aynı duruma getirir.
-  for (const box of tree.querySelectorAll('.pick'))
+  for (const box of tree.querySelectorAll('.pick:not(.gpick)'))
     box.addEventListener('click', (e) => {
       e.stopPropagation();
       const key = box.dataset.pick;
       const target = box.checked;   // tık sonrası yeni durum
 
       if (e.shiftKey && state.lastPick && state.lastPick !== key) {
-        const boxes = [...tree.querySelectorAll('.pick')];
+        const boxes = [...tree.querySelectorAll('.pick:not(.gpick)')];
         const from = boxes.findIndex((b) => b.dataset.pick === state.lastPick);
         const to = boxes.findIndex((b) => b.dataset.pick === key);
         if (from !== -1 && to !== -1) {
@@ -885,15 +887,11 @@ function renderPickInfo() {
   const count = state.checked.size;
   // 0 seçili durumunu gizlemek yerine açıkça söyle: boş seçim = TÜMÜ üretilir.
   $('pickedInfo').hidden = false;
-  $('copyPicked').hidden = count === 0;
   $('pickedInfo').textContent = count === 0 ? t('pickInfoAll') : t('pickInfo', { n: num(objectCount) });
 }
 
 function renderCounts() {
   const r = state.result;
-  $('cAdd').textContent = num(r?.addCount ?? 0);
-  $('cChange').textContent = num(r?.changeCount ?? 0);
-  $('cDelete').textContent = num(r?.deleteCount ?? 0);
 
   const blocking = (r?.risks ?? []).filter((x) => x.willBlock).length;
   const badge = $('cBlock');
@@ -1044,13 +1042,104 @@ function renderDetail() {
       ${right === null ? `<p class="missing">${esc(t('notOnThisSide'))}</p>` : pane('right', rightHtml)}</div>
   </div>`;
 
+  state.diffRowCount = rows.length;
+  state.wordTerm = '';     // yeni obje → kelime vurgusunu sıfırla
+  buildMinimap(rows);      // kırmızı/yeşil fark işaretleri
   updateDiffNav();
   if (state.hunks.length) gotoHunk(0);
+}
+
+// Sağ minimap: her fark satırı için kırmızı (silme) / yeşil (ekleme) işaret.
+// data-diff = temel (fark) işaretleri; kelime eşleşmeleri bunun üstüne eklenir.
+function buildMinimap(rows) {
+  const mm = $('diffMinimap');
+  if (!mm) return;
+  const n = rows.length || 1;
+  let html = '';
+  rows.forEach((row, i) => {
+    if (row.type === 'same') return;
+    const top = (i / n) * 100;
+    if (row.left !== null && row.left !== undefined)
+      html += `<div class="mm del" style="top:${top}%" data-row="${i}"></div>`;
+    if (row.right !== null && row.right !== undefined)
+      html += `<div class="mm add" style="top:${top}%" data-row="${i}"></div>`;
+  });
+  mm.dataset.diff = html;
+  mm.innerHTML = html;
+}
+
+function clearMinimap() {
+  const mm = $('diffMinimap');
+  if (mm) { mm.dataset.diff = ''; mm.innerHTML = ''; }
+}
+
+// Minimap'e kelime eşleşmelerini (sarı) fark işaretlerinin ÜSTÜNE ekle.
+function setWordMarkers(rowIndices) {
+  const mm = $('diffMinimap');
+  if (!mm) return;
+  const n = state.diffRowCount || 1;
+  let extra = '';
+  for (const i of rowIndices) extra += `<div class="mm word" style="top:${(i / n) * 100}%" data-row="${i}"></div>`;
+  mm.innerHTML = (mm.dataset.diff || '') + extra;
+}
+
+// Önceki sarı vurguları kaldır (mark'ları düz metne çevir).
+function clearWordHighlights() {
+  const body = $('defBody');
+  if (!body) return;
+  for (const m of body.querySelectorAll('mark.wordhit')) m.replaceWith(document.createTextNode(m.textContent));
+  body.normalize();
+}
+
+// Seçilen kelimenin (term) alt paneldeki TÜM geçtiği yerleri sarı işaretle;
+// eşleşen satırları minimap'te de sarı göster. Söz dizimi renklendirmesini bozmadan,
+// yalnızca metin düğümleri sarılır.
+function highlightWord(term) {
+  clearWordHighlights();
+  const body = $('defBody');
+  if (!body) return;
+  if (!term || term.length < 2) { setWordMarkers([]); return; }
+
+  const lower = term.toLowerCase();
+  const rowsHit = new Set();
+  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) => {
+      const p = node.parentElement;
+      if (!node.nodeValue || !p) return NodeFilter.FILTER_REJECT;
+      if (p.closest('.ln')) return NodeFilter.FILTER_REJECT;              // satır numaralarını atla
+      return node.nodeValue.toLowerCase().includes(lower) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+    },
+  });
+  const targets = [];
+  while (walker.nextNode()) targets.push(walker.currentNode);
+
+  for (const node of targets) {
+    const text = node.nodeValue;
+    const low = text.toLowerCase();
+    const frag = document.createDocumentFragment();
+    let idx = 0, pos;
+    while ((pos = low.indexOf(lower, idx)) !== -1) {
+      if (pos > idx) frag.appendChild(document.createTextNode(text.slice(idx, pos)));
+      const mark = document.createElement('mark');
+      mark.className = 'wordhit';
+      mark.textContent = text.slice(pos, pos + term.length);
+      frag.appendChild(mark);
+      idx = pos + term.length;
+      const dline = node.parentElement.closest('.dline');
+      if (dline) rowsHit.add(+dline.dataset.row);
+    }
+    if (idx < text.length) frag.appendChild(document.createTextNode(text.slice(idx)));
+    node.replaceWith(frag);
+  }
+  setWordMarkers([...rowsHit]);
 }
 
 function resetDiffNav() {
   state.hunks = [];
   state.hunkIndex = -1;
+  state.diffRowCount = 0;
+  state.wordTerm = '';
+  clearMinimap();
   updateDiffNav();
 }
 
@@ -1083,7 +1172,9 @@ function alignLines(a, b) {
   // Eşleştirme boşluk farklarını yok sayar: tablo CREATE'inde kolon hizalama boşluğu
   // (en uzun ada göre PadRight) bir kolon eklenince tüm satırlarda kayar; bu, yalnızca
   // gerçekten değişen satırın işaretlenmesini sağlar. Görüntülenen metin özgün hâlidir.
-  const norm = (s) => (s ?? '').replace(/\s+/g, ' ').trim();
+  // Ayrıca SONDAKİ VİRGÜL yok sayılır: son kolona kolon eklenince önceki satır virgül
+  // kazanır — tanım aynı olduğu hâlde fark görünürdü. Virgül liste ayıracıdır, anlam taşımaz.
+  const norm = (s) => (s ?? '').replace(/\s+/g, ' ').trim().replace(/,$/, '');
   const An = A.map(norm), Bn = B.map(norm);
 
   if (A.length > LIMIT || B.length > LIMIT) {
@@ -1152,8 +1243,32 @@ $('connCancel').addEventListener('click', closeConnect);
 $('connScrim').addEventListener('click', closeConnect);
 $('connOk').addEventListener('click', confirmConnection);
 $('connTest').addEventListener('click', testConnection);
-$('cLoadDbs').addEventListener('click', loadDatabases);
 $('cAuth').addEventListener('change', syncAuthRows);
+
+// "Listele" butonu yerine: bağlantı bilgileri hazır olunca veritabanlarını otomatik getir.
+// Aynı bağlantı için tekrar tekrar çekmemek için imza (signature) ile guard'lanır.
+let dbLoadedSig = null;   // en son başarıyla listelenen bağlantının imzası
+let dbLoading = false;    // devam eden bir listeleme var mı
+function connSig() {
+  const c = readDialogConnection();
+  return [c.server, c.authentication, c.userName ?? '', c.password ?? '', c.encrypt, c.trustServerCertificate].join('|');
+}
+function maybeAutoLoad({ force = false } = {}) {
+  const c = readDialogConnection();
+  if (!c.server) return;                                        // sunucu şart
+  if (c.authentication === 'SqlLogin' && !c.userName) return;   // SQL modunda kullanıcı adı şart
+  const sig = connSig();
+  if (dbLoading) return;                                        // zaten yükleniyor
+  if (!force && sig === dbLoadedSig) return;                    // bu bağlantı için zaten listelendi
+  dbLoading = true;
+  loadDatabases().then((ok) => { if (ok) dbLoadedSig = sig; }).finally(() => { dbLoading = false; });
+}
+// Sunucu / kimlik alanları değişince önden yükle (kutuya varmadan hazır olsun)
+for (const id of ['cServer', 'cAuth', 'cUser', 'cPass'])
+  $(id).addEventListener('change', () => maybeAutoLoad());
+// Veritabanı kutusuna tıklayınca/odaklanınca da getir — butona gerek kalmadan.
+$('cDatabase').addEventListener('mousedown', () => maybeAutoLoad());
+$('cDatabase').addEventListener('focus', () => maybeAutoLoad());
 
 $('optionsBtn').addEventListener('click', () => {
   renderOptions();
@@ -1170,6 +1285,31 @@ $('compareBtn').addEventListener('click', compare);
 $('showCanonical').addEventListener('change', renderDetail);
 $('prevDiff').addEventListener('click', () => gotoHunk(state.hunkIndex - 1));
 $('nextDiff').addEventListener('click', () => gotoHunk(state.hunkIndex + 1));
+
+// Alt panelde bir kelime seçince: tüm geçtiği yerleri sarı işaretle + minimap'e yansıt.
+// Vurgu kalıcıdır — yeni bir kelime seçilene ya da obje değişene kadar durur. Boşluk içeren
+// (çok kelimeli) seçim vurgulanmaz. Aynı kelimeyi tekrar çift-tıklayınca temizlenir (toggle).
+$('defBody').addEventListener('mouseup', () => {
+  const sel = window.getSelection();
+  const term = sel ? sel.toString().trim() : '';
+  if (!term || /\s/.test(term) || !sel.anchorNode || !$('defBody').contains(sel.anchorNode)) return;
+  if (term.length < 2) return;
+  highlightWord(term === state.wordTerm ? '' : term);
+  state.wordTerm = term === state.wordTerm ? '' : term;
+});
+
+// Minimap'e tıkla → ilgili satıra git (işaret yoksa orantısal konuma kaydır).
+$('diffMinimap').addEventListener('click', (e) => {
+  const diff = $('defBody');
+  const marker = e.target.closest('.mm');
+  if (marker) {
+    document.querySelector(`#defBody .dline[data-row="${marker.dataset.row}"]`)?.scrollIntoView({ block: 'center' });
+    return;
+  }
+  const rect = e.currentTarget.getBoundingClientRect();
+  const ratio = (e.clientY - rect.top) / rect.height;
+  diff.scrollTop = ratio * (diff.scrollHeight - diff.clientHeight);
+});
 
 // Karşılaştırma biter bitmez tüm değişiklikler seçili gelir — kullanıcı istemediklerini
 // kaldırır (dahil et değil, hariç tut mantığı). Hem obje satırı hem alt öğeleri işaretlenir
@@ -1190,6 +1330,7 @@ function selectAllChanges() {
 function selectedObjectItems() {
   const seen = new Map();
   for (const key of state.checked) {
+    if (typeof key !== 'string' || key.length === 0) continue;   // güvenlik: bozuk anahtar atla
     const objId = key.split('›')[0];
     if (seen.has(objId)) continue;
     const parts = objId.split('|');
@@ -1412,23 +1553,7 @@ $('scriptCopyBtn').addEventListener('click', async () => {
   setStatus(t('scriptCopied'));
 });
 
-// Tümünü kapat/aç: bir şey açıksa tüm alt bölümleri kapat, hepsi kapalıysa görünen objeleri aç.
-$('collapseAll').addEventListener('click', () => {
-  if (state.expanded.size > 0) {
-    state.expanded.clear();
-  } else {
-    for (const c of visibleChanges())
-      if (c.children.length) state.expanded.add(`${c.objectType}|${c.schema}|${c.name}`);
-  }
-  renderTree();
-});
-
-$('copyPicked').addEventListener('click', async () => {
-  const list = [...state.checked].map((k) => k.split('|').slice(1).join('.').replaceAll('›', ' → ')).sort();
-  await navigator.clipboard.writeText(list.join('\n'));
-  setStatus(t('copiedN', { n: num(list.length) }));
-});
-for (const id of ['fAdd', 'fChange', 'fDelete', 'typeFilter']) $(id).addEventListener('change', renderTree);
+$('typeFilter').addEventListener('change', renderTree);
 $('search').addEventListener('input', renderTree);
 
 for (const tab of document.querySelectorAll('.vtab')) {

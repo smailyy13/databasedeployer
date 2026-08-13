@@ -1,5 +1,6 @@
 :root {
   --bg: #f6f8fa;
+  --frame: #dfe4ea;
   --panel: #ffffff;
   --panel-2: #f6f8fa;
   --panel-3: #eef1f4;
@@ -27,6 +28,7 @@
 /* ---------- Koyu tema (Visual Studio / SSDT) ---------- */
 :root[data-theme="dark"] {
   --bg: #1e1e1e;
+  --frame: #121212;
   --panel: #252526;
   --panel-2: #2d2d30;
   --panel-3: #37373d;
@@ -54,11 +56,19 @@
 
 html, body { height: 100%; }
 body {
-  margin: 0; background: var(--bg); color: var(--ink);
+  margin: 0; padding: 12px; background: var(--frame); color: var(--ink);
   font: 13px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   display: flex; flex-direction: column; overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Uygulama, dış çerçeve üzerinde bir kart olarak durur */
+.app {
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  overflow: hidden; box-shadow: 0 6px 24px rgba(31, 35, 40, .10), 0 1px 3px rgba(31, 35, 40, .08);
+}
+:root[data-theme="dark"] .app { box-shadow: 0 8px 28px rgba(0, 0, 0, .45); }
 h1 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: -.01em; }
 h2 { font-size: 15px; margin: 0; font-weight: 600; }
 h3 { font-size: 11px; margin: 0 0 10px; font-weight: 600; text-transform: uppercase;
@@ -129,7 +139,6 @@ p { margin: 0; }
   background: var(--panel); border-bottom: 1px solid var(--line); flex-shrink: 0;
 }
 .statusbar.busy { color: var(--accent); }
-.statusbar.error { color: var(--del); background: var(--del-bg); border-bottom-color: transparent; }
 
 /* ---------- split ---------- */
 .split { flex: 1; display: flex; flex-direction: column; min-height: 0; }
@@ -144,18 +153,6 @@ p { margin: 0; }
   display: flex; align-items: center; gap: 10px; padding: 8px 14px;
   background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; flex-shrink: 0;
 }
-.filters { display: flex; gap: 6px; }
-.pill {
-  display: flex; align-items: center; gap: 6px; cursor: pointer;
-  padding: 4px 11px; border-radius: 999px; font-size: 12px; font-weight: 500;
-  border: 1px solid var(--line); background: var(--panel); user-select: none;
-}
-.pill:hover { border-color: var(--ink-3); }
-.pill b { font-variant-numeric: tabular-nums; font-weight: 700; }
-.pill.add { color: var(--add); } .pill.add b { color: var(--add); }
-.pill.chg { color: var(--chg); } .pill.chg b { color: var(--chg); }
-.pill.del { color: var(--del); } .pill.del b { color: var(--del); }
-
 .select, .input {
   font: inherit; padding: 6px 9px; border-radius: var(--radius);
   border: 1px solid var(--line); background: var(--panel); color: var(--ink);
@@ -315,8 +312,20 @@ tr.mismatch { background: var(--chg-bg); }
 .check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .check.inline { font-size: 11.5px; color: var(--ink-2); }
 .check input { accent-color: var(--accent); }
+.diff-wrap { flex: 1; display: flex; min-height: 0; }
 .diff { flex: 1; overflow: auto; min-height: 0; }
 .diff-grid { display: grid; grid-template-columns: 1fr 1fr; min-height: 100%; }
+
+/* Sağdaki fark/eşleşme haritası (minimap) — kırmızı=silme, yeşil=ekleme, sarı=kelime eşleşmesi */
+.diff-minimap { width: 14px; flex-shrink: 0; position: relative; cursor: pointer;
+  background: var(--panel-2); border-left: 1px solid var(--line); }
+.diff-minimap .mm { position: absolute; height: 3px; border-radius: 1px; }
+.diff-minimap .mm.del  { left: 1px;  width: 5px; background: var(--del); }
+.diff-minimap .mm.add  { right: 1px; width: 5px; background: var(--add); }
+.diff-minimap .mm.word { left: 0; right: 0; height: 2px; background: #e3b341; box-shadow: 0 0 0 1px rgba(227,179,65,.5); }
+
+/* Seçilen kelimenin tüm geçtiği yerler */
+mark.wordhit { background: #ffdf5d; color: #1f2328; border-radius: 2px; padding: 0 1px; }
 .diff-pane { border-right: 1px solid var(--line); min-width: 0; }
 .diff-pane:last-child { border-right: 0; }
 .pane-head {
@@ -447,8 +456,6 @@ tr.mismatch { background: var(--chg-bg); }
   border: 1px solid var(--line); background: var(--panel); color: var(--ink);
 }
 .row input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.combo { display: flex; gap: 8px; }
-.combo .select { flex: 1; }
 .row.hidden { display: none; }
 .conn-status { font-size: 12px; margin-top: 12px; min-height: 18px; color: var(--ink-2); }
 .conn-status.ok { color: var(--add); }

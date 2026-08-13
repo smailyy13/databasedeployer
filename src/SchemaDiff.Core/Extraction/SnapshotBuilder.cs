@@ -221,9 +221,18 @@ internal static class SnapshotBuilder
 
 
         // İzinleri host objesine göre grupla (obje/kolon → obje, şema → şema).
-        var permissionsByHost = options.IgnorePermissions
-            ? new Dictionary<ObjectKey, string>(comparer)
-            : BuildPermissions(catalog, keyById, columnNames, comparer);
+        // permissionScriptsByHost: aynı izinlerin okunur T-SQL karşılığı (DisplayScript için).
+        Dictionary<ObjectKey, string> permissionsByHost;
+        Dictionary<ObjectKey, List<string>> permissionScriptsByHost;
+        if (options.IgnorePermissions)
+        {
+            permissionsByHost = new Dictionary<ObjectKey, string>(comparer);
+            permissionScriptsByHost = new Dictionary<ObjectKey, List<string>>(comparer);
+        }
+        else
+        {
+            permissionsByHost = BuildPermissions(catalog, keyById, columnNames, comparer, out permissionScriptsByHost);
+        }
 
         // Sentetik "(database)" objesi: veritabanı seviyesi (class 0) EP ve izinleri taşır.
         // Sabit adla anahtarlanır — db adı ortamlar arası değişir, aksi hâlde Add/Remove görünürdü.
@@ -477,6 +486,13 @@ internal static class SnapshotBuilder
             SetPart(dbSnapshot, "scopedConfiguration", string.Join('\n', settings));
             Finalize(dbSnapshot);
         }
+
+        // Sentetik "(database)" objesine okunur T-SQL DisplayScript ver — aksi hâlde alt panel
+        // ham kanonik (perm|database|...) gösterir. İzinler + kapsamlı yapılandırma birlikte.
+        if (options.KeepDisplayScripts)
+            dbSnapshot.DisplayScript = RenderDatabaseScript(
+                permissionScriptsByHost.GetValueOrDefault(DatabaseKey),
+                catalog.DatabaseScopedConfigurations);
 
         // Full-text stoplist'ler: veritabanı seviyesi, şemasız. Full-text index'ler bunlara
         // ADIYLA başvurur; hedefte yoksa index'in CREATE'i patlar.
@@ -1267,40 +1283,56 @@ internal static class SnapshotBuilder
         CatalogSet catalog,
         Dictionary<int, ObjectKey> keyById,
         Dictionary<long, string> columnNames,
-        ObjectKeyComparer comparer)
+        ObjectKeyComparer comparer,
+        out Dictionary<ObjectKey, List<string>> scriptsByHost)
     {
         var schemaNameById = new Dictionary<int, string>(catalog.Schemas.Count);
         foreach (var s in catalog.Schemas) schemaNameById[s.SchemaId] = s.Name;
 
         var linesByHost = new Dictionary<ObjectKey, List<string>>(comparer);
+        scriptsByHost = new Dictionary<ObjectKey, List<string>>(comparer);
 
         foreach (var p in catalog.Permissions)
         {
             ObjectKey host;
             string scope;
+            string onClause;   // T-SQL "ON ..." hedefi (database seviyesinde boş)
 
             if (p.Class == 0)
             {
                 host = DatabaseKey;
                 scope = "database";
+                onClause = string.Empty;
             }
             else if (p.Class == 3)
             {
                 if (!schemaNameById.TryGetValue(p.MajorId, out var schemaName)) continue;
                 host = new ObjectKey(schemaName, schemaName, ObjectKind.Schema);
                 scope = "schema";
+                onClause = $" ON SCHEMA::{Bracket(schemaName)}";
             }
             else // class 1
             {
                 if (!keyById.TryGetValue(p.MajorId, out var key) || key.Kind == ObjectKind.Unknown) continue;
                 host = key;
-                scope = p.MinorId == 0
-                    ? "obj"
-                    : $"col:{columnNames.GetValueOrDefault(Pair(p.MajorId, p.MinorId), $"#{p.MinorId}")}";
+                if (p.MinorId == 0)
+                {
+                    scope = "obj";
+                    onClause = $" ON {Bracket(key.Schema)}.{Bracket(key.Name)}";
+                }
+                else
+                {
+                    var colName = columnNames.GetValueOrDefault(Pair(p.MajorId, p.MinorId), $"#{p.MinorId}");
+                    scope = $"col:{colName}";
+                    onClause = $" ON {Bracket(key.Schema)}.{Bracket(key.Name)}({Bracket(colName)})";
+                }
             }
 
             if (!linesByHost.TryGetValue(host, out var list)) linesByHost[host] = list = [];
             list.Add($"perm|{scope}|{p.State} {p.PermissionName} TO {p.Grantee ?? "?"}");
+
+            if (!scriptsByHost.TryGetValue(host, out var scr)) scriptsByHost[host] = scr = [];
+            scr.Add(PermissionTSql(p.State, p.PermissionName, onClause, p.Grantee ?? "?"));
         }
 
         var result = new Dictionary<ObjectKey, string>(comparer);
@@ -1309,7 +1341,44 @@ internal static class SnapshotBuilder
             lines.Sort(StringComparer.Ordinal);
             result[host] = string.Join('\n', lines);
         }
+        foreach (var scr in scriptsByHost.Values) scr.Sort(StringComparer.Ordinal);
         return result;
+    }
+
+    /// <summary>Identifier'ı köşeli parantezle güvenli sarar ([x], içindeki ] kaçırılır).</summary>
+    private static string Bracket(string name) => $"[{(name ?? string.Empty).Replace("]", "]]")}]";
+
+    /// <summary>Bir izin satırını T-SQL'e çevirir: GRANT/DENY {izin}[ ON ...] TO [grantee][ WITH GRANT OPTION];</summary>
+    private static string PermissionTSql(string state, string permission, string onClause, string grantee)
+    {
+        var withGrant = state == "GRANT_WITH_GRANT_OPTION";
+        var verb = withGrant ? "GRANT" : state;                 // GRANT / DENY / REVOKE
+        var suffix = withGrant ? " WITH GRANT OPTION" : string.Empty;
+        return $"{verb} {permission}{onClause} TO {Bracket(grantee)}{suffix};";
+    }
+
+    /// <summary>Sentetik "(database)" objesinin okunur T-SQL'i: izinler + kapsamlı yapılandırma.</summary>
+    private static string RenderDatabaseScript(
+        List<string>? permissions, IReadOnlyList<DatabaseScopedConfigurationRow> scopedConfigs)
+    {
+        var sb = new StringBuilder();
+        if (permissions is { Count: > 0 })
+        {
+            sb.AppendLine("-- Veritabanı seviyesi izinler");
+            foreach (var line in permissions) sb.AppendLine(line);
+        }
+        if (scopedConfigs is { Count: > 0 })
+        {
+            if (sb.Length > 0) sb.AppendLine();
+            sb.AppendLine("-- Veritabanı kapsamlı yapılandırma (scoped configuration)");
+            foreach (var c in scopedConfigs.OrderBy(c => c.Name, StringComparer.Ordinal))
+            {
+                sb.AppendLine($"ALTER DATABASE SCOPED CONFIGURATION SET {c.Name} = {c.Value ?? "PRIMARY"};");
+                if (c.ValueForSecondary is not null && c.ValueForSecondary != c.Value)
+                    sb.AppendLine($"ALTER DATABASE SCOPED CONFIGURATION FOR SECONDARY SET {c.Name} = {c.ValueForSecondary};");
+            }
+        }
+        return sb.Length == 0 ? "-- (veritabanı seviyesi izin/ayar yok)" : sb.ToString().TrimEnd();
     }
 
     /// <summary>Baz tip + facet'leri T-SQL tip ifadesine çevirir (varchar(20), decimal(19,4), datetime2(3)…).</summary>

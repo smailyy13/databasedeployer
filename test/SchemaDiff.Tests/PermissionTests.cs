@@ -158,6 +158,28 @@ public class PermissionTests
         Assert.Empty(result.Differences);
     }
 
+    // Sentetik "(database)" objesi artık okunur T-SQL DisplayScript üretmeli — alt panelde
+    // ham kanonik (perm|database|...) yerine gerçek GRANT/DENY görünsün.
+    [Fact]
+    public void Database_level_permissions_render_as_tsql_display_script()
+    {
+        var cat = Catalog(permissions:
+        [
+            new PermissionRow(0, 0, 0, "CONNECT", "GRANT", "DevopsRapor"),
+            new PermissionRow(0, 0, 0, "EXECUTE", "DENY", "sudbkubetest"),
+            new PermissionRow(0, 0, 0, "VIEW DEFINITION", "GRANT_WITH_GRANT_OPTION", @"KUVEYTTURK\aaktas"),
+        ]);
+        var snap = Build(cat, SnapshotOptions.Default with { KeepDisplayScripts = true });
+
+        var db = snap.Objects[new ObjectKey(string.Empty, "(database)", ObjectKind.Database)];
+        var script = db.DisplayScript!;
+
+        Assert.Contains("GRANT CONNECT TO [DevopsRapor];", script);
+        Assert.Contains("DENY EXECUTE TO [sudbkubetest];", script);
+        Assert.Contains(@"GRANT VIEW DEFINITION TO [KUVEYTTURK\aaktas] WITH GRANT OPTION;", script);
+        Assert.DoesNotContain("perm|database|", script);   // ham kanonik OLMAMALI
+    }
+
     private static ColumnRow Column(int columnId, string name) => new(
         CustomerId, columnId, name, "sys", "int", 4, 10, 0,
         true, null, false, false, null, null, null, null, null, null, null);

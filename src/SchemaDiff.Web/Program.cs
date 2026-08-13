@@ -259,6 +259,13 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
     var fwd = Parse(request.Selection);
     var rev = Parse(request.ReverseSelection);
 
+    // Kullanıcı ileri seçimin HEPSİNİN tikini kaldırdıysa (boş liste GÖNDERİLDİ): "hiçbiri".
+    // Bu, "seçim yok (null) → tümü" varsayılanından farklıdır — boş liste açıkça "hiçbiri" demektir.
+    var forwardExplicitEmpty = request.Selection is { Length: 0 };
+    // İleri bölüm HEPSİNİ yazar: yalnız hiç seçim yoksa (null) ve ters seçim de yoksa ve
+    // kullanıcı açıkça hepsini kaldırmadıysa.
+    var forwardAll = fwd is null && rev is null && !forwardExplicitEmpty;
+
     // Script'e giren her gövdenin (ileri/ters) hedefinde DOLU olup bloklanacak tabloları
     // en başa uyarı olarak yazar. Deploy'dan önce görülmesi gereken tek şey bu.
     var warnSegments = new List<(CompareResult, ISet<ObjectKey>?)>();
@@ -266,7 +273,7 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
         warnSegments.Add((reverseCmp, fwd));
     else
     {
-        if (fwd is null && rev is null || fwd is not null) warnSegments.Add((forwardCmp, fwd));
+        if (forwardAll || fwd is not null) warnSegments.Add((forwardCmp, fwd));
         if (rev is not null) warnSegments.Add((reverseCmp, rev));
     }
     var (blockingCount, warningText) = DeploymentWarning.Build(warnSegments);
@@ -289,8 +296,7 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
     else
     {
         // İLERİ bölüm: seçili objeler (⇄ ile işaretlenenler UI'da zaten forward'dan çıkarılır).
-        // fwd null ve ters seçim de yoksa → tümü. Ters seçim varsa boş forward = "hiçbiri".
-        var forwardAll = fwd is null && rev is null;
+        // forwardAll yukarıda hesaplandı: yalnız hiç seçim yoksa tümü; hepsi kaldırıldıysa hiçbiri.
         if (forwardAll || fwd is not null)
         {
             if (mixed) sb.Append(DeploymentHeader.UseDatabase(forwardCmp.Target.Database)).AppendLine();

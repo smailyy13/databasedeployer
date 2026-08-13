@@ -56,7 +56,8 @@ public sealed record CompareRequest(
     ConnectionDto Target,
     CompareOptionsDto? Options);
 
-/// <summary>Script üretimi isteği. Selection boş/null ise TÜM değişiklikler yazılır (ileri yön).
+/// <summary>Script üretimi isteği. Selection null ise (alan hiç gönderilmedi) TÜM değişiklikler
+/// yazılır; BOŞ liste gönderilirse "hiçbiri" demektir → ileri bölüm boş kalır.
 /// ReverseSelection'daki objeler için ise GERİ ALMA (target→source) kodu üretilir ve
 /// aynı dosyaya, ileri bölümün ardından eklenir. Reverse=true tüm isteği tersine çevirir
 /// (eski davranış; artık UI ReverseSelection kullanıyor).</summary>
