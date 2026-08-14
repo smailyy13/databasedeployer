@@ -70,7 +70,7 @@ public class ModuleScriptGeneratorTests
     }
 
     [Fact]
-    public void Table_change_is_out_of_scope_and_listed_in_header()
+    public void Table_change_is_reported_out_of_scope()
     {
         var tableKey = Table("Orders");
         var source = Database("dev", [Obj(tableKey, 1, columns: [Column("Id")])]);
@@ -78,11 +78,11 @@ public class ModuleScriptGeneratorTests
 
         var script = Generate(source, target);
 
+        // Kapsam dışı değişiklik modül script'ine YAZILMAZ (production için yorum yok);
+        // sonuçta OutOfScope olarak raporlanır, arayüz gösterir.
         Assert.Contains(tableKey, script.OutOfScope);
         Assert.Empty(script.Included);
-        // Kapsam dışı obje sessizce düşmez; başlıkta ismen görünür.
-        Assert.Contains("Orders", script.Sql);
-        Assert.Contains("KAPSAM DIŞI", script.Sql);
+        Assert.DoesNotContain("Orders", script.Sql);
     }
 
     [Fact]

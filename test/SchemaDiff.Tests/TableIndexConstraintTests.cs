@@ -245,7 +245,6 @@ public class TableIndexConstraintTests
         var colIdx = script.Sql.IndexOf("ADD [Note]", StringComparison.Ordinal);
         var fkIdx = script.Sql.IndexOf("ADD CONSTRAINT [FK_Orders_Customer]", StringComparison.Ordinal);
         Assert.True(colIdx >= 0 && fkIdx >= 0 && colIdx < fkIdx, "FK add kolon değişikliğinden sonra gelmeli");
-        Assert.Contains("Foreign key''ler ekleniyor", script.Sql);
     }
 
     // --- DATA_COMPRESSION (Dalga 2) ---

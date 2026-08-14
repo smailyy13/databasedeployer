@@ -203,8 +203,7 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
                 IncludeDrops = request.DropNotInSource,
                 ValidateNewConstraints = request.ScriptValidateNewConstraints,
             });
-            sb.AppendLine(table.Sql);
-            sb.AppendLine();
+            if (!table.IsEmpty) { sb.AppendLine(table.Sql); sb.AppendLine(); }
             included += table.Included.Count;
             hadCycle |= table.HadDependencyCycle;
             skipped.AddRange(table.Skipped.Select(s => (object)new { key = s.Key.ToString(), reason = s.Reason }));
@@ -225,7 +224,7 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
                     ObjectKind.Role, ObjectKind.User, ObjectKind.PlanGuide,
                 },
             });
-            sb.AppendLine(module.Sql);
+            if (!module.IsEmpty) { sb.AppendLine(module.Sql); }
             included += module.Included.Count;
             outOfScope += module.OutOfScope.Count;
             hadCycle |= module.HadDependencyCycle;
@@ -276,7 +275,7 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
         if (forwardAll || fwd is not null) warnSegments.Add((forwardCmp, fwd));
         if (rev is not null) warnSegments.Add((reverseCmp, rev));
     }
-    var (blockingCount, warningText) = DeploymentWarning.Build(warnSegments);
+    var (blockingCount, _) = DeploymentWarning.Build(warnSegments);
 
     // Bu script HANGİ DB üzerinde çalışır? Her BuildBody yönü cmp.Target'ı mutasyona uğratır:
     //   ileri → hedef DB ; tam ters (rollback) → kaynak DB.
@@ -318,8 +317,8 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
         }
     }
 
-    // Uyarı bloğu ve en üste tek master başlık (kaynak/hedef + çalışma sırası + USE).
-    if (warningText.Length > 0) sb.Insert(0, warningText);
+    // En üste yalnızca USE [hedef DB] yazılır (yorum/uyarı bloğu yok — production için sade).
+    // Bloklama uyarısı yalnızca arayüzde gösterilir (blockingCount), script'e girmez.
     if (sb.Length > 0) sb.Insert(0, DeploymentHeader.Master(forwardCmp, generatedAt, allowDataLoss, headerDb));
 
     var tag = request.Reverse ? "reverse" : (rev is not null ? "ileri+reverse" : (fwd is null ? scope ?? "all" : "secili"));
@@ -328,7 +327,7 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
     return Results.Ok(new
     {
         fileName,
-        sql = sb.ToString(),
+        sql = sb.ToString().TrimEnd() + Environment.NewLine,
         included,
         outOfScope,
         skipped,

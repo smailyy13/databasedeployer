@@ -100,7 +100,6 @@ public static class TableScriptGenerator
         var orderedCreates = TopologicalOrder(creates, result.Source, comparer, out var hadCycle);
 
         var sb = new StringBuilder(8192);
-        WriteHeader(sb, result, options, hadCycle);
 
         if (options.WrapInTransaction)
         {
@@ -135,8 +134,6 @@ public static class TableScriptGenerator
         // FK drop'ları EN BAŞTA (kolon/index değişikliklerini engellemesinler).
         if (fkDrops.Count > 0)
         {
-            sb.AppendLine("PRINT N'Foreign key''ler düşürülüyor';");
-            sb.AppendLine("GO");
             foreach (var s in fkDrops) sb.AppendLine(s);
             sb.AppendLine("GO");
             sb.AppendLine();
@@ -147,8 +144,6 @@ public static class TableScriptGenerator
         // FK add'leri EN SONDA (referans edilen tablolar artık var).
         if (fkAdds.Count > 0)
         {
-            sb.AppendLine("PRINT N'Foreign key''ler ekleniyor';");
-            sb.AppendLine("GO");
             foreach (var s in fkAdds) sb.AppendLine(s);
             sb.AppendLine("GO");
             sb.AppendLine();
@@ -160,9 +155,6 @@ public static class TableScriptGenerator
             sb.AppendLine("GO");
             sb.AppendLine();
         }
-
-        sb.AppendLine($"PRINT N'Tamamlandı: {included.Count} tablo uygulandı.';");
-        sb.AppendLine("GO");
 
         return new TableScriptResult(sb.ToString(), included, skipped, gated, hadCycle);
     }
@@ -184,8 +176,6 @@ public static class TableScriptGenerator
         // Bu yüzden IF/BEGIN/END ile sarmalanamaz — GO bir batch ayıracıdır, blok içinde
         // geçersizdir. Script'i olduğu gibi yayınlıyoruz; tablo zaten varsa CREATE hata
         // verir ve XACT_ABORT işlemi geri alır (yeni tablo zaten var olmamalıdır).
-        sb.AppendLine($"PRINT N'Oluşturuluyor: {Describe(key)}';");
-        sb.AppendLine("GO");
         sb.AppendLine(snapshot.DisplayScript!.TrimEnd());
         sb.AppendLine("GO");
         sb.AppendLine();
@@ -337,8 +327,6 @@ public static class TableScriptGenerator
             return;
         }
 
-        sb.AppendLine($"PRINT N'Değiştiriliyor: {Describe(key)}';");
-        sb.AppendLine("GO");
         foreach (var statement in ordered) sb.AppendLine(statement);
         sb.AppendLine("GO");
         sb.AppendLine();
@@ -784,8 +772,6 @@ public static class TableScriptGenerator
             return;
         }
 
-        sb.AppendLine($"PRINT N'Siliniyor: {Describe(key)}';");
-        sb.AppendLine("GO");
         sb.AppendLine($"IF OBJECT_ID(N'[{key.Schema}].[{key.Name}]', N'U') IS NOT NULL");
         sb.AppendLine($"    {sql}");
         sb.AppendLine("GO");
@@ -924,23 +910,7 @@ public static class TableScriptGenerator
         return ordered;
     }
 
-    // --- başlık ve yardımcılar ---
-
-    private static void WriteHeader(
-        StringBuilder sb, CompareResult result, TableScriptOptions options, bool hadCycle)
-    {
-        sb.AppendLine("/* ---- 2) Tablolar --------------------------------------------------------");
-        sb.AppendLine("   Yeni tablo CREATE · kolon ADD/ALTER/DROP · index & constraint (PK/UNIQUE/");
-        sb.AppendLine("   CHECK/FK). Kolon sırası değişimi (tablo yeniden oluşturma) ve veri taşıma");
-        sb.AppendLine("   üretilmez.");
-        sb.AppendLine(options.AllowDataLoss
-            ? "   Veri kaybı adımları (kolon/tablo silme, tip daraltma) DAHİL."
-            : "   Veri kaybı adımları ALINMADI; sonda ayrıca listelenir.");
-        if (hadCycle)
-            sb.AppendLine("   !! Yeni tablolar arasında döngüsel referans var; sıralama garanti edilemedi.");
-        sb.AppendLine("   ------------------------------------------------------------------------ */");
-        sb.AppendLine();
-    }
+    // --- yardımcılar ---
 
     private static string Describe(ObjectKey key) => $"Table [{key.Schema}].[{key.Name.Replace("'", "''")}]";
 }

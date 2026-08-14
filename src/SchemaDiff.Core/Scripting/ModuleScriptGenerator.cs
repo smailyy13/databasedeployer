@@ -122,7 +122,6 @@ public static class ModuleScriptGenerator
         var orderedCreates = TopologicalOrder(creates, result.Source, comparer, out var hadCycle);
 
         var sb = new StringBuilder(8192);
-        WriteHeader(sb, result, options, outOfScope, hadCycle);
 
         if (options.WrapInTransaction)
         {
@@ -137,8 +136,6 @@ public static class ModuleScriptGenerator
 
         foreach (var schema in schemasToAdd)
         {
-            sb.AppendLine($"PRINT N'Şema oluşturuluyor: [{schema.Name}]';");
-            sb.AppendLine("GO");
             sb.AppendLine($"IF SCHEMA_ID(N'{Escape(schema.Name)}') IS NULL");
             sb.AppendLine($"    EXECUTE (N'CREATE SCHEMA [{schema.Name}]');");
             sb.AppendLine("GO");
@@ -148,8 +145,6 @@ public static class ModuleScriptGenerator
 
         foreach (var key in drops.OrderBy(k => k.Kind).ThenBy(k => k.Name, StringComparer.OrdinalIgnoreCase))
         {
-            sb.AppendLine($"PRINT N'Siliniyor: {Describe(key)}';");
-            sb.AppendLine("GO");
             if (key.Kind == ObjectKind.DdlTrigger)
             {
                 // Veritabanı seviyesi DDL trigger: şema yok, sys.triggers'ta parent_class=0.
@@ -178,9 +173,6 @@ public static class ModuleScriptGenerator
             sb.AppendLine("GO");
             sb.AppendLine();
         }
-
-        sb.AppendLine($"PRINT N'Tamamlandı: {included.Count} obje uygulandı.';");
-        sb.AppendLine("GO");
 
         return new ScriptResult(sb.ToString(), included, outOfScope, skipped, hadCycle);
     }
@@ -229,8 +221,6 @@ public static class ModuleScriptGenerator
 
         // SET seçenekleri modülün oluşturulduğu andaki değerleriyle kurulmalı;
         // CREATE/ALTER kendi batch'inin ilk ifadesi olmak zorunda olduğu için ayrı batch.
-        sb.AppendLine($"PRINT N'{(isCreate ? "Oluşturuluyor" : "Değiştiriliyor")}: {Describe(key)}';");
-        sb.AppendLine("GO");
         sb.AppendLine($"SET ANSI_NULLS {OnOff(snapshot.UsesAnsiNulls)};");
         sb.AppendLine($"SET QUOTED_IDENTIFIER {OnOff(snapshot.UsesQuotedIdentifier)};");
         sb.AppendLine("GO");
@@ -307,33 +297,6 @@ public static class ModuleScriptGenerator
         return ordered;
     }
 
-    // --- başlık ---
-
-    private static void WriteHeader(
-        StringBuilder sb, CompareResult result, ScriptOptions options,
-        List<ObjectKey> outOfScope, bool hadCycle)
-    {
-        sb.AppendLine("/* ---- 3) Modüller --------------------------------------------------------");
-        sb.AppendLine("   Şema (CREATE SCHEMA), view, prosedür, fonksiyon, trigger. Veri kaybı yoktur.");
-
-        if (outOfScope.Count > 0)
-        {
-            sb.AppendLine($"   !! KAPSAM DIŞI {outOfScope.Count} DEĞİŞİKLİK VAR — bu script bunları UYGULAMAZ.");
-            sb.AppendLine("   Tablo/kolon/index/constraint değişiklikleri ayrıca ele alınmalıdır:");
-            sb.AppendLine();
-            foreach (var key in outOfScope
-                         .OrderBy(k => k.Kind).ThenBy(k => k.Schema, StringComparer.OrdinalIgnoreCase)
-                         .ThenBy(k => k.Name, StringComparer.OrdinalIgnoreCase))
-                sb.AppendLine($"        {key}");
-            sb.AppendLine();
-        }
-
-        if (hadCycle)
-            sb.AppendLine("   !! Yeni objeler arasında döngüsel referans var; sıralama tam garanti " +
-                          "edilemedi. Hata verirse ilgili objeyi elle uygulayın.");
-        sb.AppendLine("   ------------------------------------------------------------------------ */");
-        sb.AppendLine();
-    }
 
     // --- yardımcılar ---
 

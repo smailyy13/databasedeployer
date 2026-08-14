@@ -78,7 +78,6 @@ public static class RoleScriptGenerator
             return new RoleScriptResult(string.Empty, included, skipped);
 
         var sb = new StringBuilder(4096);
-        WriteHeader(sb, result, options);
 
         if (options.WrapInTransaction)
         {
@@ -95,7 +94,6 @@ public static class RoleScriptGenerator
             var (type, schema) = UserDef(result.Source, key);
             var login = type == "S" ? " WITHOUT LOGIN" : string.Empty;
             var sch = !schema.Equals("dbo", StringComparison.OrdinalIgnoreCase) ? $" WITH DEFAULT_SCHEMA=[{schema}]" : string.Empty;
-            sb.AppendLine($"PRINT N'Kullanıcı oluşturuluyor: {Escape(key.Name)}';");
             // Ad zaten varsa VEYA login'in SID'i başka bir kullanıcıya eşliyse (ör. hedef,
             // aynı login'e ait kişisel kopya → login = dbo) atla. Aksi hâlde Msg 15063:
             // "The login already has an account under a different user name".
@@ -110,7 +108,6 @@ public static class RoleScriptGenerator
         foreach (var key in userChanges.OrderBy(k => k.Name, StringComparer.OrdinalIgnoreCase))
         {
             var (_, schema) = UserDef(result.Source, key);
-            sb.AppendLine($"PRINT N'Kullanıcı güncelleniyor: {Escape(key.Name)}';");
             sb.AppendLine($"IF DATABASE_PRINCIPAL_ID(N'{Escape(key.Name)}') IS NOT NULL");
             sb.AppendLine($"    ALTER USER [{key.Name}] WITH DEFAULT_SCHEMA=[{schema}];");
             sb.AppendLine("GO");
@@ -120,7 +117,6 @@ public static class RoleScriptGenerator
 
         foreach (var key in adds.OrderBy(k => k.Name, StringComparer.OrdinalIgnoreCase))
         {
-            sb.AppendLine($"PRINT N'Rol oluşturuluyor: {Escape(key.Name)}';");
             sb.AppendLine($"IF DATABASE_PRINCIPAL_ID(N'{Escape(key.Name)}') IS NULL");
             sb.AppendLine($"    CREATE ROLE [{key.Name}];");
             foreach (var member in Members(result.Source, key))
@@ -144,7 +140,6 @@ public static class RoleScriptGenerator
                 continue;
             }
 
-            sb.AppendLine($"PRINT N'Rol üyeliği güncelleniyor: {Escape(key.Name)}';");
             foreach (var member in toDrop) WriteDropMember(sb, key.Name, member);
             foreach (var member in toAdd) WriteAddMember(sb, key.Name, member);
             sb.AppendLine("GO");
@@ -156,7 +151,6 @@ public static class RoleScriptGenerator
         {
             foreach (var key in drops.OrderBy(k => k.Name, StringComparer.OrdinalIgnoreCase))
             {
-                sb.AppendLine($"PRINT N'Rol siliniyor: {Escape(key.Name)}';");
                 sb.AppendLine($"IF DATABASE_PRINCIPAL_ID(N'{Escape(key.Name)}') IS NOT NULL");
                 sb.AppendLine("BEGIN");
                 // Üyeleri önce düşür — üyesi olan rol silinemez.
@@ -180,7 +174,6 @@ public static class RoleScriptGenerator
         {
             foreach (var key in userDrops.OrderBy(k => k.Name, StringComparer.OrdinalIgnoreCase))
             {
-                sb.AppendLine($"PRINT N'Kullanıcı siliniyor: {Escape(key.Name)}';");
                 sb.AppendLine($"IF DATABASE_PRINCIPAL_ID(N'{Escape(key.Name)}') IS NOT NULL");
                 sb.AppendLine("BEGIN");
                 // Kullanıcının sahip olduğu şemaları önce dbo'ya devret; aksi hâlde
@@ -251,16 +244,6 @@ public static class RoleScriptGenerator
             if (fields.Length == 2) set.Add(fields[1]);
         }
         return set;
-    }
-
-    private static void WriteHeader(StringBuilder sb, CompareResult result, RoleScriptOptions options)
-    {
-        sb.AppendLine("/* ---- 4) Kullanıcılar, roller ve üyelik ----------------------------------");
-        sb.AppendLine("   CREATE/ALTER/DROP USER; rol oluşturma/silme; üyelik (sabit roller dahil).");
-        sb.AppendLine("   Kullanıcılar önce oluşur, en son silinir. Eksik principal atlanır.");
-        sb.AppendLine("   Login/SID eşlemesi ortama özgü olduğundan karşılaştırılmaz.");
-        sb.AppendLine("   ------------------------------------------------------------------------ */");
-        sb.AppendLine();
     }
 
     private static string Escape(string value) => value.Replace("'", "''");

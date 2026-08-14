@@ -78,7 +78,6 @@ public static class ExtendedPropertyScriptGenerator
 
             if (statements.Count == 0) continue;
 
-            body.AppendLine($"PRINT N'Extended property: {Describe(host)}';");
             foreach (var s in statements) body.AppendLine(s);
             body.AppendLine("GO");
             body.AppendLine();
@@ -88,10 +87,6 @@ public static class ExtendedPropertyScriptGenerator
         if (included.Count == 0) return new ExtendedPropertyScriptResult(string.Empty, included, skipped);
 
         var sb = new StringBuilder(body.Length + 512);
-        sb.AppendLine("/* ---- 5a) Extended property ----------------------------------------------");
-        sb.AppendLine("   Modül ve tablolardan SONRA çalışır (host objeler var olmalı).");
-        sb.AppendLine("   ------------------------------------------------------------------------ */");
-        sb.AppendLine();
         sb.Append(body);
 
         return new ExtendedPropertyScriptResult(sb.ToString(), included, skipped);

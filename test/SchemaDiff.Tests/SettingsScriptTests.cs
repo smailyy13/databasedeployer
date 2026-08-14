@@ -120,14 +120,6 @@ public class SettingsScriptTests
     }
 
     [Fact]
-    public void Section_header_explains_why_it_runs_last()
-    {
-        var script = Script(Catalog(guides: [Guide()]), Catalog());
-
-        Assert.Contains("Modüllerden SONRA", script.Sql, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void Nothing_to_do_produces_an_empty_result()
     {
         Assert.True(Script(Catalog(), Catalog()).IsEmpty);
