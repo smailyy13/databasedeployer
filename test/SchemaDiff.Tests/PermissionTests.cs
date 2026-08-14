@@ -18,7 +18,8 @@ public class PermissionTests
         IEnumerable<RoleRow>? roles = null,
         IEnumerable<RoleMemberRow>? members = null,
         IEnumerable<PermissionRow>? permissions = null,
-        IEnumerable<ColumnRow>? columns = null)
+        IEnumerable<ColumnRow>? columns = null,
+        IEnumerable<UserRow>? users = null)
     {
         return new CatalogSet
         {
@@ -30,6 +31,7 @@ public class PermissionTests
             Roles = [.. roles ?? []],
             RoleMembers = [.. members ?? []],
             Permissions = [.. permissions ?? []],
+            Users = [.. users ?? []],
         };
     }
 
@@ -156,6 +158,39 @@ public class PermissionTests
         var result = SchemaComparer.Compare(source, target);
 
         Assert.Empty(result.Differences);
+    }
+
+    // Kullanıcı da (users) IgnorePermissions ile bastırılır — ne diff'e ne script'e girer.
+    [Fact]
+    public void IgnorePermissions_suppresses_users()
+    {
+        var options = SnapshotOptions.Default with { IgnorePermissions = true };
+        var source = Build(Catalog(users: [new UserRow(@"KUVEYTTURK\dcandan", "E", "dbo")]), options);
+        var target = Build(Catalog(), options);
+
+        var result = SchemaComparer.Compare(source, target);
+
+        Assert.Empty(result.Differences);
+        Assert.DoesNotContain(source.Objects.Keys, k => k.Kind == ObjectKind.User);
+    }
+
+    // Kapsam kontrolü: IgnorePermissions AÇIK iken users + roller + izinler snapshot'a HİÇ girmez;
+    // KAPALI iken hepsi görünür (varsayılan davranışın karşıt ucu).
+    [Fact]
+    public void IgnorePermissions_toggles_entire_security_layer()
+    {
+        var cat = Catalog(
+            roles: [new RoleRow(ReaderRoleId, "Reader", "dbo")],
+            members: [new RoleMemberRow(ReaderRoleId, @"KUVEYTTURK\team")],
+            users: [new UserRow(@"KUVEYTTURK\dcandan", "E", "dbo")],
+            permissions: [new PermissionRow(0, 0, 0, "CONNECT", "GRANT", @"KUVEYTTURK\team")]);
+
+        var ignored = Build(cat, SnapshotOptions.Default with { IgnorePermissions = true });
+        Assert.DoesNotContain(ignored.Objects.Keys, k => k.Kind is ObjectKind.User or ObjectKind.Role);
+
+        var kept = Build(cat, SnapshotOptions.Default);   // IgnorePermissions = false
+        Assert.Contains(kept.Objects.Keys, k => k.Kind == ObjectKind.User);
+        Assert.Contains(kept.Objects.Keys, k => k.Kind == ObjectKind.Role);
     }
 
     // Sentetik "(database)" objesi artık okunur T-SQL DisplayScript üretmeli — alt panelde
