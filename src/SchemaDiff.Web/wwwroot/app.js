@@ -331,7 +331,7 @@ const DEFAULT_OPTIONS = {
   ignoreStatistics: false,
   ignoreDmlTriggerState: false, ignoreSystemNamedConstraints: true,
   ignoreExtendedProperties: false, ignorePermissions: false, caseSensitiveNames: false,
-  blockDataLoss: true, dropNotInSource: true, scriptValidateConstraints: true,
+  blockDataLoss: false, dropNotInSource: true, scriptValidateConstraints: true,
   recreateChangedTableTypes: false,
   maxQueries: 16,
 };
