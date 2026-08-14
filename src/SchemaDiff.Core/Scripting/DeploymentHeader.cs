@@ -17,34 +17,10 @@ public static class DeploymentHeader
     public static string Master(CompareResult result, string? generatedAt, bool allowDataLoss,
         string? runOnDatabase = null)
     {
-        var sb = new StringBuilder(1024);
-        sb.AppendLine("/* ==========================================================================");
-        sb.AppendLine("   SchemaDiff — DAĞITIM SCRIPT'İ");
-        sb.AppendLine();
-        sb.AppendLine($"   Kaynak (source) : {result.Source.Server} / {result.Source.Database}");
-        sb.AppendLine($"   Hedef  (target) : {result.Target.Server} / {result.Target.Database}");
-        if (generatedAt is not null) sb.AppendLine($"   Üretim          : {generatedAt}");
-        sb.AppendLine();
-        sb.AppendLine("   ÇALIŞMA SIRASI (yukarıdan aşağıya; her bölüm kendi transaction'ında):");
-        sb.AppendLine("     1) Tipler / sequence / synonym / partition  — tablo & modüller bunlara bağlı");
-        sb.AppendLine("     2) Tablolar   — CREATE, kolon ADD/ALTER/DROP, index & constraint");
-        sb.AppendLine("     3) Modüller   — CREATE SCHEMA, view, fonksiyon, prosedür, trigger");
-        sb.AppendLine("     4) Roller     — CREATE/ALTER/DROP ROLE ve üyelik");
-        sb.AppendLine("     5) Extended property + izinler (GRANT/DENY)");
-        sb.AppendLine("     6) Veritabanı ayarları + plan guide'lar — modüllere bağlı olabilirler");
-        sb.AppendLine();
-        sb.AppendLine(allowDataLoss
-            ? "   !! VERİ KAYBI ONAYLANDI — kolon/tablo silme ve tip daraltma script'e DAHİL."
-            : "   Veri kaybı riski taşıyan adımlar script'e ALINMADI (sonda ayrıca raporlanır).");
-        sb.AppendLine("   ========================================================================== */");
-        sb.AppendLine();
-        // Hedef veritabanını açıkça seç — yanlış DB'ye (ör. master) çalıştırmayı önler.
-        if (runOnDatabase is not null)
-        {
-            sb.AppendLine(UseDatabase(runOnDatabase).TrimEnd());
-            sb.AppendLine();
-        }
-        return sb.ToString();
+        // Yalnızca hedef veritabanını seç — yanlış DB'ye (ör. master) çalıştırmayı önler.
+        // Açıklama/başlık bloğu yok (production için sade script).
+        if (runOnDatabase is null) return string.Empty;
+        return UseDatabase(runOnDatabase).TrimEnd() + Environment.NewLine + Environment.NewLine;
     }
 
     /// <summary>Bir bölümün çalışacağı DB'yi seçen <c>USE [db]; GO</c> bloğu (bracket-safe).</summary>

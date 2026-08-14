@@ -44,11 +44,6 @@ public static class SettingsScriptGenerator
         if (included.Count == 0) return new SettingsScriptResult(string.Empty, included, skipped);
 
         var sb = new StringBuilder(body.Length + 512);
-        sb.AppendLine("/* ---- 6) Veritabanı ayarları ve plan guide'lar ---------------------------");
-        sb.AppendLine("   Modüllerden SONRA çalışır: OBJECT kapsamlı plan guide bağlı olduğu");
-        sb.AppendLine("   prosedür var olmadan kurulamaz.");
-        sb.AppendLine("   ------------------------------------------------------------------------ */");
-        sb.AppendLine();
         sb.Append(body);
 
         return new SettingsScriptResult(sb.ToString(), included, skipped);
@@ -73,7 +68,6 @@ public static class SettingsScriptGenerator
 
         if (statements.Count == 0) return;
 
-        body.AppendLine("PRINT N'Veritabanı ayarları';");
         foreach (var statement in statements) body.AppendLine(statement);
         body.AppendLine("GO");
         body.AppendLine();
@@ -131,7 +125,6 @@ public static class SettingsScriptGenerator
 
             if (diff.Kind == DiffKind.Removed)
             {
-                body.AppendLine($"PRINT N'Siliniyor: {Describe(diff.Key)}';");
                 body.AppendLine($"EXEC sp_control_plan_guide N'DROP', N'{name}';");
                 body.AppendLine("GO");
                 body.AppendLine();
@@ -147,7 +140,6 @@ public static class SettingsScriptGenerator
             }
 
             // Plan guide ALTER edilemez: değişen guide önce düşürülür.
-            body.AppendLine($"PRINT N'{(diff.Kind == DiffKind.Added ? "Oluşturuluyor" : "Yeniden kuruluyor")}: {Describe(diff.Key)}';");
             if (diff.Kind == DiffKind.Changed)
                 body.AppendLine($"EXEC sp_control_plan_guide N'DROP', N'{name}';");
             body.AppendLine(source.DisplayScript!.TrimEnd());

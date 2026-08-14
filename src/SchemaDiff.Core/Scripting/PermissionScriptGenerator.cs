@@ -57,7 +57,6 @@ public static class PermissionScriptGenerator
 
             if (statements.Count == 0) continue;
 
-            body.AppendLine($"PRINT N'İzinler: {Describe(host)}';");
             foreach (var s in statements) body.AppendLine(s);
             body.AppendLine("GO");
             body.AppendLine();
@@ -67,10 +66,6 @@ public static class PermissionScriptGenerator
         if (included.Count == 0) return new PermissionScriptResult(string.Empty, included, skipped);
 
         var sb = new StringBuilder(body.Length + 512);
-        sb.AppendLine("/* ---- 5b) İzinler (GRANT/DENY) -------------------------------------------");
-        sb.AppendLine("   Modül ve tablolardan SONRA çalışır. Eksik grantee atlanır.");
-        sb.AppendLine("   ------------------------------------------------------------------------ */");
-        sb.AppendLine();
         sb.Append(body);
 
         return new PermissionScriptResult(sb.ToString(), included, skipped);

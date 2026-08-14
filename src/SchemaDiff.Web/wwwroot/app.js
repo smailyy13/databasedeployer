@@ -45,7 +45,7 @@ const I18N = {
     notComparedYet: 'No comparison yet.', noDiffForFilters: 'No differences to show with these filters.',
     listLimited: 'List limited to {n} records — there are more.',
     flagBlock: 'WILL BLOCK', flagIndeterminate: 'INDETERMINATE',
-    pickInfo: '{n} objects selected → Generate Script writes only these · Shift+click for range',
+    pickInfo: '{n} objects selected · Shift+click for range',
     pickInfoAll: 'Nothing selected → the script will be empty',
     generatedScript: 'Generated script', downloadSql: 'Download .sql', copy: 'Copy',
     scriptReady: 'Script ready — review/edit, then download', scriptCopied: 'Script copied to clipboard',
@@ -58,6 +58,8 @@ const I18N = {
     riskS3: '<b>{n}</b> are risky but empty in target → apply cleanly.',
     riskS4: '<b>{n}</b> are low risk → applied in place.',
     riskS5: '<b>{n}</b> have an unreadable row count → check manually.',
+    riskChipTotal: 'affected tables', riskChipBlock: 'will block', riskChipLoss: 'data loss',
+    riskChipClean: 'apply cleanly', riskChipUnknown: 'check manually',
     rLabelDataLoss: 'DATA LOSS', rLabelBlock: 'WILL BLOCK', rLabelCheck: 'CHECK DATA', rLabelEmpty: 'empty table',
     rLabelRisky: 'RISKY (row count unreadable)', rLabelInPlace: 'in place', rLabelSafe: 'safe',
     rowsN: '{n} rows', rowsUnknown: '? rows',
@@ -97,7 +99,7 @@ const I18N = {
     opt_ignoreDmlTriggerState: 'Ignore DML trigger state', optn_ignoreDmlTriggerState: 'Whether a DML trigger is enabled/disabled is not counted.',
     opt_ignoreSystemNamedConstraints: 'Ignore system-named constraints', optn_ignoreSystemNamedConstraints: 'Auto names like PK__Tbl__A1B2C3 differ between environments.',
     opt_ignoreExtendedProperties: 'Ignore extended properties', optn_ignoreExtendedProperties: 'Descriptions like MS_Description are not compared. Default: compared (SSDT does too).',
-    opt_ignorePermissions: 'Ignore permissions and roles', optn_ignorePermissions: 'User-defined roles, memberships and object/schema permissions are not compared. Default: compared.',
+    opt_ignorePermissions: 'Ignore users, roles and permissions', optn_ignorePermissions: 'Database users, user-defined roles, memberships and object/schema permissions are neither shown nor scripted — handled separately. Default: ignored.',
     opt_recreateChangedTableTypes: 'Recreate changed table types', optn_recreateChangedTableTypes: 'A changed table type cannot be altered. When on, dependent modules are dropped, the type is recreated and the modules are restored — only if every dependent definition is readable.',
     opt_caseSensitiveNames: 'Case-sensitive names', optn_caseSensitiveNames: "Default is case-insensitive — SQL Server's usual collation behaviour.",
   },
@@ -136,7 +138,7 @@ const I18N = {
     notComparedYet: 'Henüz karşılaştırma yapılmadı.', noDiffForFilters: 'Bu filtrelerle gösterilecek fark yok.',
     listLimited: 'Liste {n} kayıtla sınırlandı — daha fazlası var.',
     flagBlock: 'BLOKLANIR', flagIndeterminate: 'BELİRSİZ',
-    pickInfo: '{n} obje seçili → Script üret yalnızca bunları yazar · Shift+tık ile aralık seç',
+    pickInfo: '{n} obje seçili · Shift+tık ile aralık seç',
     pickInfoAll: 'Hiçbiri seçili değil → script boş olur',
     generatedScript: 'Üretilen script', downloadSql: '.sql indir', copy: 'Kopyala',
     scriptReady: 'Script hazır — gözden geçir/düzenle, sonra indir', scriptCopied: 'Script panoya kopyalandı',
@@ -149,6 +151,8 @@ const I18N = {
     riskS3: '<b>{n}</b> tanesi riskli ama hedefte boş → sorunsuz uygulanır.',
     riskS4: '<b>{n}</b> tanesi düşük riskli → yerinde uygulanır.',
     riskS5: '<b>{n}</b> tanesinin satır sayısı okunamadı → elle kontrol edin.',
+    riskChipTotal: 'etkilenen tablo', riskChipBlock: 'bloklanır', riskChipLoss: 'veri kaybı',
+    riskChipClean: 'sorunsuz', riskChipUnknown: 'elle kontrol',
     rLabelDataLoss: 'VERİ KAYBI', rLabelBlock: 'BLOKLANIR', rLabelCheck: 'KONTROL ET', rLabelEmpty: 'boş tablo',
     rLabelRisky: 'RİSKLİ (satır sayısı okunamadı)', rLabelInPlace: 'yerinde', rLabelSafe: 'güvenli',
     rowsN: '{n} satır', rowsUnknown: '? satır',
@@ -188,7 +192,7 @@ const I18N = {
     opt_ignoreDmlTriggerState: 'DML trigger durumunu yok say', optn_ignoreDmlTriggerState: 'DML trigger\'ın etkin/pasif olması fark sayılmaz.',
     opt_ignoreSystemNamedConstraints: 'Sistem üretimi constraint adlarını yok say', optn_ignoreSystemNamedConstraints: 'PK__Tbl__A1B2C3 gibi otomatik adlar ortamlar arasında farklıdır.',
     opt_ignoreExtendedProperties: 'Extended property\'leri yok say', optn_ignoreExtendedProperties: 'MS_Description gibi açıklamalar karşılaştırılmaz. Varsayılan: karşılaştırılır (SSDT de eder).',
-    opt_ignorePermissions: 'İzin ve rolleri yok say', optn_ignorePermissions: 'Kullanıcı tanımlı roller, üyelikler ve obje/şema izinleri karşılaştırılmaz. Varsayılan: karşılaştırılır.',
+    opt_ignorePermissions: 'Kullanıcı, rol ve izinleri yok say', optn_ignorePermissions: 'Veritabanı kullanıcıları, roller, üyelikler ve obje/şema izinleri ne ekranda gösterilir ne de script\'e girer — ayrıca ele alınır. Varsayılan: yok sayılır.',
     opt_recreateChangedTableTypes: 'Değişen table type\'ları yeniden kur', optn_recreateChangedTableTypes: 'Table type ALTER edilemez. Açıkken bağımlı modüller düşürülür, tip yeniden kurulur ve modüller geri yüklenir — yalnızca bağımlıların TAMAMININ tanımı okunabiliyorsa.',
     opt_caseSensitiveNames: 'İsimlerde büyük/küçük harf duyarlı', optn_caseSensitiveNames: 'Varsayılan duyarsızdır — SQL Server\'ın olağan collation davranışı.',
   },
@@ -316,8 +320,6 @@ const OPTION_GROUPS = [
                                'ignoreDataCompression', 'ignoreStatistics'] },
   { group: 'optgObject', keys: ['ignoreDmlTriggerState', 'ignoreSystemNamedConstraints'] },
   { group: 'optgScope', keys: ['ignoreExtendedProperties', 'ignorePermissions', 'caseSensitiveNames'] },
-  { group: 'optgScript', keys: ['blockDataLoss', 'dropNotInSource', 'scriptValidateConstraints',
-                                'recreateChangedTableTypes'] },
 ];
 
 const OPTION_KEYS = OPTION_GROUPS.flatMap((g) => g.keys);
@@ -330,7 +332,7 @@ const DEFAULT_OPTIONS = {
   ignoreIndexPhysical: false, ignoreFillFactor: true, ignoreIndexPadding: false, ignoreDataCompression: false,
   ignoreStatistics: false,
   ignoreDmlTriggerState: false, ignoreSystemNamedConstraints: true,
-  ignoreExtendedProperties: false, ignorePermissions: false, caseSensitiveNames: false,
+  ignoreExtendedProperties: false, ignorePermissions: true, caseSensitiveNames: false,
   blockDataLoss: false, dropNotInSource: true, scriptValidateConstraints: true,
   recreateChangedTableTypes: false,
   maxQueries: 16,
@@ -356,6 +358,7 @@ const state = {
   hunkIndex: -1,
   diffRowCount: 0,          // alt panelde toplam satır (minimap konumlaması için)
   wordTerm: '',             // alt panelde sarı vurgulanan kelime (toggle için)
+  optCollapsed: new Set(),  // ayarlar menüsünde kapatılmış kategori başlıkları
 };
 
 // Ağaçtaki klasör sırası — SSDT'nin gösterdiği sırayla aynı.
@@ -540,16 +543,36 @@ function renderEndpoints() {
 // ================= seçenekler =================
 
 function renderOptions() {
-  $('optList').innerHTML = OPTION_GROUPS.map((g) => `
-    <div class="opt-group">${esc(t(g.group))}</div>` +
-    g.keys.map((key) => `
-    <label>
-      <input type="checkbox" data-opt="${key}" ${state.options[key] ? 'checked' : ''}>
-      <span class="opt-text"><span>${esc(t('opt_' + key))}</span><span class="opt-note">${esc(t('optn_' + key))}</span></span>
-    </label>`).join('')).join('');
+  // Üst kategoriler açılır/kapanır (accordion). Her seçenek TEK satır; açıklama üstüne
+  // gelince (title tooltip) detaylı çıkar. Aktif (varsayılandan farklı) seçenek sayısı rozette.
+  $('optList').innerHTML = OPTION_GROUPS.map((g) => {
+    const collapsed = state.optCollapsed.has(g.group);
+    const activeCount = g.keys.filter((k) => state.options[k] !== DEFAULT_OPTIONS[k]).length;
+    const header = `
+      <div class="opt-group${collapsed ? ' collapsed' : ''}" data-group="${g.group}">
+        <span class="caret">${collapsed ? '▸' : '▾'}</span>
+        <span class="opt-group-name">${esc(t(g.group))}</span>
+        ${activeCount ? `<span class="opt-group-badge">${activeCount}</span>` : ''}
+      </div>`;
+    if (collapsed) return header;
+    const rows = g.keys.map((key) => `
+      <label class="opt-row" title="${esc(t('optn_' + key))}">
+        <input type="checkbox" data-opt="${key}" ${state.options[key] ? 'checked' : ''}>
+        <span class="opt-label">${esc(t('opt_' + key))}</span>
+      </label>`).join('');
+    return header + rows;
+  }).join('');
+
+  // Başlığa tıkla → o kategoriyi aç/kapa.
+  for (const h of $('optList').querySelectorAll('.opt-group'))
+    h.addEventListener('click', () => {
+      const grp = h.dataset.group;
+      state.optCollapsed.has(grp) ? state.optCollapsed.delete(grp) : state.optCollapsed.add(grp);
+      renderOptions();
+    });
 
   for (const box of $('optList').querySelectorAll('[data-opt]'))
-    box.addEventListener('change', () => { state.options[box.dataset.opt] = box.checked; });
+    box.addEventListener('change', (e) => { e.stopPropagation(); state.options[box.dataset.opt] = box.checked; renderOptions(); });
 }
 
 // ================= karşılaştırma =================
@@ -913,28 +936,39 @@ function renderRisk() {
   }
 
   const rank = { DataLoss: 3, BlockedIfNotEmpty: 2, InPlace: 1, Safe: 0 };
+  const isUnknown = (r) => r.rows === null && !r.willBlock && rank[r.risk] >= 2;
+  // Önem skoru: veri kaybı > bloklanır > bilinmeyen > yerinde > güvenli.
+  const sev = (r) => r.willBlock ? (r.risk === 'DataLoss' ? 4 : 3) : isUnknown(r) ? 2 : (r.risk === 'InPlace' ? 1 : 0);
+
   const blocking = risks.filter((r) => r.willBlock);
-  const losesData = blocking.filter((r) => r.risk === 'DataLoss');
-  const emptyRisky = risks.filter((r) => r.rows === 0 && rank[r.risk] >= 2);
-  const unknown = risks.filter((r) => r.rows === null && rank[r.risk] >= 2);
-  const low = risks.filter((r) => rank[r.risk] < 2);
+  const dataLoss = blocking.filter((r) => r.risk === 'DataLoss');
+  const unknown = risks.filter(isUnknown);
+  const clean = risks.length - blocking.length - unknown.length;
 
-  wrap.innerHTML = `<div class="tally">
-      <div>${t('riskS1', { n: num(risks.length) })}</div>
-      <div>${t('riskS2', { n: num(blocking.length), loss: num(losesData.length) })}</div>
-      <div>${t('riskS3', { n: num(emptyRisky.length) })}</div>
-      ${low.length ? `<div>${t('riskS4', { n: num(low.length) })}</div>` : ''}
-      ${unknown.length ? `<div>${t('riskS5', { n: num(unknown.length) })}</div>` : ''}
-    </div>` + risks.map((r) => {
-      let label = t('rLabelSafe'), tag = '';
-      if (r.willBlock && r.conditionalOnly) { label = t('rLabelCheck'); tag = 'warn'; }
-      else if (r.willBlock && r.risk === 'DataLoss') { label = t('rLabelDataLoss'); tag = 'danger'; }
-      else if (r.willBlock) { label = t('rLabelBlock'); tag = 'danger'; }
-      else if (r.rows === 0 && rank[r.risk] >= 2) label = t('rLabelEmpty');
-      else if (r.rows === null && rank[r.risk] >= 2) { label = t('rLabelRisky'); tag = 'warn'; }
-      else if (r.risk === 'InPlace') label = t('rLabelInPlace');
+  const chip = (n, key, cls) => `<div class="risk-stat ${cls}"><b>${num(n)}</b><span>${esc(t(key))}</span></div>`;
+  const summary = `<div class="risk-summary">
+      ${chip(risks.length, 'riskChipTotal', 'total')}
+      ${chip(blocking.length, 'riskChipBlock', 'danger')}
+      ${dataLoss.length ? chip(dataLoss.length, 'riskChipLoss', 'danger') : ''}
+      ${clean ? chip(clean, 'riskChipClean', 'ok') : ''}
+      ${unknown.length ? chip(unknown.length, 'riskChipUnknown', 'warn') : ''}
+    </div>`;
 
-      return `<div class="risk ${r.willBlock ? 'block' : (r.risk === 'InPlace' ? 'inplace' : '')}">
+  // En riskliden en güvenliye sırala; eşitse satır sayısına göre.
+  const sorted = [...risks].sort((a, b) => sev(b) - sev(a) || (b.rows ?? -1) - (a.rows ?? -1));
+
+  const cards = sorted.map((r) => {
+    let label = t('rLabelSafe'), tag = 'ok';
+    if (r.willBlock && r.conditionalOnly) { label = t('rLabelCheck'); tag = 'warn'; }
+    else if (r.willBlock && r.risk === 'DataLoss') { label = t('rLabelDataLoss'); tag = 'danger'; }
+    else if (r.willBlock) { label = t('rLabelBlock'); tag = 'danger'; }
+    else if (r.rows === 0 && rank[r.risk] >= 2) { label = t('rLabelEmpty'); tag = 'ok'; }
+    else if (isUnknown(r)) { label = t('rLabelRisky'); tag = 'warn'; }
+    else if (r.risk === 'InPlace') { label = t('rLabelInPlace'); tag = 'inplace'; }
+
+    const key = `Table|${r.schema}|${r.name}`;
+    const sel = state.selected === key ? ' selected' : '';
+    return `<div class="risk sev-${tag}${sel}" data-key="${esc(key)}" data-schema="${esc(r.schema)}" data-name="${esc(r.name)}">
         <div class="risk-head">
           <span class="tag ${tag}">${esc(label)}</span>
           <strong>${esc(r.schema)}.${esc(r.name)}</strong>
@@ -942,38 +976,23 @@ function renderRisk() {
         </div>
         ${r.findings.map((f) => `<div class="finding"><span>${esc(f.column)}</span><span>${esc(f.description)}</span></div>`).join('')}
       </div>`;
-    }).join('');
-}
+  }).join('');
 
-function renderTriggers() {
-  const wrap = $('triggerWrap');
-  const triggers = state.result?.triggers ?? [];
-  if (triggers.length === 0) {
-    wrap.innerHTML = `<p class="missing">${esc(t('noTriggers'))}</p>`;
-    return;
-  }
+  wrap.innerHTML = summary + cards;
 
-  const mismatched = triggers.filter((x) => x.sourceDisabled !== null && x.sourceDisabled !== x.disabled);
-  const off = t('stateOff'), on = t('stateOn');
-  wrap.innerHTML = (mismatched.length
-      ? `<div class="tally"><div>${t('triggerMismatch', { n: num(mismatched.length) })}</div></div>`
-      : '') +
-    `<table class="trg"><thead><tr><th>${esc(t('thTrigger'))}</th><th>${esc(t('thTarget'))}</th><th>${esc(t('thSource'))}</th></tr></thead><tbody>` +
-    triggers.map((trg) => {
-      const differs = trg.sourceDisabled !== null && trg.sourceDisabled !== trg.disabled;
-      return `<tr class="${differs ? 'mismatch' : ''}">
-        <td class="mono">${esc(trg.schema)}.${esc(trg.name)}</td>
-        <td class="${trg.disabled ? 'state-off' : 'state-on'}">${trg.disabled ? esc(off) : esc(on)}</td>
-        <td class="${trg.sourceDisabled === null ? '' : (trg.sourceDisabled ? 'state-off' : 'state-on')}">
-          ${trg.sourceDisabled === null ? '—' : (trg.sourceDisabled ? esc(off) : esc(on))}</td></tr>`;
-    }).join('') + `</tbody></table>`;
+  // Karta tıkla → alt panelde o tablonun detayını aç (ağaçtaki gibi).
+  for (const el of wrap.querySelectorAll('.risk'))
+    el.addEventListener('click', () => {
+      state.selected = el.dataset.key;
+      loadDetail(el.dataset.schema, el.dataset.name, 'Table');
+      renderRisk();
+    });
 }
 
 function renderAll() {
   renderCounts();
   renderTree();
   renderRisk();
-  renderTriggers();
 }
 
 // ================= alt panel =================
@@ -1561,7 +1580,6 @@ for (const tab of document.querySelectorAll('.vtab')) {
     for (const other of document.querySelectorAll('.vtab')) other.classList.toggle('active', other === tab);
     $('treeWrap').hidden = tab.dataset.view !== 'tree';
     $('riskWrap').hidden = tab.dataset.view !== 'risk';
-    $('triggerWrap').hidden = tab.dataset.view !== 'triggers';
     $('gridhead').hidden = tab.dataset.view !== 'tree';
   });
 }
@@ -1607,6 +1625,7 @@ $('langBtn').addEventListener('click', () => {
   renderEndpoints();
   if (state.result) renderAll();
   if (state.detail) renderDetail();
+  if (!$('optDialog').hidden) renderOptions();   // ayarlar açıksa etiket/açıklamaları da çevir
 });
 
 applyTheme();

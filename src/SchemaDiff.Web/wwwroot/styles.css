@@ -277,16 +277,31 @@ p { margin: 0; }
 .missing { padding: 48px 24px; color: var(--ink-3); text-align: center; font-size: 13px; }
 
 /* ---------- risk / trigger ---------- */
-.tally { padding: 14px; border-bottom: 1px solid var(--line); line-height: 2; background: var(--panel); }
-.tally b { font-variant-numeric: tabular-nums; }
-.risk { padding: 10px 14px; border-bottom: 1px solid var(--line-2); border-left: 3px solid transparent; }
-.risk.block { border-left-color: var(--del); background: linear-gradient(90deg, var(--del-bg), transparent 60%); }
-.risk.inplace { border-left-color: var(--chg); }
+/* Deployment riski — özet çipleri */
+.risk-summary { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px;
+                border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 1; }
+.risk-stat { display: flex; flex-direction: column; align-items: center; min-width: 76px;
+             padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); }
+.risk-stat b { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; color: var(--ink); }
+.risk-stat span { font-size: 10px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .03em; margin-top: 3px; }
+.risk-stat.danger { border-color: var(--del); background: var(--del-bg); } .risk-stat.danger b { color: var(--del); }
+.risk-stat.warn { border-color: var(--chg); background: var(--chg-bg); } .risk-stat.warn b { color: var(--chg); }
+.risk-stat.ok { border-color: var(--add); background: var(--add-bg); } .risk-stat.ok b { color: var(--add); }
+
+/* Risk kartları — tıklanabilir, severity'e göre sol kenar rengi */
+.risk { padding: 10px 14px; border-bottom: 1px solid var(--line-2); border-left: 3px solid transparent; cursor: pointer; }
+.risk:hover { background: var(--panel-2); }
+.risk.selected { background: var(--sel); }
+.risk.sev-danger { border-left-color: var(--del); }
+.risk.sev-warn, .risk.sev-inplace { border-left-color: var(--chg); }
+.risk.sev-ok { border-left-color: var(--add); }
 .risk-head { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; margin-bottom: 5px; }
 .tag { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
        background: var(--panel-2); border: 1px solid var(--line); color: var(--ink-2); letter-spacing: .02em; }
 .tag.danger { background: var(--del); color: #fff; border-color: transparent; }
 .tag.warn { background: var(--chg-bg); color: var(--chg); border-color: transparent; }
+.tag.ok { background: var(--add-bg); color: var(--add); border-color: transparent; }
+.tag.inplace { background: var(--chg-bg); color: var(--chg); border-color: transparent; }
 .rows { color: var(--ink-3); font-variant-numeric: tabular-nums; font-size: 12px; }
 .finding { display: grid; grid-template-columns: 200px 1fr; gap: 10px;
            font-family: var(--mono); font-size: 11.5px; padding: 2px 0; }
@@ -462,13 +477,27 @@ mark.wordhit { background: #ffdf5d; color: #1f2328; border-radius: 2px; padding:
 .conn-status.error { color: var(--del); }
 
 .opt-list { display: flex; flex-direction: column; gap: 1px; }
-.opt-list label { display: flex; gap: 10px; align-items: center; padding: 9px 10px; border-radius: var(--radius);
-                  cursor: pointer; border-bottom: 1px solid var(--line-2); }
-.opt-list label:last-child { border-bottom: 0; }
-.opt-list label:hover { background: var(--panel-2); }
-.opt-list input { accent-color: var(--accent); }
-.opt-list .opt-text { display: flex; flex-direction: column; }
-.opt-list .opt-note { font-size: 11px; color: var(--ink-3); }
-.opt-list .opt-group { margin: 12px 0 2px; padding: 0 2px; font-size: 11px; font-weight: 700;
-                       text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3); }
+
+/* Açılır/kapanır kategori başlığı */
+.opt-list .opt-group {
+  display: flex; align-items: center; gap: 7px; cursor: pointer; user-select: none;
+  margin: 10px 0 2px; padding: 5px 6px; border-radius: var(--radius);
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3);
+}
 .opt-list .opt-group:first-child { margin-top: 0; }
+.opt-list .opt-group:hover { background: var(--panel-2); color: var(--ink-2); }
+.opt-list .opt-group .caret { font-size: 9px; width: 10px; text-align: center; flex-shrink: 0; }
+.opt-list .opt-group-name { flex: 1; }
+.opt-list .opt-group-badge {
+  background: var(--accent-soft); color: var(--accent); border-radius: 999px;
+  padding: 0 7px; font-size: 10px; font-weight: 700; text-transform: none; letter-spacing: 0;
+}
+
+/* Tek satır seçenek — açıklama title (hover) ile gelir */
+.opt-list .opt-row {
+  display: flex; gap: 10px; align-items: center; padding: 7px 10px; border-radius: var(--radius);
+  cursor: pointer; font-size: 13px;
+}
+.opt-list .opt-row:hover { background: var(--panel-2); }
+.opt-list .opt-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.opt-list input { accent-color: var(--accent); flex-shrink: 0; }

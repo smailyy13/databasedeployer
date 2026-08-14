@@ -119,7 +119,6 @@ public static class TypeScriptGenerator
         }
 
         var sb = new StringBuilder(4096);
-        WriteHeader(sb, result, options);
 
         if (options.WrapInTransaction)
         {
@@ -144,7 +143,6 @@ public static class TypeScriptGenerator
                 continue;
             }
 
-            sb.AppendLine($"PRINT N'Oluşturuluyor: {Describe(key)}';");
             sb.AppendLine($"IF {NotExistsCondition(key)}");
             sb.AppendLine("BEGIN");
             foreach (var line in snapshot.DisplayScript!.TrimEnd().Split('\n'))
@@ -172,7 +170,6 @@ public static class TypeScriptGenerator
                 continue;
             }
 
-            sb.AppendLine($"PRINT N'Güncelleniyor: {Describe(key)}';");
             foreach (var statement in statements) sb.AppendLine(statement);
             sb.AppendLine("GO");
             sb.AppendLine();
@@ -186,7 +183,6 @@ public static class TypeScriptGenerator
                          .OrderByDescending(CreatePriority)
                          .ThenBy(k => k.Name, StringComparer.OrdinalIgnoreCase))
             {
-                sb.AppendLine($"PRINT N'Siliniyor: {Describe(key)}';");
                 sb.AppendLine($"IF {ExistsCondition(key)}");
                 sb.AppendLine($"    {DropStatement(key, result.Target.Objects.GetValueOrDefault(key))}");
                 sb.AppendLine("GO");
@@ -234,10 +230,6 @@ public static class TypeScriptGenerator
                        "tip yeniden kurulmadı; elle uygulayın";
             }
         }
-
-        sb.AppendLine($"PRINT N'Yeniden kuruluyor: {Describe(key)}';");
-        sb.AppendLine("GO");
-        sb.AppendLine();
 
         foreach (var dependent in toDrop)
         {
@@ -296,14 +288,6 @@ public static class TypeScriptGenerator
             .Select(w => Extraction.SnapshotBuilder.StopwordStatement(key.Name, w, add: false)));
 
         return statements;
-    }
-
-    private static void WriteHeader(StringBuilder sb, CompareResult result, TypeScriptOptions options)
-    {
-        sb.AppendLine("/* ---- 1) Tipler / sequence / synonym / partition -------------------------");
-        sb.AppendLine("   Tablo ve modüllerden ÖNCE çalışır (bunlar bu tiplere bağlı olabilir).");
-        sb.AppendLine("   ------------------------------------------------------------------------ */");
-        sb.AppendLine();
     }
 
     // Sıra: partition function → scheme → sequence → alias tip → table type → synonym.
