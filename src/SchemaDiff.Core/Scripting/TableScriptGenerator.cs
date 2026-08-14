@@ -233,8 +233,9 @@ public static class TableScriptGenerator
             var sql = $"ALTER TABLE {qualified} ADD [{column.Name}] {RenderType(column)}" +
                       $"{AddColumnAttributes(column)} {Nullability(column)}{def};";
 
-            // Dolu tabloya DEFAULT'suz NOT NULL kolon eklemek başarısız olur.
-            if (!column.IsNullable && column.DefaultDefinition is null && rows is > 0)
+            // Dolu tabloya DEFAULT'suz NOT NULL kolon eklemek başarısız olur → normalde geri bırakılır.
+            // AllowDataLoss açıkken (kullanıcı "her şeyi yaz" dedi) yine de script'e girer.
+            if (!column.IsNullable && column.DefaultDefinition is null && rows is > 0 && !options.AllowDataLoss)
             {
                 gated.Add(new GatedAction(key, column.Name,
                     $"NOT NULL kolon ekleniyor, DEFAULT yok, tabloda {rows} satır var — çalışmadan önce backfill gerekir", sql));
@@ -283,7 +284,9 @@ public static class TableScriptGenerator
                     statements.Add(sql);
                     break;
                 case AlterRisk.BlockedIfNotEmpty:
-                    gated.Add(new GatedAction(key, column.Name,
+                    // Dolu tabloda başarısız olabilir → normalde geri bırakılır; AllowDataLoss açıkken yazılır.
+                    if (options.AllowDataLoss) statements.Add(sql);
+                    else gated.Add(new GatedAction(key, column.Name,
                         $"{current.TypeDisplay} {(current.IsNullable ? "NULL" : "NOT NULL")} → " +
                         $"{column.TypeDisplay} {(column.IsNullable ? "NULL" : "NOT NULL")} — dolu tabloda ({rows} satır) başarısız olabilir", sql));
                     break;
