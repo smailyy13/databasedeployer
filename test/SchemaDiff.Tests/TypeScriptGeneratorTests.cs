@@ -166,7 +166,7 @@ public class TypeScriptGeneratorTests
     {
         var script = Generate(Build(PartitionFnCatalog("pfMonthly", "int", true, "10", "20", "30")), Build(Empty()));
 
-        Assert.Contains("CREATE PARTITION FUNCTION [pfMonthly] ([int]) AS RANGE RIGHT FOR VALUES (10, 20, 30);", script.Sql);
+        Assert.Contains("CREATE PARTITION FUNCTION [pfMonthly](int) AS RANGE RIGHT FOR VALUES (10, 20, 30);", script.Sql);
         Assert.Contains("NOT EXISTS (SELECT 1 FROM sys.partition_functions WHERE name = N'pfMonthly')", script.Sql);
     }
 

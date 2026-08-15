@@ -281,22 +281,31 @@ internal static class TableScriptWriter
                      .Where(i => !i.IsPrimaryKey && !i.IsUniqueConstraint && i.Name is not null)
                      .OrderBy(i => i.Name, StringComparer.Ordinal))
         {
+            var columnstore = index.TypeDesc.Contains("COLUMNSTORE", StringComparison.OrdinalIgnoreCase);
+            // CLUSTERED COLUMNSTORE tüm tabloyu kapsar → kolon listesi (ve INCLUDE/WHERE) YOK.
+            var clusteredColumnstore = columnstore && !index.TypeDesc.Contains("NONCLUSTERED", StringComparison.OrdinalIgnoreCase);
+
             var sb = new StringBuilder();
             sb.Append("GO").AppendLine();
             sb.Append("CREATE ");
-            if (index.IsUnique) sb.Append("UNIQUE ");
+            if (index.IsUnique && !columnstore) sb.Append("UNIQUE ");
             sb.Append(index.TypeDesc).Append(" INDEX [").Append(index.Name).AppendLine("]");
-            sb.Append("    ON ").Append(Quote(key.Schema, key.Name))
-              .Append('(').Append(KeyColumns(objectId, index.IndexId, sources)).Append(')');
+            sb.Append("    ON ").Append(Quote(key.Schema, key.Name));
+            if (!clusteredColumnstore)
+                sb.Append('(').Append(KeyColumns(objectId, index.IndexId, sources)).Append(')');
 
-            var included = IncludedColumns(objectId, index.IndexId, sources);
-            if (included.Length > 0) sb.AppendLine().Append("    INCLUDE(").Append(included).Append(')');
+            if (!columnstore)   // INCLUDE columnstore'da yoktur
+            {
+                var included = IncludedColumns(objectId, index.IndexId, sources);
+                if (included.Length > 0) sb.AppendLine().Append("    INCLUDE(").Append(included).Append(')');
+            }
 
-            if (index.FilterDefinition is not null)
+            if (!clusteredColumnstore && index.FilterDefinition is not null)
                 sb.AppendLine().Append("    WHERE ").Append(index.FilterDefinition);
 
             // Fiziksel seçenekler tek WITH listesinde toplanır; varsayılandan sapanlar yazılır.
-            if (!options.IgnoreIndexPhysicalOptions)
+            // Kilit/fill-factor seçenekleri columnstore'da GEÇERSİZDİR — atla.
+            if (!options.IgnoreIndexPhysicalOptions && !columnstore)
             {
                 var withOptions = new List<string>(5);
                 if (index.FillFactor > 0)

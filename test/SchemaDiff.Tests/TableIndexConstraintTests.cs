@@ -294,6 +294,29 @@ public class TableIndexConstraintTests
     }
 
     [Fact]
+    public void Clustered_columnstore_create_has_no_column_list()
+    {
+        // CLUSTERED COLUMNSTORE tüm tabloyu kapsar → CREATE'te kolon listesi YOK.
+        // Kilit seçenekleri (columnstore'da OFF raporlanır) da geçersizdir → yazılmamalı.
+        var idx = new IndexRow(CustomerId, 2, "CCI_Customer", "CLUSTERED COLUMNSTORE", false, false, false, 0, false, false, null, null, false, false);
+        var script = Generate(Build(Table([idx], [])), Build(Table([], [])));
+
+        Assert.Contains("CREATE CLUSTERED COLUMNSTORE INDEX [CCI_Customer] ON [dbo].[Customer];", script.Sql);
+        Assert.DoesNotContain("[CCI_Customer] ON [dbo].[Customer] (", script.Sql);   // kolon parantezi olmamalı
+        Assert.DoesNotContain("ALLOW_ROW_LOCKS", script.Sql);                          // columnstore'da geçersiz
+    }
+
+    [Fact]
+    public void Nonclustered_columnstore_create_lists_columns()
+    {
+        // NONCLUSTERED COLUMNSTORE ise columnstore kolonlarını listeler.
+        var idx = new IndexRow(CustomerId, 2, "NCCI_Customer", "NONCLUSTERED COLUMNSTORE", false, false, false, 0, false, false, null);
+        var script = Generate(Build(Table([idx], [Key(2, 3, 1)])), Build(Table([], [])));
+
+        Assert.Contains("CREATE NONCLUSTERED COLUMNSTORE INDEX [NCCI_Customer] ON [dbo].[Customer] ([Email])", script.Sql);
+    }
+
+    [Fact]
     public void Ignore_data_compression_option_suppresses_diff()
     {
         var opts = SnapshotOptions.Default with { KeepDisplayScripts = true, IgnoreDataCompression = true };

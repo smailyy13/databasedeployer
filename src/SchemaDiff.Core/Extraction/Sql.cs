@@ -392,8 +392,10 @@ internal static class Sql
         """;
 
     // Partition function sınır değerleri, sıralı. value sql_variant → nvarchar.
+    // Stil 126: datetime sınır değerleri ISO-8601 (2010-01-01T00:00:00.000) olarak gelsin
+    // (SSMS çıktısıyla aynı). Sayısal/diğer tiplerde stil yok sayılır.
     public const string PartitionRangeValues = """
-        SELECT prv.function_id, prv.boundary_id, CONVERT(nvarchar(4000), prv.value)
+        SELECT prv.function_id, prv.boundary_id, CONVERT(nvarchar(4000), prv.value, 126)
         FROM sys.partition_range_values AS prv
         ORDER BY prv.function_id, prv.boundary_id;
         """;

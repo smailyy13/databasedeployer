@@ -287,10 +287,12 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
         : rev is not null ? reverseCmp.Target.Database                     // yalnız ⇄ ters bölüm → kaynak DB
         : forwardCmp.Target.Database;                                      // ileri → hedef DB
 
-    // Eski tam-ters davranış (Reverse=true): tüm ileri seçimi ters karşılaştırmadan üret.
+    // Tam-ters (Reverse=true): seçili objeleri ters karşılaştırmadan üret.
+    // Seçim BOŞ liste (forwardExplicitEmpty) ise "hiçbiri" → hiç yazma (reverse sekmesi boş kalır).
+    // Seçim hiç yoksa (null) eski davranış: tümü.
     if (request.Reverse)
     {
-        BuildBody(reverseCmp, fwd);
+        if (fwd is not null || !forwardExplicitEmpty) BuildBody(reverseCmp, fwd);
     }
     else
     {
