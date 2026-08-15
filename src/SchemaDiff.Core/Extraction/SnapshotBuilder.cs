@@ -378,10 +378,8 @@ internal static class SnapshotBuilder
                 $"|bounds={string.Join(',', boundValues)}");
             if (options.KeepDisplayScripts)
             {
-                var literals = boundValues.Select(v => PartitionLiteral(pf.InputType, v));
-                snapshot.DisplayScript =
-                    $"CREATE PARTITION FUNCTION [{pf.Name}] ([{pf.InputType}]) " +
-                    $"AS RANGE {(pf.BoundaryOnRight ? "RIGHT" : "LEFT")} FOR VALUES ({string.Join(", ", literals)});";
+                var literals = boundValues.Select(v => PartitionLiteral(pf.InputType, v)).ToList();
+                snapshot.DisplayScript = RenderPartitionFunction(pf.Name, pf.InputType, pf.BoundaryOnRight, literals);
             }
             Finalize(snapshot);
             objects[key] = snapshot;
@@ -1652,7 +1650,33 @@ internal static class SnapshotBuilder
     {
         if (value == "NULL") return "NULL";
         if (type is not null && NumericPartitionTypes.Contains(type)) return value;
+        // datetime/smalldatetime: SSMS gibi hep 3 haneli milisaniye (.000). Style 126 sıfır
+        // milisaniyeyi kırptığı için kesir yoksa ekle (2010-01-01T00:00:00 → ...00.000).
+        if (type is "datetime" or "smalldatetime" && value.Contains('T') && !value.Contains('.'))
+            value += ".000";
         return $"N'{value.Replace("'", "''")}'";
+    }
+
+    /// <summary>Partition function'ı SSMS biçiminde üretir: <c>[name](type) AS RANGE RIGHT FOR
+    /// VALUES (...)</c>; sınır değerleri okunur şekilde satırlara bölünür.</summary>
+    private static string RenderPartitionFunction(string name, string? inputType, bool right, List<string> literals)
+    {
+        var sb = new StringBuilder("CREATE PARTITION FUNCTION [")
+            .Append(name).Append("](").Append(inputType ?? "sql_variant").Append(") AS RANGE ")
+            .Append(right ? "RIGHT" : "LEFT").Append(" FOR VALUES (");
+        var lineLen = sb.Length;
+        for (var i = 0; i < literals.Count; i++)
+        {
+            var piece = literals[i] + (i < literals.Count - 1 ? ", " : string.Empty);
+            if (i > 0 && lineLen + piece.Length > 180)   // ~180 karakterde alt satıra geç (SSMS gibi)
+            {
+                sb.Append(Environment.NewLine);
+                lineLen = 0;
+            }
+            sb.Append(piece);
+            lineLen += piece.Length;
+        }
+        return sb.Append(");").ToString();
     }
 
     private static string RenderSequence(ObjectKey key, SequenceRow s)

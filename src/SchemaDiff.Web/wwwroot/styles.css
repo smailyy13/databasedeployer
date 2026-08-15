@@ -218,9 +218,9 @@ p { margin: 0; }
 .rev {
   position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
   width: 22px; height: 20px; border-radius: 5px; cursor: pointer;
-  border: 1px solid var(--line); background: var(--panel-2); color: var(--ink-3);
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--ink-2);
   font-size: 12px; line-height: 1; display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity .12s ease, color .12s ease, border-color .12s ease;
+  opacity: .6; transition: opacity .12s ease, color .12s ease, border-color .12s ease;
 }
 .row-obj:hover .rev { opacity: 1; }
 .rev:hover { color: var(--accent); border-color: var(--accent); }
@@ -439,6 +439,16 @@ mark.wordhit { background: #ffdf5d; color: #1f2328; border-radius: 2px; padding:
 .x { background: none; border: 0; font-size: 16px; color: var(--ink-3); cursor: pointer;
      width: 28px; height: 28px; border-radius: var(--radius); }
 .x:hover { background: var(--panel-2); color: var(--ink); }
+
+/* Üretilen script — yön sekmeleri (source→target / target→source) */
+.script-tabs { display: flex; gap: 4px; background: var(--panel-2); padding: 3px; border-radius: 7px;
+               border: 1px solid var(--line); margin-left: 14px; }
+.stab { font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; padding: 4px 14px;
+        border-radius: var(--radius); border: 1px solid transparent; background: transparent; color: var(--ink-2); }
+.stab:hover { color: var(--ink); }
+.stab.active { background: var(--panel); border-color: var(--line); color: var(--ink); box-shadow: var(--shadow); }
+.stab.empty { color: var(--ink-3); }
+.stab.empty::after { content: ' ∅'; opacity: .6; }
 .dialog-body { display: grid; grid-template-columns: 260px 1fr; gap: 0; overflow: auto; min-height: 0; }
 .dialog-body.single { display: block; padding: 18px; }
 .recent { padding: 16px; border-right: 1px solid var(--line); overflow: auto; background: var(--panel-2); }

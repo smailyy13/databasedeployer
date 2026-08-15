@@ -44,10 +44,12 @@ const I18N = {
     comparing: 'comparing {source} → {target}…', connectionLost: 'Connection lost.',
     notComparedYet: 'No comparison yet.', noDiffForFilters: 'No differences to show with these filters.',
     listLimited: 'List limited to {n} records — there are more.',
-    flagBlock: 'WILL BLOCK', flagIndeterminate: 'INDETERMINATE',
+    flagIndeterminate: 'INDETERMINATE',
     pickInfo: '{n} objects selected · Shift+click for range',
     pickInfoAll: 'Nothing selected → the script will be empty',
     generatedScript: 'Generated script', downloadSql: 'Download .sql', copy: 'Copy',
+    dirForward: 'source → target', dirReverse: 'target → source',
+    emptyScriptInfo: 'No changes in this direction.',
     scriptReady: 'Script ready — review/edit, then download', scriptCopied: 'Script copied to clipboard',
     sqlDownloaded: 'Downloaded {file}', selectGroupTip: 'Select / clear all {g}',
     statResult: '{source} → {target} · {objects} objects · {equal} equal · +{add} ~{change} −{delete} · {ms} ms',
@@ -73,7 +75,6 @@ const I18N = {
     scriptIncluded: '{n} objects written ({sel} of selected)',
     scriptIncludedAll: 'Nothing selected — the script is empty',
     dataLossIncluded: '⚠ DATA-LOSS steps (drop column/table, narrowing) INCLUDED',
-    blockingWarned: '⚠ {n} full table(s) will block — see the warning header at the top of the script',
     stillGated: '{n} steps still gated', outOfScopeN: '{n} objects out of scope (sequence/synonym etc.)',
     skippedN: '{n} objects skipped', downloaded: '{file} downloaded · {parts}',
     optgText: 'Text / normalization', optgColumn: 'Columns & types', optgIndex: 'Indexes',
@@ -137,10 +138,12 @@ const I18N = {
     comparing: '{source} → {target} karşılaştırılıyor…', connectionLost: 'Bağlantı koptu.',
     notComparedYet: 'Henüz karşılaştırma yapılmadı.', noDiffForFilters: 'Bu filtrelerle gösterilecek fark yok.',
     listLimited: 'Liste {n} kayıtla sınırlandı — daha fazlası var.',
-    flagBlock: 'BLOKLANIR', flagIndeterminate: 'BELİRSİZ',
+    flagIndeterminate: 'BELİRSİZ',
     pickInfo: '{n} obje seçili · Shift+tık ile aralık seç',
     pickInfoAll: 'Hiçbiri seçili değil → script boş olur',
     generatedScript: 'Üretilen script', downloadSql: '.sql indir', copy: 'Kopyala',
+    dirForward: 'kaynak → hedef', dirReverse: 'hedef → kaynak',
+    emptyScriptInfo: 'Bu yönde değişiklik yok.',
     scriptReady: 'Script hazır — gözden geçir/düzenle, sonra indir', scriptCopied: 'Script panoya kopyalandı',
     sqlDownloaded: 'İndirildi: {file}', selectGroupTip: 'Tüm {g} objelerini seç / kaldır',
     statResult: '{source} → {target} · {objects} obje · {equal} aynı · +{add} ~{change} −{delete} · {ms} ms',
@@ -166,7 +169,6 @@ const I18N = {
     scriptIncluded: '{n} obje script\'e girdi ({sel} seçiliden)',
     scriptIncludedAll: 'Hiçbiri seçili değil — script boş',
     dataLossIncluded: '⚠ VERİ KAYBI adımları (kolon/tablo silme, tip daraltma) DAHİL',
-    blockingWarned: '⚠ {n} dolu tablo bloklanacak — script başındaki uyarı bloğuna bakın',
     stillGated: '{n} adım yine de gated', outOfScopeN: '{n} obje kapsam dışı (sequence/synonym vb.)',
     skippedN: '{n} obje atlandı', downloaded: '{file} indirildi · {parts}',
     optgText: 'Metin / normalizasyon', optgColumn: 'Kolon ve tipler', optgIndex: 'Index\'ler',
@@ -781,9 +783,7 @@ function objectRow(change, objKey) {
   const expandable = change.children.length > 0;
   const selected = state.selected === objKey ? ' selected' : '';
 
-  const flag = change.willBlock && change.conditionalOnly ? `<span class="flag warn">${esc(t('rLabelCheck'))}</span>`
-    : change.willBlock ? `<span class="flag">${esc(t('flagBlock'))}</span>`
-    : change.indeterminate ? `<span class="flag warn">${esc(t('flagIndeterminate'))}</span>` : '';
+  const flag = change.indeterminate ? `<span class="flag warn">${esc(t('flagIndeterminate'))}</span>` : '';
 
   return `<div class="row-obj${selected}${dim}" data-key="${esc(objKey)}"
       data-schema="${esc(change.schema)}" data-name="${esc(change.name)}" data-kind="${esc(change.objectType)}">
@@ -797,7 +797,9 @@ function objectRow(change, objKey) {
       <span class="act ${change.action}">${ACTION_ICON[change.action]}</span>
     </span>
     <span class="c-name">${change.action === 'Add' ? '' : esc(full)}${flag}</span>
-    <button class="rev${state.reversed.has(objKey) ? ' on' : ''}" data-rev="${esc(objKey)}" aria-pressed="${state.reversed.has(objKey)}" title="${esc(t('reverseTip'))}" aria-label="${esc(t('reverseTip'))}">⇄</button>
+    ${state.checked.has(objKey)
+      ? `<button class="rev${state.reversed.has(objKey) ? ' on' : ''}" data-rev="${esc(objKey)}" title="${esc(t('reverseTip'))}" aria-label="${esc(t('reverseTip'))}">⇄</button>`
+      : ''}
   </div>`;
 }
 
@@ -873,20 +875,14 @@ function bindTree(tree) {
     });
 
   // ⇄ toggle: objeyi geri-alma (ters yön) için işaretle/kaldır. İndirmez — sadece işaretler.
-  // İşaretlenince ileri seçimden çıkar (aynı obje hem ileri hem ters uygulanmasın).
-  // Generate Script'e basınca ileri seçim + ters işaretliler tek dosyada birlikte iner.
+  // ⇄ : tikli objeyi reverse yönüne al. Reverse'e giren obje forward'dan çıkar
+  // (aşağıda script üretiminde ayrılır). Tik korunur — "reverse için tikli+işaretli olmalı".
   for (const btn of tree.querySelectorAll('.rev'))
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const key = btn.dataset.rev;
-      if (state.reversed.has(key)) {
-        state.reversed.delete(key);
-      } else {
-        state.reversed.add(key);
-        state.checked.delete(key);   // ileri seçimden çıkar
-      }
+      state.reversed.has(key) ? state.reversed.delete(key) : state.reversed.add(key);
       renderTree();
-      renderPickInfo();
     });
 
   for (const el of tree.querySelectorAll('.row-obj, .row-child'))
@@ -1358,50 +1354,29 @@ function selectedObjectItems() {
   return [...seen.values()];
 }
 
-// ⇄ ile işaretlenen objeler (ters yön) → seçim formatı.
-function reversedObjectItems() {
-  return [...state.reversed].map((key) => {
-    const parts = key.split('|');
-    return { objectType: parts[0], schema: parts[1] ?? '', name: parts.slice(2).join('|') };
-  });
-}
-
-// Script üret + tarayıcıdan indir. selection = ileri yön; reverseSelection = ⇄ ile
-// işaretlenen objeler (ters yön). İkisi de aynı dosyaya, ileri bölüm sonra ters bölüm olarak yazılır.
-async function downloadScript(selection, reverseSelection = []) {
+// Script üret: iki AYRI seçimle iki AYRI script.
+//   forward = source → target — ⇄ İŞARETSİZ tikli objeler (dağıtım).
+//   reverse = target → source — YALNIZ ⇄ işaretli (ve tikli) objeler (geri alma).
+// ⇄ işaretli obje forward'dan çıkar. Reverse seçim boşsa o sekme boş kalır.
+async function generateScripts(forwardSel, reverseSel) {
   if (!state.runId) return;
   $('scriptBtn').disabled = true;
-  const hasRev = reverseSelection.length > 0;
   setStatus(t('generatingScript'), 'busy');
 
+  const call = (selection, reverse) => fetch(`/api/runs/${state.runId}/script`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      scope: 'all',
+      dataLoss: !state.options.blockDataLoss,
+      dropNotInSource: state.options.dropNotInSource,
+      scriptValidateNewConstraints: state.options.scriptValidateConstraints,
+      selection, reverse,
+    }),
+  }).then((r) => { if (!r.ok) throw new Error(t('scriptFailed')); return r.json(); });
+
   try {
-    const response = await fetch(`/api/runs/${state.runId}/script`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        scope: 'all',
-        dataLoss: !state.options.blockDataLoss,
-        dropNotInSource: state.options.dropNotInSource,
-        scriptValidateNewConstraints: state.options.scriptValidateConstraints,
-        selection, reverseSelection,
-      }),
-    });
-    if (!response.ok) throw new Error(t('scriptFailed'));
-    const data = await response.json();
-
-    // Doğrudan indirmek yerine renkli + düzenlenebilir editörde göster; indirme editörde.
-    const dataLoss = (data.dataLossActions || []).length;
-    const parts = [selection.length > 0
-      ? t('scriptIncluded', { n: num(data.included), sel: num(selection.length) })
-      : t('scriptIncludedAll', { n: num(data.included) })];
-    if (hasRev) parts.push(t('reverseIncluded', { n: num(reverseSelection.length) }));
-    if (!state.options.blockDataLoss) parts.push(t('dataLossIncluded'));
-    if (data.blockingCount > 0) parts.push(t('blockingWarned', { n: num(data.blockingCount) }));
-    if (dataLoss > 0) parts.push(t('stillGated', { n: num(dataLoss) }));
-    if (data.outOfScope > 0) parts.push(t('outOfScopeN', { n: num(data.outOfScope) }));
-    if (data.skipped.length > 0) parts.push(t('skippedN', { n: num(data.skipped.length) }));
-
-    openScriptEditor(data.sql, data.fileName, parts.join(' · '));
+    const [forward, reverse] = await Promise.all([call(forwardSel, false), call(reverseSel, true)]);
+    openScriptEditor(forwardSel.length, reverseSel.length, forward, reverse);
     setStatus(t('scriptReady'));
   } catch (error) {
     setStatus(error.message, 'error');
@@ -1410,7 +1385,27 @@ async function downloadScript(selection, reverseSelection = []) {
   }
 }
 
-$('scriptBtn').addEventListener('click', () => downloadScript(selectedObjectItems(), reversedObjectItems()));
+// Tikli objeleri ⇄ işaretine göre ikiye ayır: forward (işaretsiz) / reverse (işaretli).
+$('scriptBtn').addEventListener('click', () => {
+  const all = selectedObjectItems();
+  const keyOf = (o) => `${o.objectType}|${o.schema}|${o.name}`;
+  const forwardSel = all.filter((o) => !state.reversed.has(keyOf(o)));
+  const reverseSel = all.filter((o) => state.reversed.has(keyOf(o)));
+  generateScripts(forwardSel, reverseSel);
+});
+
+// Bir yönün özet satırı; içerik yoksa "değişiklik yok".
+function scriptInfoLine(selLen, data) {
+  if (!data.sql || !data.sql.trim()) return t('emptyScriptInfo');
+  const parts = [selLen > 0
+    ? t('scriptIncluded', { n: num(data.included), sel: num(selLen) })
+    : t('scriptIncludedAll', { n: num(data.included) })];
+  if (!state.options.blockDataLoss) parts.push(t('dataLossIncluded'));
+  if ((data.dataLossActions || []).length) parts.push(t('stillGated', { n: num(data.dataLossActions.length) }));
+  if (data.outOfScope > 0) parts.push(t('outOfScopeN', { n: num(data.outOfScope) }));
+  if ((data.skipped || []).length) parts.push(t('skippedN', { n: num(data.skipped.length) }));
+  return parts.join(' · ');
+}
 
 // ---- üretilen script editörü (renkli + düzenlenebilir + indir + yerel oto-tamamlama) ----
 let scriptFileName = 'script.sql';
@@ -1431,16 +1426,36 @@ function highlightEditor() {
   $('codeGutter').scrollTop = ta.scrollTop;
 }
 
-function openScriptEditor(sql, fileName, info) {
-  scriptFileName = fileName || 'script.sql';
-  $('codeInput').value = sql;
-  $('scriptInfo').textContent = info || '';
+function openScriptEditor(fwdLen, revLen, forward, reverse) {
+  const revEmpty = !(reverse.sql && reverse.sql.trim());
+  state.scriptDirs = {
+    forward: { sql: forward.sql || '', fileName: forward.fileName || 'script.sql', info: scriptInfoLine(fwdLen, forward) },
+    reverse: { sql: reverse.sql || '', fileName: reverse.fileName || 'reverse.sql', info: scriptInfoLine(revLen, reverse), empty: revEmpty },
+  };
+  // Reverse sekmesi boşsa etikette belli et.
+  const revTab = document.querySelector('#scriptDialog .stab[data-dir="reverse"]');
+  if (revTab) revTab.classList.toggle('empty', revEmpty);
+
+  scriptVocab = buildVocab();
   $('scriptScrim').hidden = false;
   $('scriptDialog').hidden = false;
+  showScriptDir('forward');
+}
+
+// Aktif yönü editöre yükle. İndir/kopyala codeInput + scriptFileName üzerinden çalışır.
+function showScriptDir(dir) {
+  const d = state.scriptDirs?.[dir];
+  if (!d) return;
+  state.scriptActiveDir = dir;
+  for (const b of document.querySelectorAll('#scriptDialog .stab')) b.classList.toggle('active', b.dataset.dir === dir);
+  scriptFileName = d.fileName;
+  $('codeInput').value = d.sql;
+  $('scriptInfo').textContent = d.info || '';
+  gutterLines = -1;
   $('codeInput').scrollTop = 0;
-  scriptVocab = buildVocab();
   highlightEditor();
 }
+
 function closeScriptEditor() { closeAutocomplete(); $('scriptScrim').hidden = true; $('scriptDialog').hidden = true; }
 
 // ===== yerel (AI'sız) şema-farkında oto-tamamlama =====
@@ -1559,6 +1574,9 @@ $('codeInput').addEventListener('keydown', (e) => {
 });
 $('scriptClose').addEventListener('click', closeScriptEditor);
 $('scriptScrim').addEventListener('click', closeScriptEditor);
+// Yön sekmeleri: source→target / target→source. Aktif sekmenin script'i editörde.
+for (const tab of document.querySelectorAll('#scriptDialog .stab'))
+  tab.addEventListener('click', () => showScriptDir(tab.dataset.dir));
 $('scriptDownloadBtn').addEventListener('click', () => {
   // UTF-8 BOM: sqlcmd/SSMS Türkçe karakterleri doğru okusun.
   const url = URL.createObjectURL(new Blob(['﻿' + $('codeInput').value], { type: 'application/sql' }));

@@ -664,9 +664,18 @@ public static class TableScriptGenerator
         }
 
         var columnstore = idx.TypeDesc.Contains("COLUMNSTORE", StringComparison.OrdinalIgnoreCase);
+        // CLUSTERED COLUMNSTORE tüm tabloyu kapsar → kolon listesi YOK (ve INCLUDE/WHERE olmaz).
+        // NONCLUSTERED COLUMNSTORE ise columnstore kolonlarını listeler.
+        var clusteredColumnstore = columnstore && !idx.TypeDesc.Contains("NONCLUSTERED", StringComparison.OrdinalIgnoreCase);
+
+        if (clusteredColumnstore)
+            return new StringBuilder($"CREATE {idx.TypeDesc} INDEX [{idx.Name}] ON {qualified}")
+                .Append(WithOptions(idx)).Append(';').ToString();
+
         var unique = idx.IsUnique && !columnstore ? "UNIQUE " : string.Empty;
         var sb = new StringBuilder($"CREATE {unique}{idx.TypeDesc} INDEX [{idx.Name}] ON {qualified} ({KeyList(idx, ordered: !columnstore)})");
-        if (idx.IncludedColumns.Count > 0)
+        // INCLUDE columnstore'da yoktur; yalnız klasik index'lerde yaz.
+        if (!columnstore && idx.IncludedColumns.Count > 0)
             sb.Append(" INCLUDE (").Append(string.Join(", ", idx.IncludedColumns.Select(c => $"[{c}]"))).Append(')');
         if (idx.FilterDefinition is not null)
             sb.Append(" WHERE ").Append(idx.FilterDefinition);
@@ -680,13 +689,18 @@ public static class TableScriptGenerator
     /// </summary>
     private static string WithOptions(IndexDefinition idx)
     {
+        var columnstore = idx.TypeDesc.Contains("COLUMNSTORE", StringComparison.OrdinalIgnoreCase);
         var options = new List<string>(3);
         if (idx.ExplicitCompression is { } compression) options.Add($"DATA_COMPRESSION = {compression}");
-        if (!idx.AllowRowLocks) options.Add("ALLOW_ROW_LOCKS = OFF");
-        if (!idx.AllowPageLocks) options.Add("ALLOW_PAGE_LOCKS = OFF");
-        if (idx.StatisticsNoRecompute) options.Add("STATISTICS_NORECOMPUTE = ON");
-        // SQL Server 2019+ ayarı; yalnız kaynakta AÇIKSA yazılır, eski hedefte hata vermesin.
-        if (idx.OptimizeForSequentialKey) options.Add("OPTIMIZE_FOR_SEQUENTIAL_KEY = ON");
+        // Kilit/fill-factor/istatistik seçenekleri columnstore'da GEÇERSİZDİR — yalnız klasik index'te yaz.
+        if (!columnstore)
+        {
+            if (!idx.AllowRowLocks) options.Add("ALLOW_ROW_LOCKS = OFF");
+            if (!idx.AllowPageLocks) options.Add("ALLOW_PAGE_LOCKS = OFF");
+            if (idx.StatisticsNoRecompute) options.Add("STATISTICS_NORECOMPUTE = ON");
+            // SQL Server 2019+ ayarı; yalnız kaynakta AÇIKSA yazılır, eski hedefte hata vermesin.
+            if (idx.OptimizeForSequentialKey) options.Add("OPTIMIZE_FOR_SEQUENTIAL_KEY = ON");
+        }
         return options.Count == 0 ? string.Empty : $" WITH ({string.Join(", ", options)})";
     }
 
