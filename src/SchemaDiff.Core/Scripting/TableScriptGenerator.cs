@@ -208,6 +208,21 @@ public static class TableScriptGenerator
         var statements = new List<string>();
         var localSkips = new List<string>();
 
+        // RENAME (yalnızca büyük/küçük harf farkı): kolon eşleşmesi büyük/küçük harf
+        // duyarsızdır, o yüzden yalnız harf durumu değişen kolon ne ADD ne DROP olarak görünür
+        // ve tip de aynı kaldığından ALTER üretilmez — sonuç boş script olurdu. SQL Server
+        // katalogda adı OLDUĞU GİBİ saklar; harf durumunu düzeltmenin tek yolu sp_rename'dir.
+        // Rename önce gelir ki sonraki ifadeler doğru adı kullansın.
+        var renames = new List<string>();
+        foreach (var column in source.Columns)
+        {
+            if (!targetByName.TryGetValue(column.Name, out var current)) continue;
+            if (string.Equals(column.Name, current.Name, StringComparison.Ordinal)) continue;
+            renames.Add(
+                $"EXEC sp_rename N'{Escape(key.Schema)}.{Escape(key.Name)}.{Escape(current.Name)}', " +
+                $"N'{column.Name.Replace("'", "''")}', N'COLUMN';");
+        }
+
         // ADD: kaynakta var, hedefte yok.
         foreach (var column in source.Columns)
         {
@@ -310,7 +325,7 @@ public static class TableScriptGenerator
         foreach (var skip in localSkips)
             skipped.Add(new SkippedObject(key, skip));
 
-        var ordered = verPre.Concat(pre).Concat(statements).Concat(post).ToList();
+        var ordered = renames.Concat(verPre).Concat(pre).Concat(statements).Concat(post).ToList();
 
         if (ordered.Count == 0)
         {
@@ -927,4 +942,9 @@ public static class TableScriptGenerator
     // --- yardımcılar ---
 
     private static string Describe(ObjectKey key) => $"Table [{key.Schema}].[{key.Name.Replace("'", "''")}]";
+
+    /// <summary>sp_rename'in ilk argümanı için köşeli-parantez kimlik: hem <c>]</c> hem de
+    /// dış N'…' string literal'i için <c>'</c> kaçırılır.</summary>
+    private static string Escape(string ident) =>
+        "[" + ident.Replace("]", "]]").Replace("'", "''") + "]";
 }
