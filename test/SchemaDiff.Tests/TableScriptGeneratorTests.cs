@@ -45,6 +45,38 @@ public class TableScriptGeneratorTests
     }
 
     [Fact]
+    public void Column_case_only_change_emits_sp_rename()
+    {
+        var key = Table("T");
+        var source = Database("dev", [Obj(key, 1,
+            columns: [Column("Id"), Column("TranDate", typeName: "date")])]);
+        var target = Database("prod", [Obj(key, 2,
+            columns: [Column("Id"), Column("Trandate", typeName: "date")], rowCount: 1000)]);
+
+        var script = Generate(source, target);
+
+        Assert.Contains(key, script.Included);
+        Assert.Contains("EXEC sp_rename N'[dbo].[T].[Trandate]', N'TranDate', N'COLUMN';", script.Sql);
+        // Yeniden adlandırma güvenli: veri kaybı yok, gereksiz ALTER COLUMN da yok.
+        Assert.Empty(script.DataLossActions);
+        Assert.DoesNotContain("ALTER COLUMN", script.Sql);
+    }
+
+    [Fact]
+    public void Identical_column_case_does_not_emit_sp_rename()
+    {
+        var key = Table("T");
+        var source = Database("dev", [Obj(key, 1,
+            columns: [Column("Id"), Column("Note", typeName: "nvarchar", maxLength: 200)])]);
+        var target = Database("prod", [Obj(key, 2,
+            columns: [Column("Id")])]);
+
+        var script = Generate(source, target);
+
+        Assert.DoesNotContain("sp_rename", script.Sql);
+    }
+
+    [Fact]
     public void Adding_not_null_column_without_default_to_populated_table_is_gated()
     {
         var key = Table("T");
