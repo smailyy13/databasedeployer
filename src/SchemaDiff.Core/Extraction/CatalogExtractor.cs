@@ -67,7 +67,9 @@ internal sealed class CatalogSet
 
 /// <summary>
 /// Tüm şema metadata'sını obje başına değil, obje SINIFI başına tek sorguyla çeker.
-/// 10 sorgu paralel bağlantılarda koşar; DacFx'in semantik model kurmasına gerek yok.
+/// 51 sorgu paralel bağlantılarda koşar; DacFx'in semantik model kurmasına gerek yok.
+/// 38'i opsiyoneldir: eski bir sürümde ya da yetki eksikliğinde düşen sorgu karşılaştırmayı
+/// durdurmaz, adı ExtractionReport.FailedQueries'e yazılır — "okunamadı" ile "yok" ayrılır.
 /// </summary>
 public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTimeoutSeconds = 300)
 {
@@ -82,7 +84,7 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
 
         await PreflightAsync(connectionString, catalog, report, ct);
 
-        // Her sorgu kendi bağlantısında — 10 sorgu paralel koşar, toplam süre en yavaş sorgu kadardır.
+        // Her sorgu kendi bağlantısında — hepsi paralel koşar, toplam süre en yavaş sorgu kadardır.
         var tasks = new List<Task>
         {
             Run("schemas", Sql.Schemas, r => new SchemaRow(Rdr.Int(r, 0), Rdr.Str(r, 1)), rows => catalog.Schemas = rows),

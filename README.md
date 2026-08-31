@@ -4,8 +4,9 @@ SQL Server şema karşılaştırması için hızlı bir motor. SSDT / VS Code "S
 ile aynı soruyu cevaplar — *iki veritabanı arasında ne değişti?* — ama büyük
 veritabanlarında dakikalar yerine saniyeler sürmesi hedeflenir.
 
-> Durum: **Faz 0 (PoC)**. Karşılaştırma ve raporlama çalışır.
-> Deployment script üretimi henüz **yok** — bkz. [Kapsam](#kapsam).
+> Durum: **v1.7**. Karşılaştırma, raporlama, risk analizi ve **dağıtım script'i üretimi**
+> çalışır. Neyin kapsandığı (görür / yazar / görmez ayrımıyla) `KAPSAM.md`'de;
+> aşağıdaki [Kapsam](#kapsam) bölümü onun özetidir.
 
 ## Neden daha hızlı?
 
@@ -17,12 +18,17 @@ bağımlılık grafiğini çıkarır, doğrulama çalıştırır. Bu obje başı
 Bu araç bunun yerine:
 
 1. **Toplu katalog çekimi** — obje başına sorgu yok, obje *sınıfı* başına tek sorgu.
-   17 sorgu paralel bağlantılarda koşar (`Sql.cs`).
+   51 sorgu paralel bağlantılarda koşar (`Sql.cs`); 38'i opsiyoneldir, yani eski bir
+   SQL Server sürümünde ya da yetki eksikliğinde düşen bir sorgu karşılaştırmayı durdurmaz.
 2. **Kanonikleştirme** — modül gövdeleri ScriptDom'un *token akışıyla* normalize edilir
    (regex ile değil; regex string literal içindeki `--` ile yanılır).
 3. **Hash karşılaştırması** — her obje ve alt-parçası için XxHash128. Eşit hash'li
    objenin metnine hiç bakılmaz. Dev↔prod arasında objelerin %95+'i eşit olduğundan
    pahalı iş yalnızca kalan azınlığa uygulanır.
+4. **Alt-parça hash'leri** — bir obje tek hash değil, parça parça hash'lenir (`columns`,
+   `indexes`, `checks`, `foreignKeys`, `statistics`, `body`, `permissions`…). Böylece
+   "bu tabloda yalnız index değişmiş" cevabı metin diff'i çalıştırmadan elde edilir ve
+   script üreteci yalnızca değişen parçayı işler.
 
 Semantik model yalnızca *script üretimi* için gerekir (bağımlılık sıralaması), ki o da
 `sys.sql_expression_dependencies` üzerinden çok daha ucuza elde edilebilir.
@@ -46,7 +52,7 @@ Süre dağılımı (10.000 obje, tek taraf):
 
 | Aşama | Süre |
 |---|---|
-| Katalog çekimi (17 sorgu, paralel) | ~1.050 ms |
+| Katalog çekimi (paralel) | ~1.050 ms |
 | Normalizasyon + hash | ~680 ms |
 | Karşılaştırma | ~13 ms |
 
@@ -57,6 +63,12 @@ kanıtı: 9.770 eşit objenin metnine hiç bakılmıyor.
 > Ölçüm koşulları: yerel instance, ağ gecikmesi yok; sentetik prosedür gövdeleri
 > gerçek hayattakinden kısa. Uzak sunucu ve büyük gövdelerle mutlak süreler artar —
 > ama artan kısım her iki araç için de aynı, oran korunur.
+>
+> ⚠️ Bu ölçüm kapsam 17 sorguyken alındı; kapsam o zamandan beri 51 sorguya çıktı
+> (istatistikler, full-text, XML/spatial index, partition, plan guide…). Yeni sorguların
+> çoğu küçük tablolara vurur ama **rakam yeniden ölçülmedi** — güncel oran için
+> benchmark'ı kendiniz koşun. DacFx tarafı da artık daha adil bir kıyas: eskiden
+> SchemaDiff'in görmediği sınıfları o sayıyordu.
 
 Benchmark'ı kendiniz koşmak için:
 
@@ -91,11 +103,14 @@ Düzen bilinçli olarak SSDT Schema Compare'e benzetildi:
 - ▲ ▼ tuşları fark blokları arasında gezinir (`3 / 12 fark`), blok görünümün ortasına gelir
 - "kanonik metin" kutusu karşılaştırmanın gerçekte neyi hash'lediğini gösterir
 - Ayırıcı sürüklenerek üst/alt panel oranı değiştirilebilir
+- **Ayarlar** menüsü açılır/kapanır kategoriler hâlinde; her seçenek tek satır, açıklaması
+  hover ipucunda, varsayılandan sapan seçenekler rozetle işaretli. Arayüz tam EN/TR.
+- **Deployment riski** ayrı bir görünüm: renkli özet çipleri, ciddiyete göre sıralı ve
+  tıklanabilir kartlar (alt panelde detay açar)
 
 Üretilen tablo script'i, karşılaştırmada yok sayılan şeyleri (sistem üretimi constraint
 adları, collation) **yazmaz da**. Aksi hâlde ekranda fark görünüp listede görünmeyen
 satırlar olur ve araca güven kalmazdı.
-- **Deployment riski** ve **Trigger'lar** ayrı görünümler olarak durur
 
 ### Parola saklama
 
@@ -122,6 +137,9 @@ SchemaDiff.Cli -s "<kaynak>" -t "<hedef>" --script deploy.sql --script-scope tab
 
 # Güvenli mod: veri kaybı adımlarını (kolon/tablo silme, tip daraltma) script'ten ÇIKAR
 SchemaDiff.Cli -s "<kaynak>" -t "<hedef>" --script deploy.sql --safe
+
+# İleri script + onu geri alan rollback script'i (ters yönde karşılaştırma) birlikte
+SchemaDiff.Cli -s "<kaynak>" -t "<hedef>" --script deploy.sql --rollback rollback.sql
 ```
 
 > **Not (şimdilik):** SSDT paritesi için veri kaybı adımları **varsayılan olarak script'e
@@ -142,10 +160,18 @@ kapsam dahilinde — bkz. aşağıdaki kapsam sınırı).
 - Yeni objeler `sys.sql_expression_dependencies` ile topolojik sırada oluşturulur
 - Her modülün özgün `ANSI_NULLS` / `QUOTED_IDENTIFIER` ayarı korunur
 
-**Tipler / sequence / synonym** — kullanıcı tanımlı alias tipler, table type'lar,
-sequence'lar (`CREATE SEQUENCE`) ve synonym'ler (`CREATE SYNONYM`). Tablo/modül
-dilimlerinden ÖNCE çalışır (sıra: sequence → alias tip → table type → synonym; tablo
-default'ları sequence kullanabilir). Bunlar ALTER edilmez; DEĞİŞEN obje atlanır, `DROP` opt-in.
+**Tipler ve tablo öncesi objeler** — XML schema collection, full-text stoplist, full-text
+katalog, partition function, partition scheme, kullanıcı tanımlı alias tipler, table type'lar,
+sequence'lar, synonym'ler ve legacy `RULE` / `DEFAULT`. Tablo ve modül dilimlerinden ÖNCE,
+kendi aralarında da bağımlılık sırasında çalışır (tipli XML kolonu bir koleksiyona, tablo
+default'u bir sequence'a, partition scheme bir function'a bağlı olabilir).
+
+Bu sınıflar `ALTER` edilemez. **Değişen obje otomatik drop+recreate EDİLMEZ** — atlanır ve
+sebebiyle raporlanır, çünkü bağımlılarını düşürmek gerekir ve bu sessizce yapılacak bir şey
+değildir. Tek istisna table type: `RecreateChangedTableTypes` açıkça açılırsa bağımlı
+modüller düşürülüp geri kurulur — ve bağımlılardan **birinin bile** tanımı okunamıyorsa
+(şifreli/yetkisiz) hiçbir şey üretilmez, çünkü bir prosedürü düşürüp geri kuramamak
+onarılamaz. Seçenek varsayılan **kapalı**.
 
 **Roller** — kullanıcı tanımlı roller ve üyelikleri (`CREATE ROLE` / `DROP ROLE` /
 `ALTER ROLE ADD|DROP MEMBER`). Veri kaybı yok; hedefte olmayan üye (principal) atlanır.
@@ -157,22 +183,55 @@ varlığını kontrol eder; eksik principal atlanır. GRANT→DENY dönüşümü
 `sp_dropextendedproperty` (obje/kolon/şema). İzin ve EP dilimleri modül+tablo+rol
 dilimlerinden sonra çalışır (host obje ve grantee var olmalı); yalnızca birleşik (`all`) kapsamda.
 
+**Veritabanı ayarları ve plan guide'lar** — `ALTER DATABASE SCOPED CONFIGURATION` ve
+`sp_create_plan_guide` / `sp_control_plan_guide`. **En sonda** çalışır: `OBJECT` kapsamlı
+bir plan guide, bağlı olduğu prosedür var olmadan kurulamaz. Katalog yalnız varsayılandan
+sapan ayarları verdiği için "kaynakta yok" bilgisi "varsayılan" demektir ve varsayılan
+sürüme göre değişir — o yüzden kaynaktan kalkmış bir ayara dokunulmaz. Yorumlanamayan
+bir değer tahmin edilmez, sebebiyle atlanır.
+
 **Tablolar** — yeni tablo `CREATE`, kolon `ADD` / `ALTER COLUMN` / `DROP COLUMN`, ve
 index / PK / UNIQUE / CHECK / FK değişiklikleri (aynı ad + farklı tanım = drop + recreate;
-yapısal İMZA ile karşılaştırılır, özdeş constraint gereksiz drop edilmez):
+yapısal İMZA ile karşılaştırılır, özdeş constraint gereksiz drop edilmez). Ayrıca:
 
+- **Kolon depolama nitelikleri**: `SPARSE`, `FILESTREAM`, `ROWGUIDCOL`, `COLUMN_SET`,
+  tipli XML (`xml(DOCUMENT [şema].[koleksiyon])`), `IDENTITY(seed, increment)` ve
+  `NOT FOR REPLICATION`
+- **Kullanıcı istatistikleri** (`CREATE STATISTICS`), **full-text index**, **XML ve spatial
+  index'ler** — bunların sözdizimi genel `CREATE INDEX`ten tamamen farklıdır ve kendi
+  üreteçlerinden geçer (aynı metin hem yeni tablo hem ALTER yolunda kullanılır, ayrışamazlar)
+- **Constraint durumu**: kaynakta bilerek pasif ya da güvenilmez (`NOCHECK`) bırakılmış bir
+  constraint hedefte sessizce etkinleşmez
+- **Kolon adı harf durumu**: yalnız `CustomerID` → `CustomerId` gibi bir fark hiçbir
+  ADD/DROP/ALTER üretmez; `sp_rename` ile ve diğer değişikliklerden önce yazılır
 - **Güvenlik kademesi:** additive değişiklikler (nullable kolon, tip genişletme) doğrudan
   script'e girer. Veri kaybı riski taşıyanlar (kolon/tablo silme, tip daraltma, dolu tabloya
-  DEFAULT'suz NOT NULL kolon) `--allow-data-loss` verilmedikçe script'e **GİRMEZ**; ayrı
-  listede ismen raporlanır. Boş tablo ile dolu tablo ayrılır — boşta bloke yok.
+  DEFAULT'suz NOT NULL kolon) `--safe` verildiğinde script'e **GİRMEZ**; ayrı listede ismen
+  ve üretilmiş SQL'iyle raporlanır. Boş tablo ile dolu tablo ayrılır — boşta bloke yok.
 - IDENTITY/computed kolon değişimi ALTER COLUMN ile yapılamaz → atlanır, sebebiyle bildirilir
 - Tablolar modüllerden önce yayınlanır (yeni view/prosedürler yeni tablolara bağlı olabilir)
 
-Tümü tek transaction + `SET XACT_ABORT ON`.
+Tümü tek transaction + `SET XACT_ABORT ON`. Üretilen SQL bilinçli olarak sadedir: yalnız
+`USE` + transaction + DDL — başlık yorum blokları ve `PRINT` ilerleme mesajları yoktur.
+
+### Çift yönlü script
+
+Sonuç ağacında bir objeyi `⇄` ile işaretlemek onu **ters yönde** (hedef → kaynak) yazar ve
+ileri bölümden çıkarır. Böylece "şu üç objede prod doğru, gerisinde dev doğru" durumu tek
+dosyada ifade edilebilir. Motor simetriktir; ters karşılaştırma tek satırdır:
+
+```csharp
+var reverse = SchemaComparer.Compare(result.Target, result.Source);
+```
+
+Karışık script iki farklı veritabanına dokunduğu için tek `USE` yerine bölüm başına `USE`
+yazılır. CLI tarafında aynı iş `--rollback` ile yapılır.
 
 > ⚠️ **Kalan kapsam dışı:** kolon SIRASI değişimi (ortaya kolon ekleme → tablo yeniden
-> oluşturma), partition DDL, veri taşıma. Bunlar da başlıkta/arayüzde açıkça raporlanır —
-> "script'te yoktu" ile "değişiklik yoktu" karıştırılmasın.
+> oluşturma), fiziksel yerleşim (`ON [filegroup]`), veri taşıma ve silinen ŞEMA (`DROP SCHEMA`
+> yalnız şema boşken çalışır, içindeki objelerin drop sırasına bağlıdır — üretilmiyor).
+> Bunlar arayüzde "kapsam dışı" / "atlandı" olarak sayılır — "script'te yoktu" ile
+> "değişiklik yoktu" karıştırılmasın.
 
 ## Kavram: İş (job)
 
@@ -262,7 +321,7 @@ Bir işin başarısız olması diğerlerini durdurmaz; hata o satırda raporlan�
 çıkış kodu `2` olur. Çıkış kodları: `0` fark yok, `1` fark var, `2` hata.
 
 `--max-queries` eşzamanlı sorgu sayısını sınırlar (varsayılan 16). Sınırsız bırakılırsa
-9 iş × 18 sorgu × 2 taraf = 324 eşzamanlı bağlantı açılır ve sunucu boğulur.
+9 iş × 51 sorgu × 2 taraf = 918 eşzamanlı bağlantı açılır ve sunucu boğulur.
 
 ### Kısayol: yapılandırma dosyasız
 
@@ -323,18 +382,35 @@ ilgili objeleri `Belirsiz` olarak raporlar — asla "aynı" saymaz.
 
 ## Kapsam
 
-Karşılaştırılan: şemalar, tablolar (kolonlar, computed/identity, default'lar),
-index'ler (key/include/filter/columnstore), PK-UQ-CHECK-FK constraint'leri,
-view'lar, prosedürler, fonksiyonlar, DML trigger'ları, sequence'lar, synonym'ler,
-extended property'ler (obje/kolon/şema — `--ignore-extended-properties`), kullanıcı
-tanımlı roller ve üyelikleri, obje/şema izinleri (GRANT/DENY — `--ignore-permissions`),
-kullanıcı tanımlı alias tipler, table type'lar (kolon yapısı), partition function ve scheme'ler.
+Tam liste, **görür / yazar / görmez** ayrımıyla `KAPSAM.md`'de. Özet:
 
-**Henüz kapsanmıyor** (sessizce atlanır — kullanmadan önce dikkate alın):
-veritabanı kullanıcıları (ortama özgü), veritabanı seviyesi izinler, CLR tipleri,
-table type constraint/index'leri, veritabanı seviyesi extended property'ler,
-full-text, CLR assembly, temporal ve in-memory OLTP tabloları, Always Encrypted,
-DDL trigger'ları.
+**Karşılaştırılan ve script'e yazılan:** şemalar; tablolar (kolonlar, computed/identity,
+default'lar, sparse/FILESTREAM/ROWGUIDCOL/COLUMN_SET, tipli XML); index'ler
+(key/include/filter/columnstore + fiziksel seçenekler); XML ve spatial index'ler;
+kullanıcı istatistikleri; PK-UQ-CHECK-FK constraint'leri ve etkin/güvenilir durumları;
+temporal tablolar; view'lar, prosedürler, fonksiyonlar, DML ve **DDL** trigger'ları;
+sequence'lar, synonym'ler; kullanıcı tanımlı alias tipler; table type'lar (kolon,
+constraint ve index'leriyle); partition function ve scheme'ler; XML schema collection'lar;
+full-text katalog, index ve stoplist'ler; legacy `RULE` / `DEFAULT`; kullanıcı tanımlı
+roller ve üyelikleri; obje/kolon/şema/veritabanı izinleri (`--ignore-permissions`);
+extended property'ler — obje/kolon/şema/veritabanı **ve** parametre/principal/index
+sınıfları (`--ignore-extended-properties`); plan guide'lar; database scoped configuration.
+
+**Bilinçli olarak yalnızca TESPİT edilir, script'i üretilmez:** CLR assembly ve CLR tipleri,
+Always Encrypted / kolon şifreleme anahtarları, in-memory OLTP. Bunlar için otomatik DDL
+üretmek geri dönüşü pahalı hatalara yol açar; fark raporlanır, uygulaması insana bırakılır.
+
+**Kapsam dışı:** veritabanı kullanıcıları varsayılan olarak tamamen yok sayılır (ortama
+özgüdür); fiziksel yerleşim (`ON [filegroup]`); kolon sırası değişimi; veri taşıma.
+
+Kapsamın bu veritabanında ne kadar tuttuğunu tahmin etmek yerine ölçebilirsiniz:
+
+```powershell
+SchemaDiff.Cli -s "<kaynak-conn>" --coverage
+```
+
+Her obje sınıfının veritabanında kaç tane bulunduğunu sayar ve **kapsanmayan ama sayısı
+sıfırdan büyük** olanları listeler — yapılacaklar listesi tahminle değil sayıyla çıkar.
 
 ## Doğruluk testleri
 
@@ -344,9 +420,17 @@ DDL trigger'ları.
 dotnet test
 ```
 
-78 test saf mantığı izole doğrular: normalizasyon (string içi `--` yanılgısı dahil),
-CREATE→ALTER token dönüşümü, karşılaştırma yönü, risk sınıflandırması ve script
-üretiminin güvenlik kademesi (additive vs veri kaybı).
+**895 test** (892 yeşil, 3'ü canlı SQL Server isteyen entegrasyon testi olduğu için atlanır)
+saf mantığı izole doğrular: normalizasyon (string içi `--` yanılgısı dahil), CREATE→ALTER
+token dönüşümü, karşılaştırma yönü, risk sınıflandırması, her obje sınıfının kanonik metni
+ve script üretiminin güvenlik kademesi (additive vs veri kaybı).
+
+Testlerin çoğu bir davranışı tarif etmez, bir **hatayı kilitler**. Örneğin
+`ScriptCoverageMatrixTests`, `ObjectKind` enum'ının tamamı üzerinde dönerek her sınıfın
+Add/Delete/Change yönünde ya SQL ürettiğini ya da **adıyla ve sebebiyle** raporlandığını
+doğrular — yeni bir obje sınıfı eklenip üretece bağlanmayı unutursa test kırmızı yanar.
+Bu tam olarak iki kez yaşanmış bir hatadır: sınıf karşılaştırmaya girer, arayüzde fark
+olarak görünür, ama hiçbir üreteç onu yazmaz ve kullanıcı değişikliğin uygulandığını sanır.
 
 **Fixture'lar** (`test/fixtures/`) — canlı DB'ye karşı uçtan uca. `expected.md` hem
 bulunması gerekenleri hem de **bulunmaması gerekenleri** listeler — ikincisi en az
@@ -397,17 +481,27 @@ foreach ($l in 'EDWSTG','EDWSKEY','EDWLRY','EDW','EDWDM','EDWArchive','EDWBridge
 
 ```
 src/SchemaDiff.Core/
-  Extraction/Sql.cs              katalog sorguları
+  Extraction/Sql.cs              katalog sorguları (51 SELECT, hepsi salt-okunur)
   Extraction/CatalogExtractor.cs paralel çekim + yetki kontrolü
+  Extraction/ExtractionGate.cs   süreç geneli eşzamanlı sorgu sınırı
   Extraction/SnapshotBuilder.cs  kanonikleştirme + hash
   Normalization/                 ScriptDom tabanlı T-SQL normalizasyonu
+  Hashing/Hash.cs                XxHash128 + parça birleştirme
   Diff/SchemaComparer.cs         hash tabanlı karşılaştırma
-  Analysis/                      deployment risk sınıflandırması
+  Analysis/                      risk sınıflandırması, değişiklik ağacı, rename sezgisi,
+                                 kapsam sondası
+  Scripting/                     8 script üreteci (tip → tablo → modül → rol → EP/izin → ayar)
   Jobs/                          iş modeli, paralel akan koşum, yapılandırma, seçim
 src/SchemaDiff.Cli/              seçim arayüzü ve raporlar
 src/SchemaDiff.Web/              web arayüzü (minimal API + SSE + bağımlılıksız SPA)
 src/SchemaDiff.Bench/            DacFx ile head-to-head karşılaştırma
 ```
+
+Kullanılan teknolojiler: .NET 10 / C# 14, `Microsoft.Data.SqlClient` (katalog sorguları),
+`Microsoft.SqlServer.TransactSql.ScriptDom` (T-SQL tokenizer — SSDT'nin kullandığı
+parser'ın kendisi), `System.IO.Hashing` (XxHash128), ASP.NET Core Minimal API + SSE,
+bağımlılıksız SPA (framework yok, tek `app.js`), xUnit. DacFx yalnızca `Bench`'te,
+kıyas tarafı olarak bulunur.
 
 `Jobs/` katmanı bilinçli olarak alan-bağımsızdır: `ComparisonRunner` yalnızca
 `IReadOnlyList<ComparisonJob>` alır ve `IAsyncEnumerable<JobResult>` döner. Web
@@ -416,19 +510,26 @@ paralellik, hata yalıtımı ve akış mantığı yeniden yazılmayacak.
 
 ## Sıradaki adımlar
 
-1. **Gerçek ortamda ölçüm** — kendi dev/prod katmanlarında koşup hem gerçek süreyi
-   hem de hangi obje sınıflarının eksik kaldığını somut olarak görmek. Faz 1'in
-   kapsamı tahminle değil bu çıktıyla belirlenmeli.
-2. **Kapsamı tamamla** — kullanıcı tanımlı tipler, izinler, extended property'ler.
-   Bunlar bitmeden DacFx ile kıyas tam adil değil.
-3. **Snapshot cache** — prod tarafı nadiren değişir; sıkıştırılmış snapshot'ı
+Kapsam listesi tükendi; kalan iş yeni obje sınıfı eklemek değil **doğrulama**.
+
+1. **Canlı sunucuda doğrulama** — üç üretim yolu yalnızca birim testleriyle doğrulandı,
+   gerçek bir SQL Server'a karşı hiç koşulmadı: kolon argümanlı `XML_SCHEMA_NAMESPACE`,
+   `sp_create_plan_guide` çıktısı ve table type drop+recreate akışı.
+2. **Entegrasyon testleri** — atlanan 3 test yerel SQL Server + fixture veritabanları
+   ister (`test/fixtures/`). `Big_script_matches_ssdt_operation_counts`'un beklediği
+   sayılar **oynamış olabilir**: `CREATE TABLE` çıktısı artık istatistik, full-text,
+   XML/spatial index ve `NOCHECK` batch'lerini de içeriyor. Sayı tutmazsa önce üretilen
+   script'e bakın; testi körlemesine güncellemek en değerli regresyon kilidini kaybettirir.
+3. **Gerçek ortamda ölçüm** — kendi dev/prod katmanlarında `--coverage` koşup kapsam
+   eksiğini ve gerçek süreyi görmek. Buradaki benchmark rakamı 17 sorguluk kapsamla alındı.
+4. **Atlanan objeleri arayüzde ADIYLA göster** — API zaten `skipped: [{key, reason}]`
+   döndürüyor ama arayüz yalnızca sayıyı yazıyor ("3 obje atlandı"). Hangi objenin niçin
+   atlandığını görmeden kullanıcı script'in eksik olduğunu fark edemez.
+5. **Snapshot cache** — prod tarafı nadiren değişir; sıkıştırılmış snapshot'ı
    yeniden kullanmak ikinci karşılaştırmayı milisaniyelere indirir.
    Dikkat: `sys.objects.modify_date` her değişiklikte güncellenmez (örneğin
    `CREATE INDEX` tablonunkini değiştirmez), bu yüzden tek başına invalidation
    sinyali olarak kullanılamaz.
-4. **Web arayüzü** — API + sanallaştırılmış ağaç + Monaco diff.
-5. **Script üretimi** — en uzun ve en riskli faz; veri kaybı riski taşıyan
-   değişiklikler ayrı onay istemeli.
 
 ### Kapsam dışı bırakılanlar
 
