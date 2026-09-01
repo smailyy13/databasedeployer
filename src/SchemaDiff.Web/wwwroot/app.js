@@ -1354,6 +1354,34 @@ $('defBody').addEventListener('mouseup', () => {
   state.wordTerm = term === state.wordTerm ? '' : term;
 });
 
+// Hangi tarafa (kaynak/hedef) tıklandığını hatırla — Ctrl+A için hedef panel.
+$('defBody').addEventListener('mousedown', (e) => {
+  state.lastDiffPane = e.target.closest('.diff-pane') || null;
+});
+
+// Alt panelde bir tarafa tıklayıp Ctrl+A → tüm sayfa değil, YALNIZ o tarafın kodu seçilsin.
+// Satır numarası / başlık / dolgu satırları user-select:none olduğundan kopyaya girmez → temiz SQL.
+document.addEventListener('keydown', (e) => {
+  if (!(e.ctrlKey || e.metaKey) || (e.key !== 'a' && e.key !== 'A')) return;
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+
+  const sel = window.getSelection();
+  const anchor = sel && sel.anchorNode;
+  const anchorEl = anchor ? (anchor.nodeType === 1 ? anchor : anchor.parentElement) : null;
+  let pane = anchorEl ? anchorEl.closest('.diff-pane') : null;
+  // Seçim/caret alt panelde değilse devralma; yalnız hiç seçim yokken son tıklanan panele düş.
+  if (!pane && !anchor && state.lastDiffPane && $('defBody').contains(state.lastDiffPane))
+    pane = state.lastDiffPane;
+  if (!pane || !$('defBody').contains(pane)) return;
+
+  e.preventDefault();
+  const range = document.createRange();
+  range.selectNodeContents(pane);
+  sel.removeAllRanges();
+  sel.addRange(range);
+});
+
 // Minimap'e tıkla → ilgili satıra git (işaret yoksa orantısal konuma kaydır).
 $('diffMinimap').addEventListener('click', (e) => {
   const diff = $('defBody');
