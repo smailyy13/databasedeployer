@@ -43,8 +43,11 @@ public static class ChangeCatalog
 {
     public static IReadOnlyList<ObjectChange> Build(CompareResult result)
     {
+        // Karşılaştırmanın kendi anahtar karşılaştırıcısını kullan (büyük/küçük harf duyarlı
+        // modda [T_CASE] ile [t_case] AYRI objelerdir; sabit CaseInsensitive kullanmak
+        // "aynı anahtar iki kez eklendi" hatası verirdi).
         var risks = DeploymentRiskAnalyzer.Analyze(result)
-            .ToDictionary(r => r.Table, r => r, ObjectKeyComparer.CaseInsensitive);
+            .ToDictionary(r => r.Table, r => r, result.Source.Objects.Comparer);
 
         var changes = new List<ObjectChange>(result.Differences.Count);
 
