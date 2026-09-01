@@ -66,9 +66,11 @@ internal static class TestFactory
         Dictionary<ObjectKey, List<ObjectKey>>? references = null,
         string server = "TESTSRV",
         bool ignoredColumnOrder = false,
-        bool ignoredCollation = false)
+        bool ignoredCollation = false,
+        bool caseSensitive = false)
     {
-        var dict = new Dictionary<ObjectKey, ObjectSnapshot>(ObjectKeyComparer.CaseInsensitive);
+        var dict = new Dictionary<ObjectKey, ObjectSnapshot>(
+            caseSensitive ? ObjectKeyComparer.CaseSensitive : ObjectKeyComparer.CaseInsensitive);
         foreach (var o in objects) dict[o.Key] = o;
 
         return new DatabaseSnapshot

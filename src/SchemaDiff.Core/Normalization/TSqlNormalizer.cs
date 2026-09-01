@@ -63,7 +63,19 @@ public static class TSqlNormalizer
                     break;
 
                 case TSqlTokenType.Semicolon:
-                    if (!options.IgnoreSemicolons) sb.Append(token.Text);
+                    if (!options.IgnoreSemicolons)
+                    {
+                        TrimPendingSpace(sb, options.IgnoreWhitespace);
+                        sb.Append(token.Text);
+                    }
+                    break;
+
+                // Noktalı virgül/virgülden ÖNCE ayırıcı boşluk anlamsızdır. Boşluk yok sayılırken
+                // (özellikle bir yorum atıldıktan sonra kalan) boşluğu at ki "[X] ;" ile "[X];"
+                // ya da "a , b" ile "a, b" eşit sayılsın — yoksa yorum/boşluk yok saymak işe yaramaz.
+                case TSqlTokenType.Comma:
+                    TrimPendingSpace(sb, options.IgnoreWhitespace);
+                    sb.Append(token.Text);
                     break;
 
                 case TSqlTokenType.Identifier:
@@ -104,6 +116,12 @@ public static class TSqlNormalizer
             if (!char.IsAsciiLetter(ch) && ch != '_') return token.Text;
 
         return token.Text.ToUpperInvariant();
+    }
+
+    /// <summary>Boşluk yok sayılırken kuyrukta kalan tek ayırıcı boşluğu (varsa) atar.</summary>
+    private static void TrimPendingSpace(StringBuilder sb, bool ignoreWhitespace)
+    {
+        if (ignoreWhitespace && sb.Length > 0 && sb[^1] == ' ') sb.Length--;
     }
 
     /// <summary>Tanımlayıcıyı kanonik [ad] biçimine getirir; içteki ] kaçırılır. Harf büyüklüğü korunur.</summary>

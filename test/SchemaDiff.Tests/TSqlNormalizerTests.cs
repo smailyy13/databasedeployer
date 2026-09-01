@@ -98,4 +98,27 @@ public class TSqlNormalizerTests
         var result = TSqlNormalizer.Normalize(garbage);
         Assert.False(string.IsNullOrEmpty(result));
     }
+
+    [Fact]
+    public void Comment_before_semicolon_does_not_leave_stray_space()
+    {
+        // Yorum atıldıktan sonra ';' önünde kalan ayırıcı boşluk eşitliği bozmamalı.
+        var withComment = TSqlNormalizer.Normalize("SELECT 1 AS X /* not */;");
+        var without = TSqlNormalizer.Normalize("SELECT 1 AS X;");
+        Assert.Equal(without, withComment);
+    }
+
+    [Fact]
+    public void Whitespace_before_semicolon_is_ignored()
+    {
+        Assert.Equal(TSqlNormalizer.Normalize("SELECT 1;"), TSqlNormalizer.Normalize("SELECT 1 ;"));
+    }
+
+    [Fact]
+    public void Comment_before_comma_does_not_leave_stray_space()
+    {
+        var withComment = TSqlNormalizer.Normalize("SELECT a /* c */, b FROM t");
+        var without = TSqlNormalizer.Normalize("SELECT a, b FROM t");
+        Assert.Equal(without, withComment);
+    }
 }
