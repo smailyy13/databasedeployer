@@ -23,9 +23,33 @@ public sealed class CompareSession
     public string? Error { get; private set; }
     public bool Finished { get; private set; }
 
+    // İlerleme durumu: SSE 'progress' olayında tarayıcıya gönderilir.
+    public int Percent { get; private set; }
+    public int? EtaSeconds { get; private set; }
+    public string Phase { get; private set; } = "connecting";
+
     public Task Changed
     {
         get { lock (_gate) return _signal.Task; }
+    }
+
+    /// <summary>
+    /// İlerlemeyi günceller. Yalnızca yüzde ya da aşama gerçekten değiştiğinde sinyal verir —
+    /// aksi hâlde her sorgu bitiminde onlarca kez SSE tetiklenir. Yüzde monotoniktir (geri gitmez).
+    /// </summary>
+    public void ReportProgress(int percent, int? etaSeconds, string phase)
+    {
+        lock (_gate)
+        {
+            if (Finished) return;
+            percent = Math.Clamp(percent, 0, 100);
+            if (percent < Percent) percent = Percent; // geri gitme
+            var changed = percent != Percent || phase != Phase;
+            Percent = percent;
+            EtaSeconds = etaSeconds;
+            Phase = phase;
+            if (changed) Signal();
+        }
     }
 
     public void Complete(CompareResult comparison, CompareResultDto dto)
@@ -107,11 +131,17 @@ public sealed class CompareService
         _ = Task.Run(async () =>
         {
             var stopwatch = Stopwatch.StartNew();
+            var progress = new CompareProgress(snapshot =>
+            {
+                var (percent, eta) = ProgressMath.Compute(snapshot, stopwatch.Elapsed);
+                session.ReportProgress(percent, eta, snapshot.Phase.ToString().ToLowerInvariant());
+            });
             try
             {
                 using var gate = new ExtractionGate(Math.Max(1, options.MaxQueries));
                 var comparison = await SchemaDiffService.CompareAsync(
-                    source.ToConnectionString(), target.ToConnectionString(), snapshotOptions, gate);
+                    source.ToConnectionString(), target.ToConnectionString(), snapshotOptions, gate,
+                    progress: progress);
 
                 session.Complete(comparison, Map(session, comparison, stopwatch.Elapsed));
             }
@@ -143,6 +173,8 @@ public sealed class CompareService
 
     /// <summary>Arayüzdeki görünen tür adını ObjectKind'e çevirir (seçim + detay paneli).</summary>
     public static ObjectKind ResolveKind(string label) => ObjectKindLabels.Resolve(label);
+
+    // Yüzde/ETA hesabı saf mantık olduğundan Core'daki ProgressMath'te durur (test edilebilir).
 
     private static CompareResultDto Map(CompareSession session, CompareResult comparison, TimeSpan duration)
     {

@@ -76,13 +76,16 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
     private readonly ExtractionGate _gate = gate ?? ExtractionGate.Unbounded;
 
     internal async Task<(CatalogSet Catalog, ExtractionReport Report)> ExtractAsync(
-        string connectionString, CancellationToken ct = default)
+        string connectionString, CancellationToken ct = default, CompareProgress? progress = null)
     {
+        progress ??= CompareProgress.None;
         var report = new ExtractionReport();
         var catalog = new CatalogSet();
         var total = Stopwatch.StartNew();
 
+        progress.EnterPhase(ComparePhase.Connecting);
         await PreflightAsync(connectionString, catalog, report, ct);
+        progress.EnterPhase(ComparePhase.Extracting);
 
         // Her sorgu kendi bağlantısında — hepsi paralel koşar, toplam süre en yavaş sorgu kadardır.
         var tasks = new List<Task>
@@ -200,9 +203,13 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
         VerifyDefinitionsVisible(catalog, report);
         return (catalog, report);
 
+        // AddQueries SENKRON çağrılır (koleksiyon başlatıcısı her Run'ı sırayla değerlendirir),
+        // böylece toplam sayı WhenAll'dan önce tamamlanır ve done>total geçici durumu oluşmaz.
         Task Run<T>(string name, string sql, Func<SqlDataReader, T> map, Action<List<T>> assign,
-                    bool optional = false) =>
-            Task.Run(async () =>
+                    bool optional = false)
+        {
+            progress.AddQueries(1);
+            return Task.Run(async () =>
             {
                 try
                 {
@@ -225,7 +232,13 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
                             "Karşılaştırma sürüyor, ancak bu veriye dayanan analizler eksik kalacak.");
                     }
                 }
+                finally
+                {
+                    // Opsiyonel-başarısız da "tamamlandı" sayılır; ilerleme takılıp kalmaz.
+                    progress.QueryCompleted();
+                }
             }, ct);
+        }
     }
 
     private async Task PreflightAsync(

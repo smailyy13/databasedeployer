@@ -132,7 +132,14 @@ app.MapGet("/api/runs/{id}/events", async (string id, HttpContext context, Compa
             }
 
             await WriteEventAsync(context.Response, "progress",
-                new { source = session.SourceLabel, target = session.TargetLabel }, jsonOptions, ct);
+                new
+                {
+                    source = session.SourceLabel,
+                    target = session.TargetLabel,
+                    percent = session.Percent,
+                    etaSeconds = session.EtaSeconds,
+                    phase = session.Phase,
+                }, jsonOptions, ct);
 
             await changed.WaitAsync(ct);
         }
