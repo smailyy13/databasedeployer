@@ -940,6 +940,71 @@ function bindTree(tree) {
     });
 }
 
+// ================= klavye kısayolları (Farklar görünümü) =================
+// ↑/↓ : seçili obje satırının bir üstüne / bir altına geç
+// e   : seçili objenin tikini aç/kapat
+// r   : seçili objeyi reverse (⇄) yönüne al/çıkar; tiksizse önce tikler
+function objectRowEls() { return [...$('tree').querySelectorAll('.row-obj')]; }
+
+function keepSelectedInView() {
+  $('tree').querySelector('.row-obj.selected')?.scrollIntoView({ block: 'nearest' });
+}
+
+function moveSelection(delta) {
+  const rows = objectRowEls();
+  if (rows.length === 0) return;
+  let idx = rows.findIndex((r) => r.dataset.key === state.selected);
+  const next = idx === -1 ? (delta > 0 ? 0 : rows.length - 1)
+                          : Math.max(0, Math.min(rows.length - 1, idx + delta));
+  const el = rows[next];
+  const { key, schema, name, kind } = el.dataset;
+  state.selected = key;
+  renderTree();
+  keepSelectedInView();
+  loadDetail(schema, name, kind);
+}
+
+// e: seçili objenin tikini aç/kapat (kutuya tıklamakla aynı).
+function toggleTickSelected() {
+  const key = state.selected;
+  if (!key) return;
+  setPick(key, !state.checked.has(key));
+  state.lastPick = key;
+  renderTree();
+  keepSelectedInView();
+}
+
+// r: reverse toggle. Reverse'teyse çıkar (tik korunur); değilse tiksizse önce tikle, sonra al.
+function reverseSelected() {
+  const key = state.selected;
+  if (!key) return;
+  if (state.reversed.has(key)) {
+    state.reversed.delete(key);
+  } else {
+    if (!state.checked.has(key)) { setPick(key, true); state.lastPick = key; }
+    state.reversed.add(key);
+  }
+  renderTree();
+  keepSelectedInView();
+}
+
+document.addEventListener('keydown', (e) => {
+  if (!state.result) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;          // yalnız salt tuşlar
+  if ($('treeWrap').hidden) return;                        // yalnız "Farklar" görünümü
+  // Bir metin alanına yazılıyorsa ya da bir diyalog açıksa karışma.
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable)) return;
+  if (!$('scriptDialog').hidden || !$('connDialog').hidden || !$('optDialog').hidden) return;
+
+  switch (e.key) {
+    case 'ArrowDown': e.preventDefault(); moveSelection(1); break;
+    case 'ArrowUp':   e.preventDefault(); moveSelection(-1); break;
+    case 'e': case 'E': e.preventDefault(); toggleTickSelected(); break;
+    case 'r': case 'R': e.preventDefault(); reverseSelected(); break;
+  }
+});
+
 /// İşaret kutuları "Script üret" için seçim belirler: yalnızca işaretlenen objeler
 /// (ya da işaretlenen bir alt öğenin objesi) script'e girer. Hiçbir şey seçilmezse tümü.
 function renderPickInfo() {
@@ -1038,13 +1103,18 @@ async function loadDetail(schema, name, kind) {
   $('defTitle').textContent = `${kind} ${schema}.${name}`;
   $('defBody').innerHTML = `<p class="missing">${esc(t('loading'))}</p>`;
 
+  // Ok tuşuyla hızlı gezinince birden çok istek uçar; yalnız EN SON isteğin cevabı çizilsin
+  // (yoksa yavaş gelen eski cevap yenisini ezebilir).
+  const seq = (state.detailSeq = (state.detailSeq ?? 0) + 1);
   const query = new URLSearchParams({ schema, name, kind });
   const response = await fetch(`/api/runs/${state.runId}/detail?${query}`);
+  if (seq !== state.detailSeq) return;
   if (!response.ok) {
     $('defBody').innerHTML = `<p class="missing">${esc(t('noDefinition'))}</p>`;
     return;
   }
   state.detail = await response.json();
+  if (seq !== state.detailSeq) return;
   renderDetail();
 }
 
