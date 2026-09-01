@@ -45,8 +45,6 @@ const I18N = {
     progressLine: '{source} → {target} · %{percent}{eta}',
     etaSuffix: ' · ~{sec} left', etaCalc: ' · estimating…',
     secShort: '{n}s', minShort: '{n}m',
-    phaseConnecting: 'connecting', phaseExtracting: 'reading schema',
-    phaseBuilding: 'building model', phaseComparing: 'comparing', phaseDone: 'finishing',
     notComparedYet: 'No comparison yet.', noDiffForFilters: 'No differences to show with these filters.',
     listLimited: 'List limited to {n} records — there are more.',
     flagIndeterminate: 'INDETERMINATE',
@@ -57,7 +55,7 @@ const I18N = {
     emptyScriptInfo: 'No changes in this direction.',
     scriptReady: 'Script ready — review/edit, then download', scriptCopied: 'Script copied to clipboard',
     sqlDownloaded: 'Downloaded {file}', selectGroupTip: 'Select / clear all {g}',
-    statResult: '{source} → {target} · {objects} objects · {equal} equal · +{add} ~{change} −{delete} · {ms} ms',
+    statResult: '{source} → {target} · {objects} objects · {equal} equal · +{add} ~{change} −{delete} · {dur}',
     renameWarn: ' · ⚠ {n} possible RENAME (consider sp_rename instead of drop+create)',
     noStructuralRisk: 'No structural change carries risk.',
     riskS1: '<b>{n}</b> tables have structural changes.',
@@ -144,8 +142,6 @@ const I18N = {
     progressLine: '{source} → {target} · %{percent}{eta}',
     etaSuffix: ' · ~{sec} kaldı', etaCalc: ' · süre hesaplanıyor…',
     secShort: '{n}sn', minShort: '{n}dk',
-    phaseConnecting: 'bağlanılıyor', phaseExtracting: 'şema okunuyor',
-    phaseBuilding: 'model kuruluyor', phaseComparing: 'karşılaştırılıyor', phaseDone: 'tamamlanıyor',
     notComparedYet: 'Henüz karşılaştırma yapılmadı.', noDiffForFilters: 'Bu filtrelerle gösterilecek fark yok.',
     listLimited: 'Liste {n} kayıtla sınırlandı — daha fazlası var.',
     flagIndeterminate: 'BELİRSİZ',
@@ -156,7 +152,7 @@ const I18N = {
     emptyScriptInfo: 'Bu yönde değişiklik yok.',
     scriptReady: 'Script hazır — gözden geçir/düzenle, sonra indir', scriptCopied: 'Script panoya kopyalandı',
     sqlDownloaded: 'İndirildi: {file}', selectGroupTip: 'Tüm {g} objelerini seç / kaldır',
-    statResult: '{source} → {target} · {objects} obje · {equal} aynı · +{add} ~{change} −{delete} · {ms} ms',
+    statResult: '{source} → {target} · {objects} obje · {equal} aynı · +{add} ~{change} −{delete} · {dur}',
     renameWarn: ' · ⚠ {n} olası YENİDEN ADLANDIRMA (drop+create yerine sp_rename düşünün)',
     noStructuralRisk: 'Tablo yapısında risk taşıyan değişiklik yok.',
     riskS1: '<b>{n}</b> tabloda yapısal değişiklik var.',
@@ -638,7 +634,7 @@ async function compare() {
     let msg = t('statResult', {
       source: r.sourceLabel, target: r.targetLabel, objects: num(r.sourceObjects),
       equal: num(r.equal), add: num(r.addCount), change: num(r.changeCount),
-      delete: num(r.deleteCount), ms: num(Math.round(r.durationMs)),
+      delete: num(r.deleteCount), dur: formatDuration(r.durationMs / 1000),
     });
     if (renameCount > 0) msg += t('renameWarn', { n: num(renameCount) });
     setStatus(msg, renameCount > 0 ? 'error' : '');
@@ -667,21 +663,24 @@ function setStatus(text, kind = '') {
   bar.className = `statusbar ${kind}`;
 }
 
-// Saniyeyi okunur süreye çevirir: "8sn", "1dk 20sn", "2dk".
+// Saniyeyi okunur süreye çevirir: "8sn", "1,6sn", "1dk 20sn", "2dk".
+// 1 dakikanın altında ve 10 sn'nin altındaki değerlerde tek ondalık gösterilir
+// (ör. 1,6 sn); ETA gibi tam sayı girişlerde ondalık çıkmaz.
 function formatDuration(totalSeconds) {
-  const s = Math.max(0, Math.round(totalSeconds));
-  if (s < 60) return t('secShort', { n: s });
-  const m = Math.floor(s / 60);
-  const rem = s % 60;
+  const sec = Math.max(0, totalSeconds);
+  if (sec < 60) {
+    const n = sec < 10 && !Number.isInteger(sec) ? Math.round(sec * 10) / 10 : Math.round(sec);
+    return t('secShort', { n: num(n) });
+  }
+  const m = Math.floor(sec / 60);
+  const rem = Math.round(sec % 60);
   return rem === 0 ? t('minShort', { n: m }) : `${t('minShort', { n: m })} ${t('secShort', { n: rem })}`;
 }
 
-// Compare sırasında ilerleme çubuğunu çizer (yüzde + kalan süre + aşama).
+// Compare sırasında ilerleme çubuğunu çizer (yüzde + kalan süre).
 function setProgress(data) {
   const bar = $('statusbar');
   const percent = Math.max(0, Math.min(100, data.percent ?? 0));
-  const phaseKey = 'phase' + (data.phase ? data.phase[0].toUpperCase() + data.phase.slice(1) : 'Connecting');
-  const phaseLabel = I18N[LANG][phaseKey] || '';
   const eta = data.etaSeconds != null
     ? t('etaSuffix', { sec: formatDuration(data.etaSeconds) })
     : (percent >= 10 && percent < 100 ? t('etaCalc') : '');
@@ -690,7 +689,7 @@ function setProgress(data) {
   bar.innerHTML =
     `<div class="progress">` +
     `<div class="progress-track"><div class="progress-fill" style="width:${percent}%"></div></div>` +
-    `<span class="progress-text">${esc(line)}${phaseLabel ? ' · ' + esc(phaseLabel) : ''}</span>` +
+    `<span class="progress-text">${esc(line)}</span>` +
     `</div>`;
 }
 
