@@ -177,12 +177,18 @@ internal static class SnapshotBuilder
         // En pahalı adım: T-SQL tokenize etme. Objeler birbirinden bağımsız, paralel koşar.
         // İlerleme buradan raporlanır (yerelde compare süresinin baskın kısmı bu döngüdür);
         // her modül — definition'ı NULL olsa bile — bir birim sayılır ki toplam tutsun.
+        // Harfe duyarsız modda (caseSensitiveNames kapalı) tanımlayıcı harf büyüklüğünü katla:
+        // yalnız AD harf farkı olan modül/şema (ör. [GetCustomer] vs [getcustomer]) eşit sayılsın.
+        // Tablo KOLON adları ayrı yoldan (BuildColumns) gelir ve harfi korur — kolon rename tespiti
+        // (sp_rename) bundan etkilenmez.
+        var norm = options.Normalization with { FoldIdentifierCase = !options.CaseSensitiveNames };
+
         var normalizedBodies = new ConcurrentDictionary<int, string>();
         Parallel.ForEach(catalog.Modules, module =>
         {
             if (module.Definition is not null)
                 normalizedBodies[module.ObjectId] =
-                    TSqlNormalizer.Normalize(module.Definition, module.UsesQuotedIdentifier, options.Normalization);
+                    TSqlNormalizer.Normalize(module.Definition, module.UsesQuotedIdentifier, norm);
             progress?.BuildItemCompleted();
         });
 
@@ -252,7 +258,9 @@ internal static class SnapshotBuilder
         {
             var key = new ObjectKey(schema.Name, schema.Name, ObjectKind.Schema);
             var snapshot = new ObjectSnapshot { Key = key, Hash = UInt128.Zero };
-            SetPart(snapshot, "definition", $"schema|{schema.Name}");
+            // Harfe duyarsız modda ad-harf farkı fark sayılmasın diye kanonik adı katla.
+            var schemaCanonicalName = options.CaseSensitiveNames ? schema.Name : schema.Name.ToLowerInvariant();
+            SetPart(snapshot, "definition", $"schema|{schemaCanonicalName}");
             // Detay panelinde ham "schema|RPT" yerine okunur script göster (tablo gibi).
             if (options.KeepDisplayScripts) snapshot.DisplayScript = $"CREATE SCHEMA [{schema.Name}];";
             SetPart(snapshot, "extendedProperties", extendedByHost.GetValueOrDefault(key, string.Empty));
@@ -469,7 +477,7 @@ internal static class SnapshotBuilder
             }
             else
             {
-                SetPart(snapshot, "body", TSqlNormalizer.Normalize(rd.Definition, true, options.Normalization));
+                SetPart(snapshot, "body", TSqlNormalizer.Normalize(rd.Definition, true, norm));
                 SetPart(snapshot, "definition", $"legacy|type={rd.Type}");
                 if (options.KeepDisplayScripts) snapshot.DisplayScript = rd.Definition;
             }
@@ -546,7 +554,7 @@ internal static class SnapshotBuilder
             else
             {
                 SetPart(snapshot, "body",
-                    TSqlNormalizer.Normalize(dt.Definition, dt.UsesQuotedIdentifier, options.Normalization));
+                    TSqlNormalizer.Normalize(dt.Definition, dt.UsesQuotedIdentifier, norm));
                 SetPart(snapshot, "setOptions", SetOptions(dt.UsesAnsiNulls, dt.UsesQuotedIdentifier, options));
                 SetPart(snapshot, "attributes", $"disabled={Flag(dt.IsDisabled)}");
                 snapshot.UsesAnsiNulls = dt.UsesAnsiNulls;

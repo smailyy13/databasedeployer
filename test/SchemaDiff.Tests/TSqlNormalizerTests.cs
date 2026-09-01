@@ -121,4 +121,33 @@ public class TSqlNormalizerTests
         var without = TSqlNormalizer.Normalize("SELECT a, b FROM t");
         Assert.Equal(without, withComment);
     }
+
+    [Fact]
+    public void Fold_identifier_case_makes_case_only_name_difference_equal()
+    {
+        // Harfe duyarsız modda modül gövdesindeki ad-harf farkı yok olmalı.
+        var options = new NormalizationOptions(FoldIdentifierCase: true);
+        var a = TSqlNormalizer.Normalize("CREATE PROCEDURE [dbo].[GetCustomer] AS SELECT [Id] FROM [T]", options: options);
+        var b = TSqlNormalizer.Normalize("CREATE PROCEDURE [dbo].[getcustomer] AS SELECT [id] FROM [t]", options: options);
+        Assert.Equal(a, b);
+    }
+
+    [Fact]
+    public void Identifier_case_is_significant_by_default_without_fold()
+    {
+        var a = TSqlNormalizer.Normalize("SELECT [Foo] FROM t");
+        var b = TSqlNormalizer.Normalize("SELECT [foo] FROM t");
+        Assert.NotEqual(a, b);
+    }
+
+    [Fact]
+    public void Fold_identifier_case_does_not_touch_string_literals()
+    {
+        // Katlama YALNIZ tanımlayıcılara; 'Ali' ile 'ali' hâlâ farklı veridir.
+        var options = new NormalizationOptions(FoldIdentifierCase: true);
+        var a = TSqlNormalizer.Normalize("SELECT 'Ali' AS [Name]", options: options);
+        var b = TSqlNormalizer.Normalize("SELECT 'ali' AS [Name]", options: options);
+        Assert.NotEqual(a, b);
+        Assert.Contains("'Ali'", a);
+    }
 }

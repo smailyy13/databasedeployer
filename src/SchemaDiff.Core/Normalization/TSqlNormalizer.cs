@@ -10,7 +10,11 @@ public sealed record NormalizationOptions(
     bool IgnoreKeywordCasing = false,
     // Tanımlayıcı alıntı biçimini birleştir: [a], "a" ve a aynı sayılır (harf büyüklüğü KORUNUR).
     // Semantik olarak doğrudur — parantez kimliği değiştirmez. Varsayılan açık.
-    bool NormalizeIdentifierQuoting = true)
+    bool NormalizeIdentifierQuoting = true,
+    // Tanımlayıcı harf büyüklüğünü küçük harfe indir: harfe DUYARSIZ karşılaştırmada
+    // (caseSensitiveNames kapalı) [Foo] ile [foo] aynı objeyi/kolonu gösterir; gövdede de
+    // aynı sayılmalı. Yalnız TANIMLAYICILARA uygulanır — string literal'lere DEĞİL.
+    bool FoldIdentifierCase = false)
 {
     public static readonly NormalizationOptions Default = new();
 }
@@ -79,12 +83,21 @@ public static class TSqlNormalizer
                     break;
 
                 case TSqlTokenType.Identifier:
-                    sb.Append(options.NormalizeIdentifierQuoting ? Bracket(token.Text) : token.Text);
+                {
+                    var text = options.FoldIdentifierCase ? token.Text.ToLowerInvariant() : token.Text;
+                    sb.Append(options.NormalizeIdentifierQuoting ? Bracket(text) : text);
                     break;
+                }
 
                 case TSqlTokenType.QuotedIdentifier:
-                    sb.Append(options.NormalizeIdentifierQuoting ? Bracket(Unquote(token.Text)) : token.Text);
+                {
+                    var inner = Unquote(token.Text);
+                    if (options.FoldIdentifierCase) inner = inner.ToLowerInvariant();
+                    sb.Append(options.NormalizeIdentifierQuoting
+                        ? Bracket(inner)
+                        : (options.FoldIdentifierCase ? token.Text.ToLowerInvariant() : token.Text));
                     break;
+                }
 
                 default:
                     sb.Append(options.IgnoreKeywordCasing ? UpperIfKeyword(token) : token.Text);
