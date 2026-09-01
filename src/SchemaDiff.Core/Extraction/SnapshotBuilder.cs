@@ -99,7 +99,8 @@ internal static class SnapshotBuilder
     /// <summary>Veritabanı seviyesi EP/izinleri taşıyan sentetik obje. Sabit ad — db adı değil.</summary>
     private static readonly ObjectKey DatabaseKey = new(string.Empty, "(database)", ObjectKind.Database);
 
-    public static DatabaseSnapshot Build(CatalogSet catalog, ExtractionReport report, SnapshotOptions options)
+    public static DatabaseSnapshot Build(
+        CatalogSet catalog, ExtractionReport report, SnapshotOptions options, CompareProgress? progress = null)
     {
         var sw = Stopwatch.StartNew();
 
@@ -174,12 +175,15 @@ internal static class SnapshotBuilder
         var temporalById = catalog.Temporal.ToDictionary(t => t.ObjectId);
 
         // En pahalı adım: T-SQL tokenize etme. Objeler birbirinden bağımsız, paralel koşar.
+        // İlerleme buradan raporlanır (yerelde compare süresinin baskın kısmı bu döngüdür);
+        // her modül — definition'ı NULL olsa bile — bir birim sayılır ki toplam tutsun.
         var normalizedBodies = new ConcurrentDictionary<int, string>();
         Parallel.ForEach(catalog.Modules, module =>
         {
-            if (module.Definition is null) return;
-            normalizedBodies[module.ObjectId] =
-                TSqlNormalizer.Normalize(module.Definition, module.UsesQuotedIdentifier, options.Normalization);
+            if (module.Definition is not null)
+                normalizedBodies[module.ObjectId] =
+                    TSqlNormalizer.Normalize(module.Definition, module.UsesQuotedIdentifier, options.Normalization);
+            progress?.BuildItemCompleted();
         });
 
         var scriptSources = new Scripting.TableScriptSources

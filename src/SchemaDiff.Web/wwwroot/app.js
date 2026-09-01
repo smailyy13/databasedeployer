@@ -42,6 +42,11 @@ const I18N = {
     serverRequired: 'Server name is required.', databaseRequired: 'Select a database.',
     startingCompare: 'starting comparison…', couldNotStart: 'Could not start.',
     comparing: 'comparing {source} → {target}…', connectionLost: 'Connection lost.',
+    progressLine: '{source} → {target} · %{percent}{eta}',
+    etaSuffix: ' · ~{sec} left', etaCalc: ' · estimating…',
+    secShort: '{n}s', minShort: '{n}m',
+    phaseConnecting: 'connecting', phaseExtracting: 'reading schema',
+    phaseBuilding: 'building model', phaseComparing: 'comparing', phaseDone: 'finishing',
     notComparedYet: 'No comparison yet.', noDiffForFilters: 'No differences to show with these filters.',
     listLimited: 'List limited to {n} records — there are more.',
     flagIndeterminate: 'INDETERMINATE',
@@ -136,6 +141,11 @@ const I18N = {
     serverRequired: 'Sunucu adı zorunlu.', databaseRequired: 'Bir veritabanı seçin.',
     startingCompare: 'karşılaştırma başlatılıyor…', couldNotStart: 'Başlatılamadı.',
     comparing: '{source} → {target} karşılaştırılıyor…', connectionLost: 'Bağlantı koptu.',
+    progressLine: '{source} → {target} · %{percent}{eta}',
+    etaSuffix: ' · ~{sec} kaldı', etaCalc: ' · süre hesaplanıyor…',
+    secShort: '{n}sn', minShort: '{n}dk',
+    phaseConnecting: 'bağlanılıyor', phaseExtracting: 'şema okunuyor',
+    phaseBuilding: 'model kuruluyor', phaseComparing: 'karşılaştırılıyor', phaseDone: 'tamamlanıyor',
     notComparedYet: 'Henüz karşılaştırma yapılmadı.', noDiffForFilters: 'Bu filtrelerle gösterilecek fark yok.',
     listLimited: 'Liste {n} kayıtla sınırlandı — daha fazlası var.',
     flagIndeterminate: 'BELİRSİZ',
@@ -611,6 +621,11 @@ async function compare() {
   state.eventSource = source;
   let done = false;
 
+  source.addEventListener('progress', (event) => {
+    if (done) return;
+    try { setProgress(JSON.parse(event.data)); } catch { /* yut */ }
+  });
+
   source.addEventListener('result', (event) => {
     done = true;
     source.close();
@@ -650,6 +665,33 @@ function setStatus(text, kind = '') {
   const bar = $('statusbar');
   bar.textContent = text;
   bar.className = `statusbar ${kind}`;
+}
+
+// Saniyeyi okunur süreye çevirir: "8sn", "1dk 20sn", "2dk".
+function formatDuration(totalSeconds) {
+  const s = Math.max(0, Math.round(totalSeconds));
+  if (s < 60) return t('secShort', { n: s });
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return rem === 0 ? t('minShort', { n: m }) : `${t('minShort', { n: m })} ${t('secShort', { n: rem })}`;
+}
+
+// Compare sırasında ilerleme çubuğunu çizer (yüzde + kalan süre + aşama).
+function setProgress(data) {
+  const bar = $('statusbar');
+  const percent = Math.max(0, Math.min(100, data.percent ?? 0));
+  const phaseKey = 'phase' + (data.phase ? data.phase[0].toUpperCase() + data.phase.slice(1) : 'Connecting');
+  const phaseLabel = I18N[LANG][phaseKey] || '';
+  const eta = data.etaSeconds != null
+    ? t('etaSuffix', { sec: formatDuration(data.etaSeconds) })
+    : (percent >= 10 && percent < 100 ? t('etaCalc') : '');
+  const line = t('progressLine', { source: data.source, target: data.target, percent, eta });
+  bar.className = 'statusbar busy';
+  bar.innerHTML =
+    `<div class="progress">` +
+    `<div class="progress-track"><div class="progress-fill" style="width:${percent}%"></div></div>` +
+    `<span class="progress-text">${esc(line)}${phaseLabel ? ' · ' + esc(phaseLabel) : ''}</span>` +
+    `</div>`;
 }
 
 // ================= ağaç =================
