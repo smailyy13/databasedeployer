@@ -24,9 +24,10 @@ public class ChangeCatalogCaseTests
         Assert.Contains(changes, c => c.Name == "t_case" && c.Action == ChangeAction.Delete);
     }
 
-    // Karşı örnek: case-insensitive (varsayılan) modda aynı iki anahtar TEK objede birleşir.
+    // Case-insensitive (varsayılan) modda anahtarlar birleşir; içerik (hash) aynı ama saklanan
+    // ad harf bakımından farklıysa TEK 'Değişti' (ad harf farkı) üretilir — Add+Delete DEĞİL.
     [Fact]
-    public void Case_insensitive_merges_case_only_key_difference()
+    public void Case_insensitive_name_only_case_difference_is_a_single_change()
     {
         var source = Database("dev",  [Obj(Table("T_CASE"), 1, columns: [Column("A")])]);
         var target = Database("prod", [Obj(Table("t_case"), 1, columns: [Column("A")])]);
@@ -34,6 +35,19 @@ public class ChangeCatalogCaseTests
         var result = SchemaComparer.Compare(source, target);
         var changes = ChangeCatalog.Build(result);
 
-        Assert.Empty(changes);   // aynı obje, aynı yapı -> fark yok
+        var change = Assert.Single(changes);
+        Assert.Equal(ChangeAction.Change, change.Action);
+        Assert.Equal("T_CASE", change.Name);   // kaynak adı
+        Assert.Contains(change.Children, c => c.ItemType == "Name");
+    }
+
+    // İçerik de ad da aynıysa (harf dahil) hiç fark yok.
+    [Fact]
+    public void Identical_name_and_content_is_equal()
+    {
+        var source = Database("dev",  [Obj(Table("Same"), 1, columns: [Column("A")])]);
+        var target = Database("prod", [Obj(Table("Same"), 1, columns: [Column("A")])]);
+
+        Assert.Empty(ChangeCatalog.Build(SchemaComparer.Compare(source, target)));
     }
 }

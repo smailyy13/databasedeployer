@@ -35,13 +35,23 @@ public static class SchemaComparer
                 continue;
             }
 
+            // Harfe DUYARSIZ modda anahtarlar eşleşir ama saklanan ad harf bakımından farklı
+            // olabilir (ör. [GetCustomer] ↔ [getcustomer]). Bunu ayrı bir Add+Delete yerine TEK
+            // "Değişti" (ad harf farkı) olarak göster — tablo dâhil tüm türlerde tutarlı.
+            var nameCaseDiff =
+                !string.Equals(key.Schema, targetObject.Key.Schema, StringComparison.Ordinal) ||
+                !string.Equals(key.Name, targetObject.Key.Name, StringComparison.Ordinal);
+
             if (sourceObject.Hash == targetObject.Hash)
             {
-                equalCount++;
+                if (!nameCaseDiff) { equalCount++; continue; }
+                differences.Add(new ObjectDiff(key, DiffKind.Changed, ["name"]));
                 continue;
             }
 
-            differences.Add(new ObjectDiff(key, DiffKind.Changed, ChangedParts(sourceObject, targetObject)));
+            var parts = ChangedParts(sourceObject, targetObject);
+            if (nameCaseDiff && !parts.Contains("name")) parts.Add("name");
+            differences.Add(new ObjectDiff(key, DiffKind.Changed, parts));
         }
 
         foreach (var (key, _) in target.Objects)

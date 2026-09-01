@@ -218,6 +218,13 @@ public static class ChangeCatalog
                         "sahip", key.Name, null));
                     break;
 
+                case "name":
+                    // Harfe duyarsız modda yalnız AD harf farkı: kaynak → hedef adını göster.
+                    children.Add(new ChildChange(ChangeAction.Change, "Properties", "Name",
+                        "ad (büyük/küçük harf)", $"{key.Schema}.{key.Name}",
+                        $"{source.Key.Name} → {target.Key.Name}"));
+                    break;
+
                 default:
                     children.Add(new ChildChange(ChangeAction.Change, "Properties", part, part,
                         $"{key.Schema}.{key.Name}", null));
