@@ -133,7 +133,7 @@ public sealed class CompareService
             var stopwatch = Stopwatch.StartNew();
             var progress = new CompareProgress(snapshot =>
             {
-                var (percent, eta) = ComputeProgress(snapshot, stopwatch.Elapsed);
+                var (percent, eta) = ProgressMath.Compute(snapshot, stopwatch.Elapsed);
                 session.ReportProgress(percent, eta, snapshot.Phase.ToString().ToLowerInvariant());
             });
             try
@@ -174,43 +174,7 @@ public sealed class CompareService
     /// <summary>Arayüzdeki görünen tür adını ObjectKind'e çevirir (seçim + detay paneli).</summary>
     public static ObjectKind ResolveKind(string label) => ObjectKindLabels.Resolve(label);
 
-    // İlerleme bantları (toplam yüzde). İki pahalı aşama var ve hangisinin baskın olduğu
-    // ortama göre değişir (uzak DB'de çıkarma, yerelde modül parse'ı). Bu yüzden her ikisine
-    // de geniş, KENDİ ilerlemesiyle animasyonlu bir bant verilir; sabit sıçrama bırakılmaz.
-    private const int ExtractStart = 5;    // bağlantı/preflight bitti
-    private const int ExtractEnd = 62;     // tüm çıkarma sorguları bitti
-    private const int BuildEnd = 96;       // snapshot'lar kuruldu (modül normalizasyonu)
-    private const int CompareEnd = 98;     // karşılaştırma bitti (kalanı DTO map)
-
-    /// <summary>
-    /// Ham ilerlemeyi (aşama + sorgu/modül sayıları) toplam yüzde ve kalan süre tahminine çevirir.
-    /// ETA, geçen süreden doğrusal ekstrapolasyondur: yüzde küçükken (gürültülü) gizlenir.
-    /// </summary>
-    internal static (int Percent, int? EtaSeconds) ComputeProgress(ProgressSnapshot s, TimeSpan elapsed)
-    {
-        var percent = s.Phase switch
-        {
-            ComparePhase.Connecting => 2,
-            ComparePhase.Extracting => s.QueriesTotal <= 0
-                ? ExtractStart
-                : ExtractStart + (int)((ExtractEnd - ExtractStart) * (double)s.QueriesDone / s.QueriesTotal),
-            ComparePhase.Building => s.BuildTotal <= 0
-                ? BuildEnd
-                : ExtractEnd + (int)((BuildEnd - ExtractEnd) * (double)s.BuildDone / s.BuildTotal),
-            ComparePhase.Comparing => CompareEnd,
-            _ => 100,
-        };
-        percent = Math.Clamp(percent, 0, 100);
-
-        // ETA yalnızca anlamlı ölçüde ilerleyince gösterilir; erken tahmin yanıltıcıdır.
-        int? eta = null;
-        if (percent is >= 10 and < 100 && elapsed.TotalSeconds >= 1.0)
-        {
-            var remaining = elapsed.TotalSeconds * (100 - percent) / percent;
-            eta = (int)Math.Ceiling(remaining);
-        }
-        return (percent, eta);
-    }
+    // Yüzde/ETA hesabı saf mantık olduğundan Core'daki ProgressMath'te durur (test edilebilir).
 
     private static CompareResultDto Map(CompareSession session, CompareResult comparison, TimeSpan duration)
     {
