@@ -367,6 +367,7 @@ mark.wordhit { background: #ffdf5d; color: #1f2328; border-radius: 2px; padding:
   position: sticky; top: 0; z-index: 1; background: var(--panel-2);
   border-bottom: 1px solid var(--line); padding: 5px 12px;
   font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); font-weight: 600;
+  user-select: none; /* Ctrl+A ile panel seçilince başlık kopyaya girmesin */
 }
 .dline { display: flex; font-family: var(--mono); font-size: 12px; line-height: 1.55;
          white-space: pre-wrap; word-break: break-word; }
@@ -399,7 +400,7 @@ mark.wordhit { background: #ffdf5d; color: #1f2328; border-radius: 2px; padding:
 .dline.add { background: var(--add-bg); }
 .dline.del { background: var(--del-bg); }
 .dline.pad { background: repeating-linear-gradient(45deg, transparent, transparent 7px,
-             var(--line-2) 7px, var(--line-2) 8px); min-height: 18px; }
+             var(--line-2) 7px, var(--line-2) 8px); min-height: 18px; user-select: none; }
 
 /* ---------- dialogs ---------- */
 .scrim { position: fixed; inset: 0; background: rgba(31, 35, 40, .4); z-index: 40; backdrop-filter: blur(1px); }
