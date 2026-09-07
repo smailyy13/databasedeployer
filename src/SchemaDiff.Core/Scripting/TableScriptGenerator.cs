@@ -214,6 +214,8 @@ public static class TableScriptGenerator
         // OLDUĞU GİBİ saklar; harf durumunu düzeltmenin tek yolu sp_rename'dir. Rename önce
         // gelir ki sonraki ifadeler doğru adı kullansın.
         var renames = new List<string>();
+        // Kolon adı harfe duyarsızsa yalnız harf farkı bir fark değildir — sp_rename üretme.
+        if (result.Source.CaseSensitiveColumnNames)
         foreach (var column in source.Columns)
         {
             if (!targetByName.TryGetValue(column.Name, out var current)) continue;

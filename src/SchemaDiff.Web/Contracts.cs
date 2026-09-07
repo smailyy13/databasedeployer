@@ -49,6 +49,7 @@ public sealed record CompareOptionsDto(
     bool IgnoreExtendedProperties = false,
     bool IgnorePermissions = false,
     bool CaseSensitiveNames = false,
+    bool CaseSensitiveColumnNames = false,
     int MaxQueries = 16);
 
 public sealed record CompareRequest(

@@ -124,6 +124,7 @@ public sealed class CompareService
             IgnoreExtendedProperties = options.IgnoreExtendedProperties,
             IgnorePermissions = options.IgnorePermissions,
             CaseSensitiveNames = options.CaseSensitiveNames,
+            CaseSensitiveColumnNames = options.CaseSensitiveColumnNames,
             KeepDisplayScripts = true,   // alt panelde tam kodu bağlamıyla göstermek için
         };
 

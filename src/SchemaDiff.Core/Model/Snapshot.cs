@@ -260,6 +260,13 @@ public sealed class DatabaseSnapshot
     public bool CaseSensitiveNames { get; init; }
 
     /// <summary>
+    /// Kolon adlarında büyük/küçük harf duyarlı mı. Kapalıyken kolon adı kanoniğe küçük harfe
+    /// indirgenerek yazılır (yalnız harf farkı yok sayılır) ve script üreticisi <c>sp_rename</c>
+    /// üretmez. Bkz. <see cref="CaseSensitiveNames"/> (obje adları için).
+    /// </summary>
+    public bool CaseSensitiveColumnNames { get; init; }
+
+    /// <summary>
     /// Obje → referans verdiği objeler. Script üretiminde yeni objeleri doğru sırada
     /// oluşturmak için kullanılır; karşılaştırmaya girmez.
     /// </summary>
