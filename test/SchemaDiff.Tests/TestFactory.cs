@@ -69,8 +69,9 @@ internal static class TestFactory
         bool ignoredCollation = false,
         bool caseSensitive = false)
     {
-        var dict = new Dictionary<ObjectKey, ObjectSnapshot>(
-            caseSensitive ? ObjectKeyComparer.CaseSensitive : ObjectKeyComparer.CaseInsensitive);
+        // Gerçek SnapshotBuilder gibi: eşleştirme her zaman harfe duyarsız. "caseSensitive"
+        // yalnızca ad harf farkının raporlanıp raporlanmayacağını (CaseSensitiveNames) belirler.
+        var dict = new Dictionary<ObjectKey, ObjectSnapshot>(ObjectKeyComparer.CaseInsensitive);
         foreach (var o in objects) dict[o.Key] = o;
 
         return new DatabaseSnapshot
@@ -81,6 +82,7 @@ internal static class TestFactory
             References = references ?? [],
             IgnoredColumnOrder = ignoredColumnOrder,
             IgnoredCollation = ignoredCollation,
+            CaseSensitiveNames = caseSensitive,
         };
     }
 

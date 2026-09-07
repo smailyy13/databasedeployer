@@ -7,30 +7,14 @@ namespace SchemaDiff.Tests;
 
 public class ChangeCatalogCaseTests
 {
-    // caseSensitiveNames=true iken [T_CASE] ve [t_case] AYRI objelerdir (biri eklenmiş,
-    // biri silinmiş). ChangeCatalog risk sözlüğünü karşılaştırmanın kendi karşılaştırıcısıyla
-    // kurmalı; sabit CaseInsensitive kullanınca "aynı anahtar iki kez eklendi" ile çökerdi.
+    // "Ad büyük/küçük harf duyarlı" AÇIKken [T_CASE] ile [t_case] eşleşir (anahtarlar her zaman
+    // harfe duyarsız) ama ad harf farkı bir fark sayılır: TEK bir 'Değişti' (ad) üretilir —
+    // Add+Delete DEĞİL. ChangeCatalog kaynak → hedef adını bir "Name" alt satırında gösterir.
     [Fact]
-    public void Case_sensitive_key_difference_does_not_crash_and_splits_into_add_and_delete()
+    public void Case_sensitive_name_only_case_difference_is_a_single_change()
     {
         var source = Database("dev",  [Obj(Table("T_CASE"), 1, columns: [Column("A")])], caseSensitive: true);
-        var target = Database("prod", [Obj(Table("t_case"), 2, columns: [Column("A")])], caseSensitive: true);
-
-        var result = SchemaComparer.Compare(source, target);
-        var changes = ChangeCatalog.Build(result);   // eskiden burada fırlatıyordu
-
-        Assert.Equal(2, changes.Count);
-        Assert.Contains(changes, c => c.Name == "T_CASE" && c.Action == ChangeAction.Add);
-        Assert.Contains(changes, c => c.Name == "t_case" && c.Action == ChangeAction.Delete);
-    }
-
-    // Case-insensitive (varsayılan) modda anahtarlar birleşir; içerik (hash) aynı ama saklanan
-    // ad harf bakımından farklıysa TEK 'Değişti' (ad harf farkı) üretilir — Add+Delete DEĞİL.
-    [Fact]
-    public void Case_insensitive_name_only_case_difference_is_a_single_change()
-    {
-        var source = Database("dev",  [Obj(Table("T_CASE"), 1, columns: [Column("A")])]);
-        var target = Database("prod", [Obj(Table("t_case"), 1, columns: [Column("A")])]);
+        var target = Database("prod", [Obj(Table("t_case"), 1, columns: [Column("A")])], caseSensitive: true);
 
         var result = SchemaComparer.Compare(source, target);
         var changes = ChangeCatalog.Build(result);
@@ -39,6 +23,19 @@ public class ChangeCatalogCaseTests
         Assert.Equal(ChangeAction.Change, change.Action);
         Assert.Equal("T_CASE", change.Name);   // kaynak adı
         Assert.Contains(change.Children, c => c.ItemType == "Name");
+    }
+
+    // "Ad büyük/küçük harf duyarlı" KAPALIyken (varsayılan) ad harf farkı yok sayılır:
+    // [T_CASE] ile [t_case] eşit sayılır, hiç listelenmez.
+    [Fact]
+    public void Case_insensitive_name_only_case_difference_is_not_listed()
+    {
+        var source = Database("dev",  [Obj(Table("T_CASE"), 1, columns: [Column("A")])]);
+        var target = Database("prod", [Obj(Table("t_case"), 1, columns: [Column("A")])]);
+
+        var result = SchemaComparer.Compare(source, target);
+
+        Assert.Empty(ChangeCatalog.Build(result));
     }
 
     // İçerik de ad da aynıysa (harf dahil) hiç fark yok.
