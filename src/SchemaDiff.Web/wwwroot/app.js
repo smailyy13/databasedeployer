@@ -80,7 +80,7 @@ const I18N = {
     dataLossIncluded: '⚠ DATA-LOSS steps (drop column/table, narrowing) INCLUDED',
     stillGated: '{n} steps still gated', outOfScopeN: '{n} objects out of scope (sequence/synonym etc.)',
     skippedN: '{n} objects skipped', downloaded: '{file} downloaded · {parts}',
-    optgText: 'Text / normalization', optgColumn: 'Columns & types', optgIndex: 'Indexes',
+    optgText: 'Text / normalization', optgCasing: 'Casing (upper/lower)', optgColumn: 'Columns & types', optgIndex: 'Indexes',
     optgObject: 'Objects & constraints', optgScope: 'Scope', optgScript: 'Script / deployment (affects generated SQL)',
     opt_blockDataLoss: 'Block on possible data loss', optn_blockDataLoss: 'Data-loss steps (drop column/table, narrowing) are left out of the generated script and only reported.',
     opt_dropNotInSource: 'Drop objects not in source', optn_dropNotInSource: 'Objects, indexes and constraints that exist in target but not in source get DROP statements.',
@@ -105,7 +105,9 @@ const I18N = {
     opt_ignoreExtendedProperties: 'Ignore extended properties', optn_ignoreExtendedProperties: 'Descriptions like MS_Description are not compared. Default: compared (SSDT does too).',
     opt_ignorePermissions: 'Ignore users, roles and permissions', optn_ignorePermissions: 'Database users, user-defined roles, memberships and object/schema permissions are neither shown nor scripted — handled separately. Default: ignored.',
     opt_recreateChangedTableTypes: 'Recreate changed table types', optn_recreateChangedTableTypes: 'A changed table type cannot be altered. When on, dependent modules are dropped, the type is recreated and the modules are restored — only if every dependent definition is readable.',
-    opt_caseSensitiveNames: 'Case-sensitive names', optn_caseSensitiveNames: "Default is case-insensitive — SQL Server's usual collation behaviour.",
+    opt_caseSensitiveNames: 'Case-sensitive object names', optn_caseSensitiveNames: 'When on, a name that differs only in case ([GetCustomer] ↔ [getcustomer]) is a single "Change". Off (default): not listed. Covers schemas, tables, views, procedures, functions, triggers, sequences, synonyms.',
+    opt_caseSensitiveColumnNames: 'Case-sensitive column names', optn_caseSensitiveColumnNames: 'When on, a column differing only in case ([Id] ↔ [id]) is a change and is fixed with sp_rename. Off (default): not counted.',
+    opt_caseSensitiveKeywords: 'Case-sensitive keywords', optn_caseSensitiveKeywords: 'When on, "select" and "SELECT" differ. Off (default): keyword casing is ignored. Identifiers and literals are unaffected.',
   },
   tr: {
     source: 'Kaynak', target: 'Hedef', selectConnection: 'bağlantı seçin',
@@ -177,7 +179,7 @@ const I18N = {
     dataLossIncluded: '⚠ VERİ KAYBI adımları (kolon/tablo silme, tip daraltma) DAHİL',
     stillGated: '{n} adım yine de gated', outOfScopeN: '{n} obje kapsam dışı (sequence/synonym vb.)',
     skippedN: '{n} obje atlandı', downloaded: '{file} indirildi · {parts}',
-    optgText: 'Metin / normalizasyon', optgColumn: 'Kolon ve tipler', optgIndex: 'Index\'ler',
+    optgText: 'Metin / normalizasyon', optgCasing: 'Büyük/küçük harf', optgColumn: 'Kolon ve tipler', optgIndex: 'Index\'ler',
     optgObject: 'Nesne ve constraint\'ler', optgScope: 'Kapsam', optgScript: 'Script / dağıtım (üretilen SQL\'e etki eder)',
     opt_blockDataLoss: 'Olası veri kaybında durdur', optn_blockDataLoss: 'Veri kaybı adımları (kolon/tablo silme, tip daraltma) üretilen script\'e girmez, yalnızca raporlanır.',
     opt_dropNotInSource: 'Kaynakta olmayan nesneleri sil', optn_dropNotInSource: 'Hedefte olup kaynakta olmayan nesne, index ve constraint\'ler için DROP üretilir.',
@@ -202,7 +204,9 @@ const I18N = {
     opt_ignoreExtendedProperties: 'Extended property\'leri yok say', optn_ignoreExtendedProperties: 'MS_Description gibi açıklamalar karşılaştırılmaz. Varsayılan: karşılaştırılır (SSDT de eder).',
     opt_ignorePermissions: 'Kullanıcı, rol ve izinleri yok say', optn_ignorePermissions: 'Veritabanı kullanıcıları, roller, üyelikler ve obje/şema izinleri ne ekranda gösterilir ne de script\'e girer — ayrıca ele alınır. Varsayılan: yok sayılır.',
     opt_recreateChangedTableTypes: 'Değişen table type\'ları yeniden kur', optn_recreateChangedTableTypes: 'Table type ALTER edilemez. Açıkken bağımlı modüller düşürülür, tip yeniden kurulur ve modüller geri yüklenir — yalnızca bağımlıların TAMAMININ tanımı okunabiliyorsa.',
-    opt_caseSensitiveNames: 'İsimlerde büyük/küçük harf duyarlı', optn_caseSensitiveNames: 'Varsayılan duyarsızdır — SQL Server\'ın olağan collation davranışı.',
+    opt_caseSensitiveNames: 'Nesne adlarında büyük/küçük harf duyarlı', optn_caseSensitiveNames: 'Açıkken yalnız harf farkı olan ad ([GetCustomer] ↔ [getcustomer]) tek bir "Değişti" olur. Kapalı (varsayılan): listelenmez. Şema, tablo, view, prosedür, fonksiyon, trigger, sequence, synonym adlarını kapsar.',
+    opt_caseSensitiveColumnNames: 'Kolon adlarında büyük/küçük harf duyarlı', optn_caseSensitiveColumnNames: 'Açıkken yalnız harf farkı olan kolon ([Id] ↔ [id]) fark sayılır ve dağıtımda sp_rename ile düzeltilir. Kapalı (varsayılan): fark sayılmaz.',
+    opt_caseSensitiveKeywords: 'Anahtar kelimelerde büyük/küçük harf duyarlı', optn_caseSensitiveKeywords: 'Açıkken "select" ile "SELECT" farklıdır. Kapalı (varsayılan): anahtar kelime harfi yok sayılır. Tanımlayıcılar ve literaller etkilenmez.',
   },
 };
 
@@ -320,27 +324,37 @@ const GROUPS = [
 // SSDT'nin "General" sekmesindeki seçenekleri gruplayarak yansıtır. Yalnızca bu araçta
 // GERÇEKTEN uygulanan seçenekler var — çalışmayan bir kutu göstermek yanıltıcı olur.
 const OPTION_GROUPS = [
-  { group: 'optgText', keys: ['ignoreWhitespace', 'ignoreComments', 'ignoreKeywordCasing',
+  { group: 'optgText', keys: ['ignoreWhitespace', 'ignoreComments',
                               'ignoreSemicolons', 'ignoreAnsiNulls', 'ignoreQuotedIdentifiers'] },
+  { group: 'optgCasing', keys: ['caseSensitiveNames', 'caseSensitiveColumnNames', 'caseSensitiveKeywords'] },
   { group: 'optgColumn', keys: ['ignoreColumnOrder', 'ignoreCollation',
                                 'ignoreIdentitySeed', 'ignoreIdentityIncrement'] },
   { group: 'optgIndex', keys: ['ignoreIndexPhysical', 'ignoreFillFactor', 'ignoreIndexPadding',
                                'ignoreDataCompression', 'ignoreStatistics'] },
   { group: 'optgObject', keys: ['ignoreDmlTriggerState', 'ignoreSystemNamedConstraints'] },
-  { group: 'optgScope', keys: ['ignoreExtendedProperties', 'ignorePermissions', 'caseSensitiveNames'] },
+  { group: 'optgScope', keys: ['ignoreExtendedProperties', 'ignorePermissions'] },
 ];
 
 const OPTION_KEYS = OPTION_GROUPS.flatMap((g) => g.keys);
 
+// Arayüzdeki casing seçenekleri "duyarlı olduğunda işaretle" mantığında (tiksiz = yok say).
+// Backend anahtar-kelime seçeneğini "ignore" olarak beklediğinden istekte polariteyi çeviririz.
+function compareOptionsPayload(opts) {
+  const { caseSensitiveKeywords, ...rest } = opts;
+  return { ...rest, ignoreKeywordCasing: !caseSensitiveKeywords };
+}
+
 const DEFAULT_OPTIONS = {
-  ignoreWhitespace: true, ignoreComments: true, ignoreKeywordCasing: false,
+  ignoreWhitespace: true, ignoreComments: true,
   ignoreSemicolons: false, ignoreAnsiNulls: true, ignoreQuotedIdentifiers: true,
+  // Casing: hepsi varsayılan KAPALI (tiksiz) → harf farkları varsayılan olarak yok sayılır.
+  caseSensitiveNames: false, caseSensitiveColumnNames: false, caseSensitiveKeywords: false,
   ignoreColumnOrder: false, ignoreCollation: false,
   ignoreIdentitySeed: false, ignoreIdentityIncrement: false,
   ignoreIndexPhysical: false, ignoreFillFactor: true, ignoreIndexPadding: false, ignoreDataCompression: false,
   ignoreStatistics: false,
   ignoreDmlTriggerState: false, ignoreSystemNamedConstraints: true,
-  ignoreExtendedProperties: false, ignorePermissions: true, caseSensitiveNames: false,
+  ignoreExtendedProperties: false, ignorePermissions: true,
   blockDataLoss: false, dropNotInSource: true, scriptValidateConstraints: true,
   recreateChangedTableTypes: false,
   maxQueries: 16,
@@ -600,7 +614,7 @@ async function compare() {
   try {
     const response = await fetch('/api/compare', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source: state.source, target: state.target, options: state.options }),
+      body: JSON.stringify({ source: state.source, target: state.target, options: compareOptionsPayload(state.options) }),
     });
     data = await response.json();
     if (!response.ok) throw new Error(data.error ?? t('couldNotStart'));

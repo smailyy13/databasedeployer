@@ -66,6 +66,13 @@ public sealed record SnapshotOptions
     public bool CaseSensitiveNames { get; init; }
 
     /// <summary>
+    /// Kolon adlarında büyük/küçük harf duyarlı ol. Varsayılan KAPALI: yalnız harf farkı
+    /// olan kolon ([Id] ↔ [id]) fark sayılmaz. Açıkken fark yakalanır ve dağıtımda
+    /// <c>sp_rename</c> ile düzeltilir. Obje adları için ayrı <see cref="CaseSensitiveNames"/>.
+    /// </summary>
+    public bool CaseSensitiveColumnNames { get; init; }
+
+    /// <summary>
     /// Extended property'leri (MS_Description vb.) karşılaştırma dışında bırak. Varsayılan
     /// kapalı: dokümantasyon ağırlıklı EDW'lerde bunlar gerçek şema farkıdır ve SSDT de
     /// karşılaştırır. Gürültü yaratıyorsa açılabilir.
@@ -712,6 +719,7 @@ internal static class SnapshotBuilder
             IgnoredColumnOrder = options.IgnoreColumnOrder,
             IgnoredCollation = options.IgnoreCollation,
             CaseSensitiveNames = options.CaseSensitiveNames,
+            CaseSensitiveColumnNames = options.CaseSensitiveColumnNames,
         };
     }
 
@@ -784,7 +792,10 @@ internal static class SnapshotBuilder
         var sb = new StringBuilder(columns.Count * 96);
         foreach (var c in ordered)
         {
-            sb.Append("col|").Append(c.Name)
+            // Kolon adı harfe duyarsızsa kanoniğe küçük harfle gir: [Id] ile [id] aynı hash'i
+            // üretir, yalnız harf farkı "değişti" görünmez. Duyarlıysa ad olduğu gibi korunur.
+            var columnName = options.CaseSensitiveColumnNames ? c.Name : c.Name.ToLowerInvariant();
+            sb.Append("col|").Append(columnName)
               .Append('|').Append(c.TypeSchema).Append('.').Append(c.TypeName)
               .Append("|len=").Append(c.MaxLength.ToString(CultureInfo.InvariantCulture))
               .Append("|prec=").Append(c.Precision.ToString(CultureInfo.InvariantCulture))
@@ -1639,7 +1650,8 @@ internal static class SnapshotBuilder
         var sb = new StringBuilder(columns.Count * 80);
         foreach (var c in ordered)
         {
-            sb.Append("col|").Append(c.Name)
+            var columnName = options.CaseSensitiveColumnNames ? c.Name : c.Name.ToLowerInvariant();
+            sb.Append("col|").Append(columnName)
               .Append('|').Append(c.TypeSchema).Append('.').Append(c.TypeName)
               .Append("|len=").Append(c.MaxLength.ToString(CultureInfo.InvariantCulture))
               .Append("|prec=").Append(c.Precision.ToString(CultureInfo.InvariantCulture))
