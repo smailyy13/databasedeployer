@@ -253,6 +253,13 @@ public sealed class DatabaseSnapshot
     public bool IgnoredCollation { get; init; }
 
     /// <summary>
+    /// Kullanıcı "ad büyük/küçük harf duyarlı" dedi mi. Anahtarlar her zaman harfe duyarsız
+    /// eşleşir; bu bayrak yalnızca ad harf farkının bir "Değişti" olarak raporlanıp
+    /// raporlanmayacağını belirler (açık → raporla, kapalı → yok say). Bkz. SchemaComparer.
+    /// </summary>
+    public bool CaseSensitiveNames { get; init; }
+
+    /// <summary>
     /// Obje → referans verdiği objeler. Script üretiminde yeni objeleri doğru sırada
     /// oluşturmak için kullanılır; karşılaştırmaya girmez.
     /// </summary>

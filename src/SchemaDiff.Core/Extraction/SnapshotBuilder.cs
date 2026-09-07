@@ -219,9 +219,11 @@ internal static class SnapshotBuilder
                 id => id, id => BuildSpatialIndexDefinitions(id, spatialIndexesBy, indexColumnsBy, columnNames)),
         };
 
-        var comparer = options.CaseSensitiveNames
-            ? ObjectKeyComparer.CaseSensitive
-            : ObjectKeyComparer.CaseInsensitive;
+        // Eşleştirme her zaman harfe DUYARSIZ yapılır: [GetCustomer] ile [getcustomer] AYNI
+        // objenin iki yazımıdır, ayrı objeler değil. "Ad büyük/küçük harf duyarlı" seçeneği
+        // yalnızca bu harf farkının RAPORLANIP raporlanmayacağını belirler (bkz. SchemaComparer):
+        // açıkken tek bir "Değişti" (ad), kapalıyken hiç listelenmez.
+        var comparer = ObjectKeyComparer.CaseInsensitive;
         var objects = new Dictionary<ObjectKey, ObjectSnapshot>(catalog.Objects.Count + catalog.Schemas.Count, comparer);
 
         // Extended property'leri host objesine göre grupla; her host'a tek bir kanonik parça.
@@ -709,6 +711,7 @@ internal static class SnapshotBuilder
             References = references,
             IgnoredColumnOrder = options.IgnoreColumnOrder,
             IgnoredCollation = options.IgnoreCollation,
+            CaseSensitiveNames = options.CaseSensitiveNames,
         };
     }
 
