@@ -65,8 +65,9 @@ public static class TSqlNormalizer
                 case TSqlTokenType.SingleLineComment:
                 case TSqlTokenType.MultilineComment:
                     if (!options.IgnoreComments) sb.Append(token.Text);
-                    // Yorumu attıktan sonra iki token'ın yapışmaması için ayırıcı bırak.
-                    else if (sb.Length > 0 && sb[^1] != ' ') sb.Append(' ');
+                    // Yorumu attıktan sonra iki token'ın yapışmaması için ayırıcı bırak — ama
+                    // yapısal noktalamadan sonra bu ayırıcı da anlamsız (boşluk yolu ile tutarlı).
+                    else if (sb.Length > 0 && !NoSpaceAfter(sb[^1])) sb.Append(' ');
                     break;
 
                 case TSqlTokenType.Semicolon:
