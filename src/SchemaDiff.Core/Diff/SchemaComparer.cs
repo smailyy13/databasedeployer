@@ -20,6 +20,11 @@ public static class SchemaComparer
         var differences = new List<ObjectDiff>();
         var equalCount = 0;
 
+        // Anahtarlar her zaman harfe duyarsız eşleşir. Ad harf farkı ([GetCustomer] ↔ [getcustomer])
+        // YALNIZCA "ad büyük/küçük harf duyarlı" seçeneği AÇIKKEN bir fark sayılır ve tek bir
+        // "Değişti" (ad) olarak gösterilir. Kapalıyken bu iki yazım eşit sayılır, listelenmez.
+        var reportNameCase = source.CaseSensitiveNames;
+
         foreach (var (key, sourceObject) in source.Objects)
         {
             if (!target.Objects.TryGetValue(key, out var targetObject))
@@ -35,12 +40,9 @@ public static class SchemaComparer
                 continue;
             }
 
-            // Harfe DUYARSIZ modda anahtarlar eşleşir ama saklanan ad harf bakımından farklı
-            // olabilir (ör. [GetCustomer] ↔ [getcustomer]). Bunu ayrı bir Add+Delete yerine TEK
-            // "Değişti" (ad harf farkı) olarak göster — tablo dâhil tüm türlerde tutarlı.
-            var nameCaseDiff =
-                !string.Equals(key.Schema, targetObject.Key.Schema, StringComparison.Ordinal) ||
-                !string.Equals(key.Name, targetObject.Key.Name, StringComparison.Ordinal);
+            var nameCaseDiff = reportNameCase &&
+                (!string.Equals(key.Schema, targetObject.Key.Schema, StringComparison.Ordinal) ||
+                 !string.Equals(key.Name, targetObject.Key.Name, StringComparison.Ordinal));
 
             if (sourceObject.Hash == targetObject.Hash)
             {
