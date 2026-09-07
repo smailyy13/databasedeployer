@@ -123,6 +123,17 @@ public class TSqlNormalizerTests
     }
 
     [Fact]
+    public void Whitespace_after_comma_is_ignored()
+    {
+        // "a, b" ile "a,b" (virgülden sonra boşluk) eşit sayılmalı.
+        Assert.Equal(TSqlNormalizer.Normalize("SELECT a,b FROM t"),
+                     TSqlNormalizer.Normalize("SELECT a, b FROM t"));
+        // Parantezden sonra ve ';' sonrası boşluk da anlamsız.
+        Assert.Equal(TSqlNormalizer.Normalize("SELECT (a) FROM t"),
+                     TSqlNormalizer.Normalize("SELECT ( a) FROM t"));
+    }
+
+    [Fact]
     public void Fold_identifier_case_makes_case_only_name_difference_equal()
     {
         // Harfe duyarsız modda modül gövdesindeki ad-harf farkı yok olmalı.
