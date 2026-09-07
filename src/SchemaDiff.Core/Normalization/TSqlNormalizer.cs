@@ -54,7 +54,10 @@ public static class TSqlNormalizer
                 case TSqlTokenType.WhiteSpace:
                     if (options.IgnoreWhitespace)
                     {
-                        if (sb.Length > 0 && sb[^1] != ' ') sb.Append(' ');
+                        // Boşluğu tek ayırıcıya indir; ama yapısal noktalamadan ("," ";" "(")
+                        // SONRA gelen boşluk anlamsızdır — "a, b" ile "a,b" eşit sayılsın diye at.
+                        // (Öncesindeki boşluk zaten Comma/Semicolon'da kırpılıyor.)
+                        if (sb.Length > 0 && !NoSpaceAfter(sb[^1])) sb.Append(' ');
                     }
                     else sb.Append(token.Text);
                     break;
@@ -136,6 +139,9 @@ public static class TSqlNormalizer
     {
         if (ignoreWhitespace && sb.Length > 0 && sb[^1] == ' ') sb.Length--;
     }
+
+    /// <summary>Bu karakterden sonra ayırıcı boşluk anlam taşımaz (zaten ayrılmıştır).</summary>
+    private static bool NoSpaceAfter(char c) => c is ' ' or ',' or ';' or '(';
 
     /// <summary>Tanımlayıcıyı kanonik [ad] biçimine getirir; içteki ] kaçırılır. Harf büyüklüğü korunur.</summary>
     private static string Bracket(string inner) => $"[{inner.Replace("]", "]]")}]";
