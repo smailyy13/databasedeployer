@@ -11,7 +11,7 @@ namespace SchemaDiff.Web;
 
 public sealed class CompareSession
 {
-    private readonly Lock _gate = new();
+    private readonly object _gate = new();
     private TaskCompletionSource _signal = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public required string Id { get; init; }

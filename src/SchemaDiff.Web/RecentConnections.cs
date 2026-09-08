@@ -35,7 +35,7 @@ public sealed class RecentConnections
     private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("SchemaDiff.RecentConnections.v1");
 
     private readonly string _path;
-    private readonly Lock _gate = new();
+    private readonly object _gate = new();
     private List<StoredConnection> _entries = [];
 
     private static readonly JsonSerializerOptions JsonOptions = new()

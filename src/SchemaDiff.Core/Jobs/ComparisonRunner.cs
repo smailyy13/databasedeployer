@@ -7,8 +7,9 @@ namespace SchemaDiff.Core.Jobs;
 /// <summary>
 /// Seçilen işleri paralel koşturur ve sonuçları BİTTİKÇE akıtır.
 ///
-/// Task.WhenAll yerine Task.WhenEach: 7 işten biri 30 saniye sürüyorsa, diğer 6'sının
-/// sonucunu 30 saniye bekletmenin anlamı yok. İlk sonuç ilk bitende ekrana düşer.
+/// Task.WhenAll yerine "bitince akıt" (WhenAny döngüsü): 7 işten biri 30 saniye
+/// sürüyorsa, diğer 6'sının sonucunu 30 saniye bekletmenin anlamı yok. İlk sonuç ilk
+/// bitende ekrana düşer.
 /// </summary>
 public static class ComparisonRunner
 {
@@ -25,8 +26,14 @@ public static class ComparisonRunner
 
         try
         {
-            await foreach (var completed in Task.WhenEach(tasks).WithCancellation(ct))
+            // Biten görevi bitince akıt: bekleyen kümeden ilk tamamlananı al, çıkar, döndür.
+            var pending = new HashSet<Task<JobResult>>(tasks);
+            while (pending.Count > 0)
+            {
+                var completed = await Task.WhenAny(pending).WaitAsync(ct);
+                pending.Remove(completed);
                 yield return await completed;
+            }
         }
         finally
         {
