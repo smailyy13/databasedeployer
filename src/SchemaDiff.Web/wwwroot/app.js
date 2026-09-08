@@ -363,7 +363,7 @@ function compareOptionsPayload(opts) {
 
 const DEFAULT_OPTIONS = {
   ignoreWhitespace: true, ignoreComments: true,
-  ignoreSemicolons: false, ignoreAnsiNulls: true, ignoreQuotedIdentifiers: true,
+  ignoreSemicolons: true, ignoreAnsiNulls: true, ignoreQuotedIdentifiers: true,
   // Casing: hepsi varsayılan KAPALI (tiksiz) → harf farkları varsayılan olarak yok sayılır.
   caseSensitiveNames: false, caseSensitiveColumnNames: false, caseSensitiveKeywords: false,
   ignoreColumnOrder: false, ignoreCollation: false,
