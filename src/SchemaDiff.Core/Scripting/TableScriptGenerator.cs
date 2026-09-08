@@ -126,9 +126,13 @@ public static class TableScriptGenerator
                                     .ThenBy(k => k.Name, StringComparer.OrdinalIgnoreCase))
             EmitAlter(body, key, result, options, included, skipped, gated, fkDrops, fkAdds);
 
-        // Tablo silme en sona: değişen tablolar ona bağlı FK'ler önce düşmüş olur.
-        foreach (var key in drops.OrderBy(k => k.Schema, StringComparer.OrdinalIgnoreCase)
-                                   .ThenBy(k => k.Name, StringComparer.OrdinalIgnoreCase))
+        // Tablo silme en sona. Sıra bağımlılığa göre TERS topolojik: FK SAHİBİ tablo, referans
+        // ettiği tablodan ÖNCE düşmeli — yoksa "başka nesne referans ediyor" hatasıyla patlar.
+        // Silinen tablolar hedefte olduğundan hedefin referans grafiği kullanılır.
+        var orderedDrops = TopologicalOrder(drops, result.Target, comparer, out var dropCycle);
+        orderedDrops.Reverse();
+        hadCycle |= dropCycle;
+        foreach (var key in orderedDrops)
             EmitDrop(body, key, result, options, included, gated);
 
         // FK drop'ları EN BAŞTA (kolon/index değişikliklerini engellemesinler).

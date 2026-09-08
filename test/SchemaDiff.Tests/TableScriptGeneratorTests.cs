@@ -31,6 +31,53 @@ public class TableScriptGeneratorTests
     }
 
     [Fact]
+    public void Added_tables_are_created_in_fk_dependency_order()
+    {
+        // NC, NP'ye FK ile bağlı; ikisi de YENİ. NP'nin CREATE'i NC'den ÖNCE gelmeli —
+        // yoksa NC'nin satır-içi FK'si daha yokken NP'ye bakıp patlar (Msg 1767).
+        var np = Table("NP");
+        var nc = Table("NC");
+        var source = Database("dev",
+        [
+            Obj(np, 1, displayScript: "CREATE TABLE [dbo].[NP] ([Id] INT NOT NULL);"),
+            Obj(nc, 2, displayScript: "CREATE TABLE [dbo].[NC] ([Id] INT NOT NULL, [PId] INT NULL, " +
+                "CONSTRAINT [FK_NC_NP] FOREIGN KEY ([PId]) REFERENCES [dbo].[NP]([Id]));"),
+        ], references: new() { [nc] = [np] });
+        var target = Database("prod", []);
+
+        var sql = Generate(source, target).Sql;
+
+        Assert.True(
+            sql.IndexOf("CREATE TABLE [dbo].[NP]", StringComparison.Ordinal) <
+            sql.IndexOf("CREATE TABLE [dbo].[NC]", StringComparison.Ordinal),
+            "referans edilen tablo (NP), FK sahibi tablodan (NC) ÖNCE oluşturulmalı");
+    }
+
+    [Fact]
+    public void Dropped_tables_are_dropped_in_reverse_fk_dependency_order()
+    {
+        // OC, OP'ye FK ile bağlı; ikisi de siliniyor. FK SAHİBİ (OC) referans edilenden (OP)
+        // ÖNCE düşmeli — yoksa "başka nesne referans ediyor" hatası.
+        var op = Table("OP");
+        var oc = Table("OC");
+        var source = Database("dev", []);
+        var target = Database("prod",
+        [
+            Obj(op, 1, displayScript: "CREATE TABLE [dbo].[OP] ([Id] INT NOT NULL);"),
+            Obj(oc, 2, displayScript: "CREATE TABLE [dbo].[OC] ([Id] INT NOT NULL, [PId] INT NULL, " +
+                "CONSTRAINT [FK_OC_OP] FOREIGN KEY ([PId]) REFERENCES [dbo].[OP]([Id]));"),
+        ], references: new() { [oc] = [op] });
+
+        var opts = new TableScriptOptions { IncludeDrops = true, AllowDataLoss = true };
+        var sql = Generate(source, target, opts).Sql;
+
+        Assert.True(
+            sql.IndexOf("DROP TABLE [dbo].[OC]", StringComparison.Ordinal) <
+            sql.IndexOf("DROP TABLE [dbo].[OP]", StringComparison.Ordinal),
+            "FK sahibi (OC) referans edilenden (OP) ÖNCE düşmeli");
+    }
+
+    [Fact]
     public void Adding_nullable_column_is_emitted_directly()
     {
         var key = Table("T");

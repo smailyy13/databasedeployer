@@ -693,6 +693,19 @@ internal static class SnapshotBuilder
             list.Add(to);
         }
 
+        // FOREIGN KEY bağımlılıkları da grafiğe girer: modül bağımlılıkları
+        // (sql_expression_dependencies) tablolar arası FK'yi İÇERMEZ. Bunlar olmadan
+        // yeni bir tablonun FK'si başka bir YENİ tabloya bakıyorsa (satır-içi CONSTRAINT),
+        // topolojik sıra bozulur ve CREATE, referans tablo daha yokken çalışıp patlar (Msg 1767).
+        foreach (var fk in catalog.ForeignKeys)
+        {
+            if (!keyById.TryGetValue(fk.ParentObjectId, out var from)) continue;
+            if (!keyById.TryGetValue(fk.ReferencedObjectId, out var to)) continue;
+            if (from.Equals(to)) continue;   // kendine referans: sıralama gerektirmez
+            if (!references.TryGetValue(from, out var list)) references[from] = list = [];
+            if (!list.Contains(to)) list.Add(to);
+        }
+
         // Dış (cross-db / linked server) referanslar: deploy öncesi uyarı — bu objeler
         // ancak dış kaynak hedefte de varsa çalışır.
         if (catalog.ExternalReferences.Count > 0)

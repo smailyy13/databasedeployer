@@ -42,6 +42,39 @@ public class ModuleScriptGeneratorTests
     }
 
     [Fact]
+    public void Changed_dml_trigger_disabled_in_source_is_explicitly_disabled()
+    {
+        // Kaynak trigger PASİF, hedef AKTİF → ALTER durumu korumaz; script açıkça DISABLE etmeli.
+        var tbl = Table("T");
+        var trg = Trigger("TR");
+        var src = Obj(trg, 1, displayScript: "CREATE TRIGGER [dbo].[TR] ON [dbo].[T] AFTER INSERT AS SELECT 1", parent: tbl);
+        src.IsDisabled = true;
+        var tgt = Obj(trg, 2, displayScript: "CREATE TRIGGER [dbo].[TR] ON [dbo].[T] AFTER INSERT AS SELECT 1", parent: tbl);
+        tgt.IsDisabled = false;
+
+        // Parent tablo iki tarafta da var (aksi hâlde trigger "parent hedefte yok" diye atlanır).
+        var sql = Generate(Database("dev", [Obj(tbl, 9), src]), Database("prod", [Obj(tbl, 9), tgt])).Sql;
+
+        Assert.Contains("DISABLE TRIGGER [dbo].[TR] ON [dbo].[T];", sql);
+    }
+
+    [Fact]
+    public void Changed_dml_trigger_enabled_in_source_is_explicitly_enabled()
+    {
+        // Kaynak AKTİF, hedef PASİF → ALTER pasifliği koruduğundan script açıkça ENABLE etmeli.
+        var tbl = Table("T");
+        var trg = Trigger("TR");
+        var src = Obj(trg, 1, displayScript: "CREATE TRIGGER [dbo].[TR] ON [dbo].[T] AFTER INSERT AS SELECT 1", parent: tbl);
+        src.IsDisabled = false;
+        var tgt = Obj(trg, 2, displayScript: "CREATE TRIGGER [dbo].[TR] ON [dbo].[T] AFTER INSERT AS SELECT 1", parent: tbl);
+        tgt.IsDisabled = true;
+
+        var sql = Generate(Database("dev", [Obj(tbl, 9), src]), Database("prod", [Obj(tbl, 9), tgt])).Sql;
+
+        Assert.Contains("ENABLE TRIGGER [dbo].[TR] ON [dbo].[T];", sql);
+    }
+
+    [Fact]
     public void Removed_module_is_dropped_with_object_id_guard()
     {
         var key = View("Legacy");
