@@ -38,7 +38,7 @@ public static class SettingsScriptGenerator
         var skipped = new List<SkippedObject>();
         var body = new StringBuilder(2048);
 
-        AppendScopedConfiguration(result, body, included, skipped);
+        AppendScopedConfiguration(result, selection, body, included, skipped);
         AppendPlanGuides(result, selection, body, included, skipped);
 
         if (included.Count == 0) return new SettingsScriptResult(string.Empty, included, skipped);
@@ -52,9 +52,12 @@ public static class SettingsScriptGenerator
     // --- database scoped configuration ---
 
     private static void AppendScopedConfiguration(
-        CompareResult result, StringBuilder body, List<ObjectKey> included, List<SkippedObject> skipped)
+        CompareResult result, ISet<ObjectKey>? selection, StringBuilder body, List<ObjectKey> included, List<SkippedObject> skipped)
     {
         var key = new ObjectKey(string.Empty, "(database)", ObjectKind.Database);
+        // Seçim varsa ve (database) objesi seçilmediyse dokunma — kullanıcı yalnız
+        // işaretlediği objelerin script'ini ister, DB seviyesi ayar sızmamalı.
+        if (selection is not null && !selection.Contains(key)) return;
         var source = SettingsMap(result.Source.Objects.GetValueOrDefault(key));
         var target = SettingsMap(result.Target.Objects.GetValueOrDefault(key));
 
