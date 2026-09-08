@@ -23,6 +23,7 @@ const I18N = {
     tabDiff: 'Differences', tabRisk: 'Deployment risk', tabTriggers: 'Triggers',
     type: 'Type', objectDefinitions: 'Object Definitions',
     prevDiff: 'Previous difference', nextDiff: 'Next difference', canonicalText: 'canonical text',
+    metaOnlyDiff: 'The CREATE script is identical — the difference is in metadata (extended properties, permissions, SET options…). Showing canonical text.',
     selectRow: 'Select a row above.', connect: 'Connect', recentConnections: 'Recent connections',
     none: 'None.', connectionProperties: 'Connection properties', serverName: 'Server name',
     authentication: 'Authentication', username: 'Username', password: 'Password',
@@ -128,6 +129,7 @@ const I18N = {
     tabDiff: 'Farklar', tabRisk: 'Deployment riski', tabTriggers: 'Trigger\'lar',
     type: 'Tür', objectDefinitions: 'Obje Tanımları',
     prevDiff: 'Önceki fark', nextDiff: 'Sonraki fark', canonicalText: 'kanonik metin',
+    metaOnlyDiff: 'CREATE metni iki tarafta aynı — fark meta veride (extended property, izin, SET seçenekleri…). Kanonik metin gösteriliyor.',
     selectRow: 'Üstteki listeden bir satır seçin.', connect: 'Bağlan', recentConnections: 'Son bağlantılar',
     none: 'Kayıt yok.', connectionProperties: 'Bağlantı özellikleri', serverName: 'Sunucu adı',
     authentication: 'Kimlik doğrulama', username: 'Kullanıcı adı', password: 'Parola',
@@ -1185,7 +1187,13 @@ function renderDetail() {
   // Script = tam metin (modülde özgün gövde, tabloda üretilmiş CREATE).
   // Kanonik metin yalnızca "karşılaştırma neyi gördü?" sorusu için.
   const hasScript = detail.sourceScript !== null || detail.targetScript !== null;
-  const useScript = hasScript && !$('showCanonical').checked;
+  // Bazı farklar (extended property, izin, SET seçenekleri, istatistik…) CREATE metnine
+  // GİRMEZ. Böyle bir objede iki taraf script olarak AYNI görünür ama kanonik farklıdır;
+  // kullanıcı boş bir diff görüp "fark yok" sanmasın diye otomatik kanoniğe düşeriz.
+  const scriptsIdentical = hasScript
+    && (detail.sourceScript ?? '') === (detail.targetScript ?? '')
+    && (detail.sourceText ?? '') !== (detail.targetText ?? '');
+  const useScript = hasScript && !$('showCanonical').checked && !scriptsIdentical;
   const left = (useScript ? detail.sourceScript : detail.sourceText) ?? null;
   const right = (useScript ? detail.targetScript : detail.targetText) ?? null;
 
@@ -1221,7 +1229,10 @@ function renderDetail() {
            `<span class="ln">${lineNo}</span><span class="code">${code}</span></div>`;
   }).join('');
 
-  $('defBody').innerHTML = `<div class="diff-grid">
+  const hint = scriptsIdentical && !$('showCanonical').checked
+    ? `<div class="diff-hint">${esc(t('metaOnlyDiff'))}</div>` : '';
+
+  $('defBody').innerHTML = `${hint}<div class="diff-grid">
     <div class="diff-pane"><div class="pane-head">${esc(t('source'))}${left === null ? esc(t('missingSuffix')) : ''}</div>
       ${left === null ? `<p class="missing">${esc(t('notOnThisSide'))}</p>` : pane('left', leftHtml)}</div>
     <div class="diff-pane"><div class="pane-head">${esc(t('target'))}${right === null ? esc(t('missingSuffix')) : ''}</div>

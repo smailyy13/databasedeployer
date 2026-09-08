@@ -381,6 +381,9 @@ tr.mismatch { background: var(--chg-bg); }
 .check input { accent-color: var(--accent); }
 .diff-wrap { flex: 1; display: flex; min-height: 0; }
 .diff { flex: 1; overflow: auto; min-height: 0; }
+.diff-hint { position: sticky; top: 0; z-index: 1; padding: 6px 12px; font-size: 12px;
+  color: var(--ink); background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border-bottom: 1px solid var(--line); }
 .diff-grid { display: grid; grid-template-columns: 1fr 1fr; min-height: 100%; }
 
 /* Sağdaki fark/eşleşme haritası (minimap) — kırmızı=silme, yeşil=ekleme, sarı=kelime eşleşmesi */
