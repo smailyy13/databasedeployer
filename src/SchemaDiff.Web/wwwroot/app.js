@@ -1569,6 +1569,7 @@ async function generateScripts(forwardSel, reverseSel) {
       dataLoss: !state.options.blockDataLoss,
       dropNotInSource: state.options.dropNotInSource,
       scriptValidateNewConstraints: state.options.scriptValidateConstraints,
+      recreateChangedTableTypes: state.options.recreateChangedTableTypes,
       selection, reverse,
     }),
   }).then((r) => { if (!r.ok) throw new Error(t('scriptFailed')); return r.json(); });
