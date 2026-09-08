@@ -67,7 +67,8 @@ internal static class TestFactory
         string server = "TESTSRV",
         bool ignoredColumnOrder = false,
         bool ignoredCollation = false,
-        bool caseSensitive = false)
+        bool caseSensitive = false,
+        bool caseSensitiveColumns = false)
     {
         // Gerçek SnapshotBuilder gibi: eşleştirme her zaman harfe duyarsız. "caseSensitive"
         // yalnızca ad harf farkının raporlanıp raporlanmayacağını (CaseSensitiveNames) belirler.
@@ -83,6 +84,7 @@ internal static class TestFactory
             IgnoredColumnOrder = ignoredColumnOrder,
             IgnoredCollation = ignoredCollation,
             CaseSensitiveNames = caseSensitive,
+            CaseSensitiveColumnNames = caseSensitiveColumns,
         };
     }
 

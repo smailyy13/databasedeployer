@@ -45,8 +45,27 @@ public class TableScriptGeneratorTests
     }
 
     [Fact]
-    public void Column_case_only_change_emits_sp_rename()
+    public void Column_case_only_change_emits_sp_rename_when_case_sensitive_columns_on()
     {
+        var key = Table("T");
+        var source = Database("dev", [Obj(key, 1,
+            columns: [Column("Id"), Column("TranDate", typeName: "date")])], caseSensitiveColumns: true);
+        var target = Database("prod", [Obj(key, 2,
+            columns: [Column("Id"), Column("Trandate", typeName: "date")], rowCount: 1000)], caseSensitiveColumns: true);
+
+        var script = Generate(source, target);
+
+        Assert.Contains(key, script.Included);
+        Assert.Contains("EXEC sp_rename N'[dbo].[T].[Trandate]', N'TranDate', N'COLUMN';", script.Sql);
+        // Yeniden adlandırma güvenli: veri kaybı yok, gereksiz ALTER COLUMN da yok.
+        Assert.Empty(script.DataLossActions);
+        Assert.DoesNotContain("ALTER COLUMN", script.Sql);
+    }
+
+    [Fact]
+    public void Column_case_only_change_does_not_emit_sp_rename_by_default()
+    {
+        // Varsayılan (kolon adı harfe DUYARSIZ): yalnız harf farkı bir rename değildir.
         var key = Table("T");
         var source = Database("dev", [Obj(key, 1,
             columns: [Column("Id"), Column("TranDate", typeName: "date")])]);
@@ -55,10 +74,7 @@ public class TableScriptGeneratorTests
 
         var script = Generate(source, target);
 
-        Assert.Contains(key, script.Included);
-        Assert.Contains("EXEC sp_rename N'[dbo].[T].[Trandate]', N'TranDate', N'COLUMN';", script.Sql);
-        // Yeniden adlandırma güvenli: veri kaybı yok, gereksiz ALTER COLUMN da yok.
-        Assert.Empty(script.DataLossActions);
+        Assert.DoesNotContain("sp_rename", script.Sql);
         Assert.DoesNotContain("ALTER COLUMN", script.Sql);
     }
 
