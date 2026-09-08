@@ -88,7 +88,8 @@ const I18N = {
     stillGated: '{n} steps still gated', outOfScopeN: '{n} objects out of scope (sequence/synonym etc.)',
     skippedN: '{n} objects skipped', downloaded: '{file} downloaded · {parts}',
     optgText: 'Text / normalization', optgCasing: 'Casing (upper/lower)', optgColumn: 'Columns & types', optgIndex: 'Indexes',
-    optgObject: 'Objects & constraints', optgScope: 'Scope', optgScript: 'Script / deployment (affects generated SQL)',
+    optgObject: 'Objects & constraints', optgScope: 'Scope', optgBehavior: 'Behaviour', optgScript: 'Script / deployment (affects generated SQL)',
+    opt_selectAllByDefault: 'Start with all changes selected', optn_selectAllByDefault: 'After a comparison every change is ticked (ready to script). Turn off to start with nothing selected and pick manually.',
     opt_blockDataLoss: 'Block on possible data loss', optn_blockDataLoss: 'Data-loss steps (drop column/table, narrowing) are left out of the generated script and only reported.',
     opt_dropNotInSource: 'Drop objects not in source', optn_dropNotInSource: 'Objects, indexes and constraints that exist in target but not in source get DROP statements.',
     opt_scriptValidateConstraints: 'Script validation for new constraints', optn_scriptValidateConstraints: 'New CHECK/FK use WITH CHECK (validate existing rows). Uncheck for WITH NOCHECK so they can be added to a populated table without validation.',
@@ -194,7 +195,8 @@ const I18N = {
     stillGated: '{n} adım yine de gated', outOfScopeN: '{n} obje kapsam dışı (sequence/synonym vb.)',
     skippedN: '{n} obje atlandı', downloaded: '{file} indirildi · {parts}',
     optgText: 'Metin / normalizasyon', optgCasing: 'Büyük/küçük harf', optgColumn: 'Kolon ve tipler', optgIndex: 'Index\'ler',
-    optgObject: 'Nesne ve constraint\'ler', optgScope: 'Kapsam', optgScript: 'Script / dağıtım (üretilen SQL\'e etki eder)',
+    optgObject: 'Nesne ve constraint\'ler', optgScope: 'Kapsam', optgBehavior: 'Davranış', optgScript: 'Script / dağıtım (üretilen SQL\'e etki eder)',
+    opt_selectAllByDefault: 'Başlangıçta tüm değişiklikler seçili', optn_selectAllByDefault: 'Karşılaştırma sonrası her değişiklik tikli gelir (script\'e hazır). Kapatınca hiçbiri seçili olmadan başlar, elle seçersiniz.',
     opt_blockDataLoss: 'Olası veri kaybında durdur', optn_blockDataLoss: 'Veri kaybı adımları (kolon/tablo silme, tip daraltma) üretilen script\'e girmez, yalnızca raporlanır.',
     opt_dropNotInSource: 'Kaynakta olmayan nesneleri sil', optn_dropNotInSource: 'Hedefte olup kaynakta olmayan nesne, index ve constraint\'ler için DROP üretilir.',
     opt_scriptValidateConstraints: 'Yeni constraint\'leri doğrula', optn_scriptValidateConstraints: 'Yeni CHECK/FK WITH CHECK ile üretilir (mevcut satırları doğrular). Kapatınca WITH NOCHECK — dolu tabloya doğrulamadan eklenebilir.',
@@ -347,6 +349,7 @@ const OPTION_GROUPS = [
                                'ignoreDataCompression', 'ignoreStatistics'] },
   { group: 'optgObject', keys: ['ignoreDmlTriggerState', 'ignoreSystemNamedConstraints'] },
   { group: 'optgScope', keys: ['ignoreExtendedProperties', 'ignorePermissions'] },
+  { group: 'optgBehavior', keys: ['selectAllByDefault'] },
 ];
 
 const OPTION_KEYS = OPTION_GROUPS.flatMap((g) => g.keys);
@@ -369,6 +372,7 @@ const DEFAULT_OPTIONS = {
   ignoreStatistics: false,
   ignoreDmlTriggerState: false, ignoreSystemNamedConstraints: true,
   ignoreExtendedProperties: true, ignorePermissions: true,
+  selectAllByDefault: true,
   blockDataLoss: false, dropNotInSource: true, scriptValidateConstraints: true,
   recreateChangedTableTypes: false,
   maxQueries: 16,
@@ -657,7 +661,9 @@ async function compare() {
     source.close();
     stopLoading();
     state.result = JSON.parse(event.data);
-    selectAllChanges();   // ilk başta hepsi seçili gelsin
+    // Başlangıç seçim durumu ayara bağlı: hepsi tikli (script'e hazır) ya da hiçbiri.
+    if (state.options.selectAllByDefault) selectAllChanges();
+    else state.checked.clear();
     $('scriptBtn').disabled = false;
     renderAll();
     const r = state.result;
