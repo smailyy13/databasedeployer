@@ -226,11 +226,28 @@ public static class ModuleScriptGenerator
         sb.AppendLine("GO");
         sb.AppendLine(body);
         sb.AppendLine("GO");
-        // CREATE/ALTER TRIGGER trigger'ı aktif eder; source'ta pasifse durumu koru.
-        if (key.Kind == ObjectKind.DdlTrigger && snapshot.IsDisabled == true)
+        // Trigger'ın etkin/pasif durumu CREATE/ALTER ile HEDEFten devralınır (ALTER durumu korur),
+        // bu yüzden kaynağa göre AÇIKÇA ayarla. DDL trigger ON DATABASE; DML trigger ON [parent].
+        if (key.Kind is ObjectKind.Trigger or ObjectKind.DdlTrigger)
         {
-            sb.AppendLine($"DISABLE TRIGGER [{key.Name}] ON DATABASE;");
-            sb.AppendLine("GO");
+            var on = key.Kind == ObjectKind.DdlTrigger ? "ON DATABASE"
+                   : snapshot.Parent is { } p ? $"ON [{p.Schema}].[{p.Name}]" : null;
+            var trg = key.Kind == ObjectKind.DdlTrigger ? $"[{key.Name}]" : $"[{key.Schema}].[{key.Name}]";
+            if (on is not null)
+            {
+                if (snapshot.IsDisabled == true)
+                {
+                    sb.AppendLine($"DISABLE TRIGGER {trg} {on};");
+                    sb.AppendLine("GO");
+                }
+                else if (!isCreate && key.Kind == ObjectKind.Trigger)
+                {
+                    // Yeni CREATE zaten aktif gelir; ama ALTER hedefteki pasif durumu koruduğundan,
+                    // kaynak aktifse açıkça yeniden etkinleştir.
+                    sb.AppendLine($"ENABLE TRIGGER {trg} {on};");
+                    sb.AppendLine("GO");
+                }
+            }
         }
         sb.AppendLine();
 

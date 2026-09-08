@@ -126,9 +126,13 @@ public static class TableScriptGenerator
                                     .ThenBy(k => k.Name, StringComparer.OrdinalIgnoreCase))
             EmitAlter(body, key, result, options, included, skipped, gated, fkDrops, fkAdds);
 
-        // Tablo silme en sona: değişen tablolar ona bağlı FK'ler önce düşmüş olur.
-        foreach (var key in drops.OrderBy(k => k.Schema, StringComparer.OrdinalIgnoreCase)
-                                   .ThenBy(k => k.Name, StringComparer.OrdinalIgnoreCase))
+        // Tablo silme en sona. Sıra bağımlılığa göre TERS topolojik: FK SAHİBİ tablo, referans
+        // ettiği tablodan ÖNCE düşmeli — yoksa "başka nesne referans ediyor" hatasıyla patlar.
+        // Silinen tablolar hedefte olduğundan hedefin referans grafiği kullanılır.
+        var orderedDrops = TopologicalOrder(drops, result.Target, comparer, out var dropCycle);
+        orderedDrops.Reverse();
+        hadCycle |= dropCycle;
+        foreach (var key in orderedDrops)
             EmitDrop(body, key, result, options, included, gated);
 
         // FK drop'ları EN BAŞTA (kolon/index değişikliklerini engellemesinler).
@@ -208,11 +212,11 @@ public static class TableScriptGenerator
         var statements = new List<string>();
         var localSkips = new List<string>();
 
-        // RENAME (yalnızca büyük/küçük harf farkı): kolon eşleşmesi büyük/küçük harf
-        // duyarsızdır, o yüzden yalnız harf durumu değişen kolon ne ADD ne DROP olarak görünür
-        // ve tip de aynı kaldığından ALTER üretilmez — sonuç boş script olurdu. SQL Server
-        // katalogda adı OLDUĞU GİBİ saklar; harf durumunu düzeltmenin tek yolu sp_rename'dir.
-        // Rename önce gelir ki sonraki ifadeler doğru adı kullansın.
+        // RENAME (yalnızca büyük/küçük harf farkı): kolon eşleşmesi harf-duyarsız olduğundan
+        // yalnız harf durumu değişen kolon ne ADD ne DROP olarak görünür ve tip de aynı
+        // kaldığından ALTER üretilmez — sonuç boş script olurdu. SQL Server katalogda adı
+        // OLDUĞU GİBİ saklar; harf durumunu düzeltmenin tek yolu sp_rename'dir. Rename önce
+        // gelir ki sonraki ifadeler doğru adı kullansın.
         var renames = new List<string>();
         // Kolon adı harfe duyarsızsa yalnız harf farkı bir fark değildir — sp_rename üretme.
         if (result.Source.CaseSensitiveColumnNames)
