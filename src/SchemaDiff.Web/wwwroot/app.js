@@ -42,9 +42,15 @@ const I18N = {
     serverRequired: 'Server name is required.', databaseRequired: 'Select a database.',
     startingCompare: 'starting comparison…', couldNotStart: 'Could not start.',
     comparing: 'comparing {source} → {target}…', connectionLost: 'Connection lost.',
-    progressLine: '{source} → {target} · %{percent}{eta}',
-    etaSuffix: ' · ~{sec} left', etaCalc: ' · estimating…',
+    progressLine: '{source} → {target} · %{percent} · {elapsed} elapsed',
     secShort: '{n}s', minShort: '{n}m',
+    loadMeta: '%{percent} · {elapsed} elapsed',
+    loadStarting: 'Starting…',
+    loadConnecting: 'Connecting to databases…',
+    loadExtracting: 'Reading schema (querying catalog)…',
+    loadBuilding: 'Building snapshot…',
+    loadComparing: 'Comparing differences…',
+    loadFinishing: 'Finishing…',
     notComparedYet: 'No comparison yet.', noDiffForFilters: 'No differences to show with these filters.',
     listLimited: 'List limited to {n} records — there are more.',
     flagIndeterminate: 'INDETERMINATE',
@@ -141,9 +147,15 @@ const I18N = {
     serverRequired: 'Sunucu adı zorunlu.', databaseRequired: 'Bir veritabanı seçin.',
     startingCompare: 'karşılaştırma başlatılıyor…', couldNotStart: 'Başlatılamadı.',
     comparing: '{source} → {target} karşılaştırılıyor…', connectionLost: 'Bağlantı koptu.',
-    progressLine: '{source} → {target} · %{percent}{eta}',
-    etaSuffix: ' · ~{sec} kaldı', etaCalc: ' · süre hesaplanıyor…',
+    progressLine: '{source} → {target} · %{percent} · {elapsed} geçti',
     secShort: '{n}sn', minShort: '{n}dk',
+    loadMeta: '%{percent} · {elapsed} geçti',
+    loadStarting: 'Başlatılıyor…',
+    loadConnecting: 'Veritabanlarına bağlanılıyor…',
+    loadExtracting: 'Şema okunuyor (katalog sorgulanıyor)…',
+    loadBuilding: 'Anlık görüntü hazırlanıyor…',
+    loadComparing: 'Farklar karşılaştırılıyor…',
+    loadFinishing: 'Tamamlanıyor…',
     notComparedYet: 'Henüz karşılaştırma yapılmadı.', noDiffForFilters: 'Bu filtrelerle gösterilecek fark yok.',
     listLimited: 'Liste {n} kayıtla sınırlandı — daha fazlası var.',
     flagIndeterminate: 'BELİRSİZ',
@@ -366,6 +378,8 @@ const state = {
   options: { ...DEFAULT_OPTIONS },
   runId: null,
   result: null,
+  compare: null,            // aktif karşılaştırma ilerlemesi (loading ekranı için)
+  compareTimer: null,       // geçen süre sayacı (setInterval id)
   selected: null,
   detail: null,
   editing: null,
@@ -625,7 +639,7 @@ async function compare() {
   }
 
   state.runId = data.runId;
-  setStatus(t('comparing', { source: data.source, target: data.target }), 'busy');
+  startLoading(data.source, data.target);
 
   const source = new EventSource(`/api/runs/${data.runId}/events`);
   state.eventSource = source;
@@ -639,6 +653,7 @@ async function compare() {
   source.addEventListener('result', (event) => {
     done = true;
     source.close();
+    stopLoading();
     state.result = JSON.parse(event.data);
     selectAllChanges();   // ilk başta hepsi seçili gelsin
     $('scriptBtn').disabled = false;
@@ -658,6 +673,7 @@ async function compare() {
   source.addEventListener('failed', (event) => {
     done = true;
     source.close();
+    stopLoading();
     setStatus(JSON.parse(event.data).error, 'error');
     $('compareBtn').disabled = false;
   });
@@ -666,6 +682,7 @@ async function compare() {
   source.onerror = () => {
     if (done) return;
     source.close();
+    stopLoading();
     setStatus(t('connectionLost'), 'error');
     $('compareBtn').disabled = false;
   };
@@ -691,20 +708,49 @@ function formatDuration(totalSeconds) {
   return rem === 0 ? t('minShort', { n: m }) : `${t('minShort', { n: m })} ${t('secShort', { n: rem })}`;
 }
 
-// Compare sırasında ilerleme çubuğunu çizer (yüzde + kalan süre).
-function setProgress(data) {
+// Sunucu aşama adı → arayüz adım metni anahtarı.
+const PHASE_STEP = {
+  starting: 'loadStarting', connecting: 'loadConnecting', extracting: 'loadExtracting',
+  building: 'loadBuilding', comparing: 'loadComparing', done: 'loadFinishing',
+};
+
+// Loading ekranını aç: geçen süreyi yerelde saydığımız için düzenli tik gerekir
+// (SSE olayları seyrek gelebilir). Üst bardaki New comparison butonu kapanmaz.
+function startLoading(source, target) {
+  state.compare = { start: performance.now(), percent: 0, phase: 'connecting', source, target };
+  $('loadingBox').hidden = false;
+  renderLoading();
+  clearInterval(state.compareTimer);
+  state.compareTimer = setInterval(renderLoading, 250);
+}
+
+function stopLoading() {
+  clearInterval(state.compareTimer);
+  state.compareTimer = null;
+  state.compare = null;
+  $('loadingBox').hidden = true;
+}
+
+// Adım metni + yüzde + GEÇEN süreyi (kalan değil) çizer.
+function renderLoading() {
+  const c = state.compare;
+  if (!c) return;
+  const elapsed = formatDuration((performance.now() - c.start) / 1000);
+  const percent = Math.max(0, Math.min(100, c.percent ?? 0));
+  $('loadingStep').textContent = t(PHASE_STEP[c.phase] || 'loadStarting');
+  $('loadingMeta').textContent = t('loadMeta', { percent, elapsed });
+  $('loadingFill').style.width = `${percent}%`;
   const bar = $('statusbar');
-  const percent = Math.max(0, Math.min(100, data.percent ?? 0));
-  const eta = data.etaSeconds != null
-    ? t('etaSuffix', { sec: formatDuration(data.etaSeconds) })
-    : (percent >= 10 && percent < 100 ? t('etaCalc') : '');
-  const line = t('progressLine', { source: data.source, target: data.target, percent, eta });
   bar.className = 'statusbar busy';
-  bar.innerHTML =
-    `<div class="progress">` +
-    `<div class="progress-track"><div class="progress-fill" style="width:${percent}%"></div></div>` +
-    `<span class="progress-text">${esc(line)}</span>` +
-    `</div>`;
+  bar.textContent = t('progressLine', { source: c.source, target: c.target, percent, elapsed });
+}
+
+// SSE ilerleme olayı: yalnız yüzde ve aşamayı günceller (süreyi timer sayar).
+function setProgress(data) {
+  if (!state.compare) return;
+  if (typeof data.percent === 'number') state.compare.percent = data.percent;
+  if (data.phase) state.compare.phase = data.phase;
+  renderLoading();
 }
 
 // ================= ağaç =================
