@@ -71,6 +71,11 @@ public class NormalizerOptionMatrixTests
         { "SELECT 1",                 "/* baş */ SELECT 1" },          // başta yorum
         { "SELECT 1 AS X",            "SELECT 1 /* a */ /* b */ AS X" }, // iki yorum
         { "SELECT 1\nFROM t",         "SELECT 1 -- satır\nFROM t" },   // satır yorumu satır ortasında
+        { "SELECT 1 AS X",            "SELECT 1 AS X /* satir1\n satir2\n satir3 */" }, // ÇOK SATIRLI blok (sonda)
+        { "SELECT a, b FROM t",       "SELECT a,\n/* cok\n   satirli\n   yorum */ b FROM t" }, // çok satırlı blok (ortada)
+        { "SELECT 1",                 "SELECT 1 /* dis /* ic */ dis */" }, // İÇ İÇE blok yorum (T-SQL destekler)
+        { "SELECT 1 AS X",            "/* bas\n cok satir */ SELECT 1 AS X" }, // çok satırlı blok (başta)
+        { "SELECT 1",                 "-- l1\n-- l2\nSELECT 1" },      // arka arkaya satır yorumları
     };
 
     [Theory]
