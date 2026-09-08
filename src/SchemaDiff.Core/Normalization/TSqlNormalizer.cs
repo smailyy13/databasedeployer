@@ -44,6 +44,21 @@ public static class TSqlNormalizer
         if (errors.Count > 0 || tokens.Count == 0) return FallbackNormalize(sql);
 
         var sb = new StringBuilder(sql.Length);
+
+        // Boşluk yok sayılırken ayırıcı boşluk YALNIZCA iki "kelime" karakterini (harf/rakam/_/
+        // @/#/$) ayırmak için gerekir — aksi hâlde "SELECT" ile "1" birleşip "SELECT1" olurdu.
+        // Noktalama/operatör çevresindeki boşluk (", ) ( = >= + ." vb.) anlamsızdır ve atılır;
+        // böylece "a, b"≡"a,b", "a >= 1"≡"a>=1", "dbo . T"≡"dbo.T", "( a )"≡"(a)" olur.
+        var pendingSpace = false;
+        void Emit(string piece)
+        {
+            if (piece.Length == 0) return;
+            if (pendingSpace && sb.Length > 0 && IsWordChar(sb[^1]) && IsWordChar(piece[0]))
+                sb.Append(' ');
+            pendingSpace = false;
+            sb.Append(piece);
+        }
+
         foreach (var token in tokens)
         {
             switch (token.TokenType)
@@ -52,44 +67,26 @@ public static class TSqlNormalizer
                     break;
 
                 case TSqlTokenType.WhiteSpace:
-                    if (options.IgnoreWhitespace)
-                    {
-                        // Boşluğu tek ayırıcıya indir; ama yapısal noktalamadan ("," ";" "(")
-                        // SONRA gelen boşluk anlamsızdır — "a, b" ile "a,b" eşit sayılsın diye at.
-                        // (Öncesindeki boşluk zaten Comma/Semicolon'da kırpılıyor.)
-                        if (sb.Length > 0 && !NoSpaceAfter(sb[^1])) sb.Append(' ');
-                    }
-                    else sb.Append(token.Text);
+                    if (options.IgnoreWhitespace) pendingSpace = true;   // gerekirse ayırıcıya döner
+                    else { sb.Append(token.Text); pendingSpace = false; }
                     break;
 
                 case TSqlTokenType.SingleLineComment:
                 case TSqlTokenType.MultilineComment:
-                    if (!options.IgnoreComments) sb.Append(token.Text);
-                    // Yorumu attıktan sonra iki token'ın yapışmaması için ayırıcı bırak — ama
-                    // yapısal noktalamadan sonra bu ayırıcı da anlamsız (boşluk yolu ile tutarlı).
-                    else if (sb.Length > 0 && !NoSpaceAfter(sb[^1])) sb.Append(' ');
+                    // Yorum atılınca yerinde bir ayırıcı ihtimali kalır (boşlukla aynı kural).
+                    if (options.IgnoreComments) pendingSpace = true;
+                    else Emit(token.Text);
                     break;
 
                 case TSqlTokenType.Semicolon:
-                    if (!options.IgnoreSemicolons)
-                    {
-                        TrimPendingSpace(sb, options.IgnoreWhitespace);
-                        sb.Append(token.Text);
-                    }
-                    break;
-
-                // Noktalı virgül/virgülden ÖNCE ayırıcı boşluk anlamsızdır. Boşluk yok sayılırken
-                // (özellikle bir yorum atıldıktan sonra kalan) boşluğu at ki "[X] ;" ile "[X];"
-                // ya da "a , b" ile "a, b" eşit sayılsın — yoksa yorum/boşluk yok saymak işe yaramaz.
-                case TSqlTokenType.Comma:
-                    TrimPendingSpace(sb, options.IgnoreWhitespace);
-                    sb.Append(token.Text);
+                    if (!options.IgnoreSemicolons) Emit(token.Text);
+                    // yok sayılıyorsa hiç yazma; çevredeki boşluk zaten pendingSpace olur
                     break;
 
                 case TSqlTokenType.Identifier:
                 {
                     var text = options.FoldIdentifierCase ? token.Text.ToLowerInvariant() : token.Text;
-                    sb.Append(options.NormalizeIdentifierQuoting ? Bracket(text) : text);
+                    Emit(options.NormalizeIdentifierQuoting ? Bracket(text) : text);
                     break;
                 }
 
@@ -97,14 +94,14 @@ public static class TSqlNormalizer
                 {
                     var inner = Unquote(token.Text);
                     if (options.FoldIdentifierCase) inner = inner.ToLowerInvariant();
-                    sb.Append(options.NormalizeIdentifierQuoting
+                    Emit(options.NormalizeIdentifierQuoting
                         ? Bracket(inner)
                         : (options.FoldIdentifierCase ? token.Text.ToLowerInvariant() : token.Text));
                     break;
                 }
 
-                default:
-                    sb.Append(options.IgnoreKeywordCasing ? UpperIfKeyword(token) : token.Text);
+                default:   // anahtar kelimeler, operatörler, virgül, literal'ler…
+                    Emit(options.IgnoreKeywordCasing ? UpperIfKeyword(token) : token.Text);
                     break;
             }
         }
@@ -135,14 +132,12 @@ public static class TSqlNormalizer
         return token.Text.ToUpperInvariant();
     }
 
-    /// <summary>Boşluk yok sayılırken kuyrukta kalan tek ayırıcı boşluğu (varsa) atar.</summary>
-    private static void TrimPendingSpace(StringBuilder sb, bool ignoreWhitespace)
-    {
-        if (ignoreWhitespace && sb.Length > 0 && sb[^1] == ' ') sb.Length--;
-    }
-
-    /// <summary>Bu karakterden sonra ayırıcı boşluk anlam taşımaz (zaten ayrılmıştır).</summary>
-    private static bool NoSpaceAfter(char c) => c is ' ' or ',' or ';' or '(';
+    /// <summary>
+    /// "Kelime" karakteri: yan yana gelince tek token'a kaynayabilecek karakterler
+    /// (harf, rakam, alt çizgi, değişken/temp/para öneki). Yalnızca iki kelime karakteri
+    /// arasında ayırıcı boşluk gerekir; noktalama/operatör çevresinde boşluk anlamsızdır.
+    /// </summary>
+    private static bool IsWordChar(char c) => char.IsLetterOrDigit(c) || c is '_' or '@' or '#' or '$';
 
     /// <summary>Tanımlayıcıyı kanonik [ad] biçimine getirir; içteki ] kaçırılır. Harf büyüklüğü korunur.</summary>
     private static string Bracket(string inner) => $"[{inner.Replace("]", "]]")}]";

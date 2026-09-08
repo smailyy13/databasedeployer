@@ -125,6 +125,31 @@ public class ComparisonOptionsTests
         Assert.True(Equal(a, b, SnapshotOptions.Default with { IgnoreQuotedIdentifiers = true }));
     }
 
+    [Fact]
+    public void AnsiNulls_difference_is_symmetric_in_either_direction()
+    {
+        // Yön fark etmez: ON↔OFF her iki sırada da fark, ignore ile her iki sırada da eşit.
+        var on = Proc(ansiNulls: true, quoted: true);
+        var off = Proc(ansiNulls: false, quoted: true);
+
+        Assert.False(Equal(off, on, SnapshotOptions.Default));
+        Assert.True(Equal(off, on, SnapshotOptions.Default with { IgnoreAnsiNulls = true }));
+    }
+
+    [Fact]
+    public void Both_set_flags_differ_each_ignore_covers_only_its_own_flag()
+    {
+        var a = Proc(ansiNulls: true, quoted: true);
+        var b = Proc(ansiNulls: false, quoted: false);   // İKİ bayrak da farklı
+
+        Assert.False(Equal(a, b, SnapshotOptions.Default));
+        // Yalnız birini yok saymak yetmez — öteki bayrak farkı hâlâ görünür.
+        Assert.False(Equal(a, b, SnapshotOptions.Default with { IgnoreAnsiNulls = true }));
+        Assert.False(Equal(a, b, SnapshotOptions.Default with { IgnoreQuotedIdentifiers = true }));
+        // İkisini de yok sayınca eşit.
+        Assert.True(Equal(a, b, SnapshotOptions.Default with { IgnoreAnsiNulls = true, IgnoreQuotedIdentifiers = true }));
+    }
+
     // --- DML trigger state ---
 
     private static CatalogSet Trigger(bool disabled) => new()
