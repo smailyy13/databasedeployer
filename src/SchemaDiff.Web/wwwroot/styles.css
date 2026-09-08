@@ -161,7 +161,39 @@ p { margin: 0; }
 .progress-text { color: var(--ink-2); white-space: nowrap; }
 
 /* ---------- split ---------- */
-.split { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.split { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; }
+
+/* Karşılaştırma sırasında yalnız içerik alanını kaplayan küçük loading — üst bar (New
+   comparison dâhil) kapanmaz ve tıklanabilir kalır. */
+.loading {
+  position: absolute; inset: 0; z-index: 30;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(1.5px);
+}
+.loading[hidden] { display: none; }
+.loading-card {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 22px 30px; min-width: 260px; max-width: 80%;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 10px 34px rgba(0,0,0,.18); text-align: center;
+}
+.loading-spinner {
+  width: 30px; height: 30px; border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  border-top-color: var(--accent); animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-step { font-size: 14px; font-weight: 600; color: var(--ink); }
+.loading-meta { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.loading-bar { width: 220px; max-width: 100%; height: 6px; border-radius: 4px;
+  background: color-mix(in srgb, var(--ink-3) 22%, transparent); overflow: hidden; }
+.loading-fill { height: 100%; background: var(--accent); border-radius: 4px;
+  width: 0; transition: width .3s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner { animation-duration: 2s; }
+  .loading-fill { transition: none; }
+}
 .upper { display: flex; flex-direction: column; min-height: 0; flex: 1 1 58%; }
 .lower { display: flex; flex-direction: column; min-height: 0; flex: 1 1 42%;
          background: var(--panel); border-top: 1px solid var(--line); }
@@ -273,8 +305,8 @@ p { margin: 0; }
 
 /* Seçim modunda script'e girmeyecek satırlar soluk; tamamen tik-dışı kategori üstü çizili.
    İşaret kutusu ve ⇄ tam görünür kalır ki geri seçilebilsin. */
-.row-obj.dim, .row-child.dim { opacity: .4; }
-.row-obj.dim:hover, .row-child.dim:hover { opacity: .7; }
+.row-obj.dim, .row-child.dim { opacity: .68; }
+.row-obj.dim:hover, .row-child.dim:hover { opacity: .88; }
 .row-obj.dim .pick, .row-obj.dim .rev, .row-child.dim .pick { opacity: 1; }
 .row-cat.struck { opacity: .55; }
 .row-cat.struck .folder { text-decoration: line-through; }
