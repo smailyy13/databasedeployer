@@ -78,6 +78,38 @@ public class SettingsScriptTests
     }
 
     [Fact]
+    public void Scoped_configuration_does_not_leak_when_database_object_not_selected()
+    {
+        // Kullanıcı yalnız başka bir objeyi seçtiyse DB seviyesi ayar script'e SIZMAMALI.
+        var cmp = SchemaComparer.Compare(
+            Build(Catalog([new DatabaseScopedConfigurationRow(1, "MAXDOP", "8", "0")])), Build(Catalog()));
+        var selectOther = new HashSet<ObjectKey>(ObjectKeyComparer.CaseInsensitive)
+        {
+            new("dbo", "P1", ObjectKind.Procedure),
+        };
+
+        var script = SettingsScriptGenerator.Generate(cmp, selectOther);
+
+        Assert.DoesNotContain("SCOPED CONFIGURATION", script.Sql);
+        Assert.True(script.IsEmpty);
+    }
+
+    [Fact]
+    public void Scoped_configuration_is_written_when_database_object_is_selected()
+    {
+        var cmp = SchemaComparer.Compare(
+            Build(Catalog([new DatabaseScopedConfigurationRow(1, "MAXDOP", "8", "0")])), Build(Catalog()));
+        var selectDb = new HashSet<ObjectKey>(ObjectKeyComparer.CaseInsensitive)
+        {
+            new(string.Empty, "(database)", ObjectKind.Database),
+        };
+
+        var script = SettingsScriptGenerator.Generate(cmp, selectDb);
+
+        Assert.Contains("ALTER DATABASE SCOPED CONFIGURATION SET MAXDOP = 8;", script.Sql);
+    }
+
+    [Fact]
     public void Setting_removed_from_source_is_left_alone()
     {
         // Katalog yalnız varsayılandan sapanları verir: "kaynakta yok" = varsayılan, ve
