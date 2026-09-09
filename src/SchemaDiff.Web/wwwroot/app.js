@@ -644,6 +644,11 @@ async function compare() {
   state.checked.clear();
   state.reversed.clear();
   state.lastPick = null;
+  // Alt panel (fark görünümü) önceki karşılaştırmadan veri taşımasın.
+  state.detail = null;
+  $('defTitle').textContent = t('objectDefinitions');
+  $('defBody').innerHTML = `<p class="missing">${esc(t('selectRow'))}</p>`;
+  resetDiffNav();
   renderAll();
 
   let data;
