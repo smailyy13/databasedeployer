@@ -421,10 +421,24 @@ const DEFAULT_OPTIONS = {
   maxQueries: 16,
 };
 
+// Karşılaştırma seçenekleri cihazda saklanır (dil/tema gibi). Kaydedilen ayarlar
+// varsayılanların ÜZERİNE yazılır; ileride eklenen yeni bir seçenek eski kayıtta
+// yoksa varsayılanıyla gelir. Bozuk/erişilemez localStorage'da sessizce varsayılana düşer.
+const OPTIONS_KEY = 'options';
+function loadOptions() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(OPTIONS_KEY) || '{}');
+    return { ...DEFAULT_OPTIONS, ...(saved && typeof saved === 'object' ? saved : {}) };
+  } catch { return { ...DEFAULT_OPTIONS }; }
+}
+function saveOptions() {
+  try { localStorage.setItem(OPTIONS_KEY, JSON.stringify(state.options)); } catch { /* yut */ }
+}
+
 const state = {
   source: null,
   target: null,
-  options: { ...DEFAULT_OPTIONS },
+  options: loadOptions(),
   runId: null,
   result: null,
   compare: null,            // aktif karşılaştırma ilerlemesi (loading ekranı için)
@@ -669,7 +683,7 @@ function renderOptions() {
     });
 
   for (const box of $('optList').querySelectorAll('[data-opt]'))
-    box.addEventListener('change', (e) => { e.stopPropagation(); state.options[box.dataset.opt] = box.checked; renderOptions(); });
+    box.addEventListener('change', (e) => { e.stopPropagation(); state.options[box.dataset.opt] = box.checked; saveOptions(); renderOptions(); });
 }
 
 // ================= karşılaştırma =================
@@ -1653,7 +1667,7 @@ const closeOptions = () => { $('optScrim').hidden = true; $('optDialog').hidden 
 $('optClose').addEventListener('click', closeOptions);
 $('optOk').addEventListener('click', closeOptions);
 $('optScrim').addEventListener('click', closeOptions);
-$('optReset').addEventListener('click', () => { state.options = { ...DEFAULT_OPTIONS }; renderOptions(); });
+$('optReset').addEventListener('click', () => { state.options = { ...DEFAULT_OPTIONS }; saveOptions(); renderOptions(); });
 
 // Klavye kısayolları paneli.
 const closeShortcuts = () => { $('scScrim').hidden = true; $('scDialog').hidden = true; };
