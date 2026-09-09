@@ -242,23 +242,49 @@ p { margin: 0; }
 }
 .scroll { flex: 1; overflow: auto; min-height: 0; }
 
-/* ---------- tree ---------- */
+/* ---------- tree ----------
+   Kırılım tonu içe doğru açılır (üst kategori daha koyu → alt daha açık):
+   işlem grubu (en koyu) › tür alt-grubu (orta) › obje satırı (taban) › kategori/öğe. */
 .group {
   display: grid; grid-template-columns: 148px 1fr 46px 1fr; align-items: center;
-  padding: 7px 14px;
-  background: var(--panel-2); border-bottom: 1px solid var(--line);
-  position: sticky; top: 0; z-index: 2; cursor: pointer; user-select: none;
+  padding: 8px 14px;
+  background: var(--panel-3); border-bottom: 1px solid var(--line);
+  box-shadow: inset 3px 0 0 var(--ink-3);
+  position: sticky; top: 0; z-index: 3; cursor: pointer; user-select: none;
 }
-.group:hover { background: var(--panel-3); }
+.group:hover { filter: brightness(0.98); }
 .group .caret { color: var(--ink-3); width: 10px; }
 .group .gpick { accent-color: var(--accent); cursor: pointer; margin: 0; }
-.group .gname { font-weight: 600; }
+.group .gname { font-weight: 700; text-transform: uppercase; letter-spacing: .03em; font-size: 12px; }
+.group.add { box-shadow: inset 3px 0 0 var(--add); background: color-mix(in srgb, var(--add) 11%, var(--panel-3)); }
+.group.change { box-shadow: inset 3px 0 0 var(--chg); background: color-mix(in srgb, var(--chg) 11%, var(--panel-3)); }
+.group.delete { box-shadow: inset 3px 0 0 var(--del); background: color-mix(in srgb, var(--del) 11%, var(--panel-3)); }
 .group.add .gname { color: var(--add); }
 .group.change .gname { color: var(--chg); }
 .group.delete .gname { color: var(--del); }
 .group .gcount {
   color: var(--ink-2); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
   background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px;
+  margin-left: 8px;
+}
+
+/* Tür alt-grubu: işlem grubundan bir ton açık, işlem rengiyle ince sol şerit. */
+.type-group {
+  display: grid; grid-template-columns: 148px 1fr 46px 1fr; align-items: center;
+  padding: 5px 14px;
+  background: var(--panel-2); border-bottom: 1px solid var(--line-2);
+  cursor: pointer; user-select: none;
+}
+.type-group:hover { background: var(--panel-3); }
+.type-group .caret { color: var(--ink-3); width: 10px; }
+.type-group .tgpick { accent-color: var(--accent); cursor: pointer; margin: 0; }
+.type-group .tgname { font-weight: 600; color: var(--ink); font-size: 12px; }
+.type-group.add .tgname { color: color-mix(in srgb, var(--add) 82%, var(--ink)); }
+.type-group.change .tgname { color: color-mix(in srgb, var(--chg) 78%, var(--ink)); }
+.type-group.delete .tgname { color: color-mix(in srgb, var(--del) 82%, var(--ink)); }
+.type-group .tgcount {
+  color: var(--ink-3); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+  margin-left: 6px;
 }
 
 .row-obj, .row-child {
