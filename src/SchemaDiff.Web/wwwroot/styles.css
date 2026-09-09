@@ -113,11 +113,11 @@ p { margin: 0; }
 
 /* tema / dil geçiş düğmeleri */
 .iconbtn {
-  font: inherit; cursor: pointer; border-radius: var(--radius); border: 1px solid var(--line);
-  background: var(--panel); color: var(--ink-2); height: 30px; min-width: 34px; padding: 0 9px;
-  display: inline-flex; align-items: center; justify-content: center; gap: 5px; font-size: 14px;
+  font: inherit; cursor: pointer; border-radius: var(--radius); border: 1px solid var(--ink-3);
+  background: var(--panel); color: var(--ink); height: 30px; min-width: 34px; padding: 0 9px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px; font-size: 15px;
 }
-.iconbtn:hover { background: var(--panel-2); color: var(--ink); border-color: var(--ink-3); }
+.iconbtn:hover { background: var(--panel-2); color: var(--ink); border-color: var(--ink-2); }
 .iconbtn .lang { font-size: 11px; font-weight: 700; letter-spacing: .04em; }
 .sep { width: 1px; height: 22px; background: var(--line); margin: 0 2px; }
 
