@@ -87,7 +87,6 @@ const I18N = {
     scriptReady: 'Script ready — review/edit, then download', scriptCopied: 'Script copied to clipboard',
     sqlDownloaded: 'Downloaded {file}', selectGroupTip: 'Select / clear all {g}',
     selectTypeTip: 'Select / clear all {g} objects',
-    grpDelete: 'Removed', grpChange: 'Changed', grpAdd: 'Added',
     statObjects: '{n} objects', statChanged: '{n} changed', statAdded: '{n} added',
     statRemoved: '{n} removed', statEqual: '{n} identical',
     renameWarn: '  ·  ⚠ {n} possible RENAME (consider sp_rename instead of drop+create)',
@@ -209,7 +208,6 @@ const I18N = {
     scriptReady: 'Script hazır — gözden geçir/düzenle, sonra indir', scriptCopied: 'Script panoya kopyalandı',
     sqlDownloaded: 'İndirildi: {file}', selectGroupTip: 'Tüm {g} objelerini seç / kaldır',
     selectTypeTip: 'Tüm {g} objelerini seç / kaldır',
-    grpDelete: 'Silinen', grpChange: 'Değişen', grpAdd: 'Eklenen',
     statObjects: '{n} obje', statChanged: '{n} değişti', statAdded: '{n} eklendi',
     statRemoved: '{n} silindi', statEqual: '{n} aynı',
     renameWarn: '  ·  ⚠ {n} olası YENİDEN ADLANDIRMA (drop+create yerine sp_rename düşünün)',
@@ -377,9 +375,9 @@ function highlightLines(lines) {
 
 // SSDT'nin sonuç ağacındaki sıra: önce silinecekler, sonra değişenler, sonra eklenecekler.
 const GROUPS = [
-  { action: 'Delete', labelKey: 'grpDelete', cls: 'delete', mark: '−' },
-  { action: 'Change', labelKey: 'grpChange', cls: 'change', mark: '~' },
-  { action: 'Add', labelKey: 'grpAdd', cls: 'add', mark: '+' },
+  { action: 'Delete', label: 'Delete', cls: 'delete', mark: '−' },
+  { action: 'Change', label: 'Change', cls: 'change', mark: '~' },
+  { action: 'Add', label: 'Add', cls: 'add', mark: '+' },
 ];
 
 // SSDT'nin "General" sekmesindeki seçenekleri gruplayarak yansıtır. Yalnızca bu araçta
@@ -858,16 +856,15 @@ function renderTree() {
 
     const collapsed = state.collapsed.has(group.action);
     const allChecked = rows.every((c) => objIncluded(`${c.objectType}|${c.schema}|${c.name}`));
-    const groupLabel = t(group.labelKey);
     html += `<div class="group ${group.cls}" data-group="${group.action}">
       <span class="c-type">
         <span class="caret">${collapsed ? '▸' : '▾'}</span>
-        <span class="gname">${esc(groupLabel)}</span>
+        <span class="gname">${group.label}</span>
         <span class="gcount">${num(rows.length)}</span>
       </span>
       <span></span>
       <span class="c-mid"><input type="checkbox" class="pick gpick" data-gpick="${group.action}"
-        ${allChecked ? 'checked' : ''} title="${esc(t('selectGroupTip', { g: groupLabel }))}"></span>
+        ${allChecked ? 'checked' : ''} title="${esc(t('selectGroupTip', { g: group.label }))}"></span>
       <span></span>
     </div>`;
     if (collapsed) continue;
