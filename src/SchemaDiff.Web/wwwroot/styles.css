@@ -194,6 +194,10 @@ p { margin: 0; }
   .loading-spinner { animation-duration: 2s; }
   .loading-fill { transition: none; }
 }
+/* İptal butonu: büyük + kırmızı çerçeve, dikkat çeksin */
+#cancelBtn { margin-top: 8px; padding: 9px 26px; font-size: 14px; font-weight: 600;
+  color: var(--del); border: 2px solid var(--del); border-radius: 8px; background: transparent; }
+#cancelBtn:hover:not(:disabled) { background: var(--del-bg); border-color: var(--del); }
 .upper { display: flex; flex-direction: column; min-height: 0; flex: 1 1 58%; }
 .lower { display: flex; flex-direction: column; min-height: 0; flex: 1 1 42%;
          background: var(--panel); border-top: 1px solid var(--line); }

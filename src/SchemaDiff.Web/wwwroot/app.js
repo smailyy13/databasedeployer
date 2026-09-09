@@ -1014,6 +1014,7 @@ function bindTree(tree) {
       e.stopPropagation();
       const key = box.dataset.pick;
       const target = box.checked;   // tık sonrası yeni durum
+      const touched = new Set();    // parent tikini eşitlemek için etkilenen objeler
 
       if (e.shiftKey && state.lastPick && state.lastPick !== key) {
         const boxes = [...tree.querySelectorAll('.pick:not(.gpick)')];
@@ -1024,10 +1025,29 @@ function bindTree(tree) {
           for (let i = lo; i <= hi; i++) {
             boxes[i].checked = target;
             setPick(boxes[i].dataset.pick, target);
+            touched.add(boxes[i].dataset.pick.split('›')[0]);
           }
         }
       } else {
         setPick(key, target);
+        touched.add(key.split('›')[0]);
+      }
+
+      // Parent/child eşitleme: bir objenin alt tiklerinden biri bile açıksa üst tik açık,
+      // hepsi kapalıysa üst tik de kapalı olur (alt öğesi olmayan obje kendi değerinde kalır).
+      for (const objKey of touched) {
+        const change = findChange(objKey);
+        if (!change?.children?.length) continue;
+        const anyChild = change.children.some(
+          (ch) => state.checked.has(`${objKey}›${ch.category}›${ch.name}`));
+        anyChild ? state.checked.add(objKey) : state.checked.delete(objKey);
+      }
+
+      // Tik'e tıklamak aynı zamanda o satırı seçsin → alt panelde farkları göster.
+      const row = box.closest('.row-obj, .row-child');
+      if (row) {
+        state.selected = row.dataset.key;
+        loadDetail(row.dataset.schema, row.dataset.name, row.dataset.kind);
       }
 
       state.lastPick = key;
