@@ -86,6 +86,8 @@ const I18N = {
     emptyScriptInfo: 'No changes in this direction.',
     scriptReady: 'Script ready — review/edit, then download', scriptCopied: 'Script copied to clipboard',
     sqlDownloaded: 'Downloaded {file}', selectGroupTip: 'Select / clear all {g}',
+    selectTypeTip: 'Select / clear all {g} objects',
+    grpDelete: 'Removed', grpChange: 'Changed', grpAdd: 'Added',
     statObjects: '{n} objects', statChanged: '{n} changed', statAdded: '{n} added',
     statRemoved: '{n} removed', statEqual: '{n} identical',
     renameWarn: '  ·  ⚠ {n} possible RENAME (consider sp_rename instead of drop+create)',
@@ -206,6 +208,8 @@ const I18N = {
     emptyScriptInfo: 'Bu yönde değişiklik yok.',
     scriptReady: 'Script hazır — gözden geçir/düzenle, sonra indir', scriptCopied: 'Script panoya kopyalandı',
     sqlDownloaded: 'İndirildi: {file}', selectGroupTip: 'Tüm {g} objelerini seç / kaldır',
+    selectTypeTip: 'Tüm {g} objelerini seç / kaldır',
+    grpDelete: 'Silinen', grpChange: 'Değişen', grpAdd: 'Eklenen',
     statObjects: '{n} obje', statChanged: '{n} değişti', statAdded: '{n} eklendi',
     statRemoved: '{n} silindi', statEqual: '{n} aynı',
     renameWarn: '  ·  ⚠ {n} olası YENİDEN ADLANDIRMA (drop+create yerine sp_rename düşünün)',
@@ -373,9 +377,9 @@ function highlightLines(lines) {
 
 // SSDT'nin sonuç ağacındaki sıra: önce silinecekler, sonra değişenler, sonra eklenecekler.
 const GROUPS = [
-  { action: 'Delete', label: 'Delete', cls: 'delete', mark: '−' },
-  { action: 'Change', label: 'Change', cls: 'change', mark: '~' },
-  { action: 'Add', label: 'Add', cls: 'add', mark: '+' },
+  { action: 'Delete', labelKey: 'grpDelete', cls: 'delete', mark: '−' },
+  { action: 'Change', labelKey: 'grpChange', cls: 'change', mark: '~' },
+  { action: 'Add', labelKey: 'grpAdd', cls: 'add', mark: '+' },
 ];
 
 // SSDT'nin "General" sekmesindeki seçenekleri gruplayarak yansıtır. Yalnızca bu araçta
@@ -431,7 +435,8 @@ const state = {
   detail: null,
   editing: null,
   expanded: new Set(),      // açılmış objeler
-  collapsed: new Set(),     // kapatılmış üst gruplar
+  collapsed: new Set(),     // kapatılmış üst gruplar (işlem: Ekle/Değiştir/Sil)
+  collapsedTypes: new Set(),// kapatılmış tür alt-grupları (Tablo/Prosedür/Şema…)
   collapsedCats: new Set(), // kapatılmış kategori klasörleri (varsayılan açık)
   checked: new Set(),       // işaretlenmiş satırlar (ileri yön)
   reversed: new Set(),      // ⇄ ile işaretlenen objeler (geri alma / ters yön)
@@ -447,6 +452,17 @@ const state = {
 // Ağaçtaki klasör sırası — SSDT'nin gösterdiği sırayla aynı.
 const CATEGORY_ORDER = ['Columns', 'Primary Key', 'Unique Constraints', 'Indexes',
                         'Foreign Keys', 'Check Constraints', 'Properties'];
+
+// Tür alt-grupları bu mantıksal sırayla dizilir (TYPE_TR anahtar sırası). Listede
+// olmayan tür sona alınır, kendi aralarında alfabetik.
+const TYPE_ORDER = Object.keys(TYPE_TR);
+function orderedTypes(rows) {
+  const present = [...new Set(rows.map((c) => c.objectType))];
+  return present.sort((a, b) => {
+    const ia = TYPE_ORDER.indexOf(a), ib = TYPE_ORDER.indexOf(b);
+    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib) || a.localeCompare(b);
+  });
+}
 
 const ACTION_ICON = { Add: '＋', Change: '✎', Delete: '✕' };
 
@@ -842,20 +858,42 @@ function renderTree() {
 
     const collapsed = state.collapsed.has(group.action);
     const allChecked = rows.every((c) => objIncluded(`${c.objectType}|${c.schema}|${c.name}`));
+    const groupLabel = t(group.labelKey);
     html += `<div class="group ${group.cls}" data-group="${group.action}">
       <span class="c-type">
         <span class="caret">${collapsed ? '▸' : '▾'}</span>
-        <span class="gname">${group.label}</span>
+        <span class="gname">${esc(groupLabel)}</span>
         <span class="gcount">${num(rows.length)}</span>
       </span>
       <span></span>
       <span class="c-mid"><input type="checkbox" class="pick gpick" data-gpick="${group.action}"
-        ${allChecked ? 'checked' : ''} title="${esc(t('selectGroupTip', { g: group.label }))}"></span>
+        ${allChecked ? 'checked' : ''} title="${esc(t('selectGroupTip', { g: groupLabel }))}"></span>
       <span></span>
     </div>`;
     if (collapsed) continue;
 
-    for (const change of rows) {
+    // Tür alt-grupları: aynı işlem içinde objeleri türe göre kümele (Tablolar, Prosedürler,
+    // Şemalar…). Böylece alt öğeler çoğaldığında liste dağılmaz.
+    for (const otype of orderedTypes(rows)) {
+      const typeRows = rows.filter((c) => c.objectType === otype);
+      const typeKey = `${group.action}#${otype}`;
+      const typeCollapsed = state.collapsedTypes.has(typeKey);
+      const typeAllChecked = typeRows.every((c) => objIncluded(`${c.objectType}|${c.schema}|${c.name}`));
+
+      html += `<div class="type-group ${group.cls}" data-typegroup="${esc(typeKey)}">
+        <span class="c-type" style="padding-left:24px">
+          <span class="caret">${typeCollapsed ? '▸' : '▾'}</span>
+          <span class="tgname">${esc(typeLabel(otype))}</span>
+          <span class="tgcount">${num(typeRows.length)}</span>
+        </span>
+        <span></span>
+        <span class="c-mid"><input type="checkbox" class="pick tgpick" data-tgpick="${esc(typeKey)}"
+          ${typeAllChecked ? 'checked' : ''} title="${esc(t('selectTypeTip', { g: typeLabel(otype) }))}"></span>
+        <span></span>
+      </div>`;
+      if (typeCollapsed) continue;
+
+    for (const change of typeRows) {
       const objKey = `${change.objectType}|${change.schema}|${change.name}`;
       html += objectRow(change, objKey);
 
@@ -871,7 +909,7 @@ function renderTree() {
         const struck = selectionActive() && !catIn ? ' struck' : '';
 
         html += `<div class="row-cat${struck}" data-cat="${esc(catKey)}">
-          <span class="c-type" style="padding-left:26px">
+          <span class="c-type" style="padding-left:56px">
             <span class="caret">${catOpen ? '▾' : '▸'}</span>
             <span class="folder">${esc(category)}</span>
             <span class="catcount">${items.length}</span>
@@ -880,6 +918,7 @@ function renderTree() {
 
         if (catOpen) for (const item of items) html += childRow(change, objKey, catKey, item);
       }
+    }
     }
   }
 
@@ -945,9 +984,8 @@ function objectRow(change, objKey) {
 
   return `<div class="row-obj${selected}${dim}" data-key="${esc(objKey)}"
       data-schema="${esc(change.schema)}" data-name="${esc(change.name)}" data-kind="${esc(change.objectType)}">
-    <span class="c-type" style="padding-left:8px">
+    <span class="c-type" style="padding-left:42px">
       <span class="caret" data-toggle="${esc(objKey)}">${expandable ? (open ? '▾' : '▸') : ''}</span>
-      <span class="otype">${esc(typeLabel(change.objectType))}</span>
     </span>
     <span class="c-name">${change.action === 'Delete' ? '' : esc(full)}</span>
     <span class="c-mid">
@@ -972,7 +1010,7 @@ function childRow(change, objKey, catKey, item) {
 
   return `<div class="row-child${dim}" data-key="${esc(objKey)}"
       data-schema="${esc(change.schema)}" data-name="${esc(change.name)}" data-kind="${esc(change.objectType)}">
-    <span class="c-type" style="padding-left:52px">${esc(item.itemType)}</span>
+    <span class="c-type" style="padding-left:74px">${esc(item.itemType)}</span>
     <span class="c-name">${item.action === 'Delete' ? '' : esc(name)}</span>
     <span class="c-mid">
       <input type="checkbox" class="pick" data-pick="${esc(pickKey)}" ${state.checked.has(pickKey) ? 'checked' : ''}>
@@ -1000,6 +1038,26 @@ function bindTree(tree) {
       renderTree();
     });
 
+  // Tür alt-grubu başlığı: aç/kapat.
+  for (const el of tree.querySelectorAll('.type-group'))
+    el.addEventListener('click', () => {
+      const key = el.dataset.typegroup;
+      state.collapsedTypes.has(key) ? state.collapsedTypes.delete(key) : state.collapsedTypes.add(key);
+      renderTree();
+    });
+
+  // Tür başlığındaki kutu: o türdeki (görünen) tüm objeleri seç/kaldır.
+  for (const box of tree.querySelectorAll('.tgpick'))
+    box.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const on = box.checked;
+      const [action, otype] = box.dataset.tgpick.split('#');
+      for (const c of visibleChanges())
+        if (c.action === action && c.objectType === otype)
+          setPick(`${c.objectType}|${c.schema}|${c.name}`, on);
+      renderTree();
+    });
+
   for (const el of tree.querySelectorAll('.row-cat'))
     el.addEventListener('click', () => {
       const key = el.dataset.cat;
@@ -1009,7 +1067,7 @@ function bindTree(tree) {
 
   // İşaret kutuları satır seçimini tetiklemesin. Shift+tık: son tıklanan kutu ile
   // şimdiki arasındaki tüm kutuları (alt alta olanları) toplu olarak aynı duruma getirir.
-  for (const box of tree.querySelectorAll('.pick:not(.gpick)'))
+  for (const box of tree.querySelectorAll('.pick:not(.gpick):not(.tgpick)'))
     box.addEventListener('click', (e) => {
       e.stopPropagation();
       const key = box.dataset.pick;
@@ -1017,7 +1075,7 @@ function bindTree(tree) {
       const touched = new Set();    // parent tikini eşitlemek için etkilenen objeler
 
       if (e.shiftKey && state.lastPick && state.lastPick !== key) {
-        const boxes = [...tree.querySelectorAll('.pick:not(.gpick)')];
+        const boxes = [...tree.querySelectorAll('.pick:not(.gpick):not(.tgpick)')];
         const from = boxes.findIndex((b) => b.dataset.pick === state.lastPick);
         const to = boxes.findIndex((b) => b.dataset.pick === key);
         if (from !== -1 && to !== -1) {
