@@ -18,6 +18,14 @@ const I18N = {
     reverseIncluded: '{n} reversed in the reverse section',
     generateScriptTip: 'Generate a deployment script from selected changes',
     options: 'Comparison options', toggleTheme: 'Toggle theme', toggleLang: 'Language',
+    settingsBtn: 'Settings',
+    shortcutsTitle: 'Keyboard shortcuts',
+    sc_move: 'Move the row selection up / down',
+    sc_tick: 'Tick / untick the selected row (include it in the script)',
+    sc_rev: 'Send the selected object to the reverse (⇄) section / undo',
+    sc_k_shift: 'Shift + click',
+    sc_range: 'Range select / deselect checkboxes from the last one clicked',
+    sc_ctrla: "Inside a diff pane: select only that pane's clean SQL",
     pickTwo: 'Select two connections to compare.', allTypes: 'All types',
     searchPh: 'search schema or object…',
     tabDiff: 'Differences', tabRisk: 'Deployment risk', tabTriggers: 'Triggers',
@@ -55,7 +63,7 @@ const I18N = {
     notComparedYet: 'No comparison yet.', noDiffForFilters: 'No differences to show with these filters.',
     listLimited: 'List limited to {n} records — there are more.',
     flagIndeterminate: 'INDETERMINATE',
-    pickInfo: '{n} objects selected · Shift+click for range',
+    pickInfo: '{n} objects selected',
     pickInfoAll: 'Nothing selected → the script will be empty',
     generatedScript: 'Generated script', downloadSql: 'Download .sql', copy: 'Copy',
     dirForward: 'source → target', dirReverse: 'target → source',
@@ -125,6 +133,14 @@ const I18N = {
     reverseIncluded: '{n} obje ters bölümde',
     generateScriptTip: 'Seçili değişikliklerden dağıtım script\'i üret',
     options: 'Karşılaştırma seçenekleri', toggleTheme: 'Temayı değiştir', toggleLang: 'Dil',
+    settingsBtn: 'Ayarlar',
+    shortcutsTitle: 'Klavye kısayolları',
+    sc_move: 'Satır seçimini yukarı / aşağı taşı',
+    sc_tick: 'Seçili satırı tikle / kaldır (script’e dahil et)',
+    sc_rev: 'Seçili objeyi ters (⇄) bölüme al / geri al',
+    sc_k_shift: 'Shift + tık',
+    sc_range: 'Son tıklanan kutudan itibaren aralığı toplu seç / kaldır',
+    sc_ctrla: 'Diff panelinde: yalnız o panelin temiz SQL’ini seç',
     pickTwo: 'Karşılaştırmak için iki bağlantı seçin.', allTypes: 'Tüm türler',
     searchPh: 'şema veya obje ara…',
     tabDiff: 'Farklar', tabRisk: 'Deployment riski', tabTriggers: 'Trigger\'lar',
@@ -162,7 +178,7 @@ const I18N = {
     notComparedYet: 'Henüz karşılaştırma yapılmadı.', noDiffForFilters: 'Bu filtrelerle gösterilecek fark yok.',
     listLimited: 'Liste {n} kayıtla sınırlandı — daha fazlası var.',
     flagIndeterminate: 'BELİRSİZ',
-    pickInfo: '{n} obje seçili · Shift+tık ile aralık seç',
+    pickInfo: '{n} obje seçili',
     pickInfoAll: 'Hiçbiri seçili değil → script boş olur',
     generatedScript: 'Üretilen script', downloadSql: '.sql indir', copy: 'Kopyala',
     dirForward: 'kaynak → hedef', dirReverse: 'hedef → kaynak',
@@ -902,7 +918,7 @@ function objectRow(change, objKey) {
     </span>
     <span class="c-name">${change.action === 'Delete' ? '' : esc(full)}</span>
     <span class="c-mid">
-      <input type="checkbox" class="pick" data-pick="${esc(objKey)}" title="Shift+tık: aralığı toplu seç/kaldır" ${state.checked.has(objKey) ? 'checked' : ''}>
+      <input type="checkbox" class="pick" data-pick="${esc(objKey)}" ${state.checked.has(objKey) ? 'checked' : ''}>
       <span class="act ${change.action}">${ACTION_ICON[change.action]}</span>
     </span>
     <span class="c-name">${change.action === 'Add' ? '' : esc(full)}${flag}</span>
@@ -924,7 +940,7 @@ function childRow(change, objKey, catKey, item) {
     <span class="c-type" style="padding-left:52px">${esc(item.itemType)}</span>
     <span class="c-name">${item.action === 'Delete' ? '' : esc(name)}</span>
     <span class="c-mid">
-      <input type="checkbox" class="pick" data-pick="${esc(pickKey)}" title="Shift+tık: aralığı toplu seç/kaldır" ${state.checked.has(pickKey) ? 'checked' : ''}>
+      <input type="checkbox" class="pick" data-pick="${esc(pickKey)}" ${state.checked.has(pickKey) ? 'checked' : ''}>
       <span class="act ${item.action}">${ACTION_ICON[item.action]}</span>
     </span>
     <span class="c-name">${item.action === 'Add' ? '' : esc(name)}${detail}</span>
@@ -1063,7 +1079,7 @@ document.addEventListener('keydown', (e) => {
   // Bir metin alanına yazılıyorsa ya da bir diyalog açıksa karışma.
   const ae = document.activeElement;
   if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable)) return;
-  if (!$('scriptDialog').hidden || !$('connDialog').hidden || !$('optDialog').hidden) return;
+  if (!$('scriptDialog').hidden || !$('connDialog').hidden || !$('optDialog').hidden || !$('scDialog').hidden) return;
 
   switch (e.key) {
     case 'ArrowDown': e.preventDefault(); moveSelection(1); break;
@@ -1484,6 +1500,13 @@ $('optOk').addEventListener('click', closeOptions);
 $('optScrim').addEventListener('click', closeOptions);
 $('optReset').addEventListener('click', () => { state.options = { ...DEFAULT_OPTIONS }; renderOptions(); });
 
+// Klavye kısayolları paneli.
+const closeShortcuts = () => { $('scScrim').hidden = true; $('scDialog').hidden = true; };
+$('shortcutsBtn').addEventListener('click', () => { $('scScrim').hidden = false; $('scDialog').hidden = false; });
+$('scClose').addEventListener('click', closeShortcuts);
+$('scOk').addEventListener('click', closeShortcuts);
+$('scScrim').addEventListener('click', closeShortcuts);
+
 $('compareBtn').addEventListener('click', compare);
 $('showCanonical').addEventListener('change', renderDetail);
 $('prevDiff').addEventListener('click', () => gotoHunk(state.hunkIndex - 1));
@@ -1644,19 +1667,23 @@ function highlightEditor() {
 }
 
 function openScriptEditor(fwdLen, revLen, forward, reverse) {
+  const fwdEmpty = !(forward.sql && forward.sql.trim());
   const revEmpty = !(reverse.sql && reverse.sql.trim());
   state.scriptDirs = {
-    forward: { sql: forward.sql || '', fileName: forward.fileName || 'script.sql', info: scriptInfoLine(fwdLen, forward) },
+    forward: { sql: forward.sql || '', fileName: forward.fileName || 'script.sql', info: scriptInfoLine(fwdLen, forward), empty: fwdEmpty },
     reverse: { sql: reverse.sql || '', fileName: reverse.fileName || 'reverse.sql', info: scriptInfoLine(revLen, reverse), empty: revEmpty },
   };
-  // Reverse sekmesi boşsa etikette belli et.
+  // Boş yönü etikette ∅ ile belli et (her iki sekme için).
+  const fwdTab = document.querySelector('#scriptDialog .stab[data-dir="forward"]');
   const revTab = document.querySelector('#scriptDialog .stab[data-dir="reverse"]');
+  if (fwdTab) fwdTab.classList.toggle('empty', fwdEmpty);
   if (revTab) revTab.classList.toggle('empty', revEmpty);
 
   scriptVocab = buildVocab();
   $('scriptScrim').hidden = false;
   $('scriptDialog').hidden = false;
-  showScriptDir('forward');
+  // İleri (source→target) boş ama ters (target→source) doluysa doğrudan ters sekmeyi aç.
+  showScriptDir(fwdEmpty && !revEmpty ? 'reverse' : 'forward');
 }
 
 // Aktif yönü editöre yükle. İndir/kopyala codeInput + scriptFileName üzerinden çalışır.
@@ -1823,6 +1850,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (!$('connDialog').hidden) closeConnect();
   if (!$('optDialog').hidden) closeOptions();
+  if (!$('scDialog').hidden) closeShortcuts();
   if (!$('scriptDialog').hidden) closeScriptEditor();
 });
 

@@ -28,8 +28,9 @@
     <button class="btn ghost" id="newCompareBtn" data-i18n="newComparison" data-i18n-title="newComparisonTip" title="Open a new comparison in a separate tab">New comparison</button>
     <button class="btn primary" id="compareBtn" disabled data-i18n="compare">Compare</button>
     <button class="btn ghost" id="scriptBtn" disabled data-i18n="generateScript" data-i18n-title="generateScriptTip" title="Generate a deployment script from selected changes">Generate Script</button>
-    <button class="iconbtn" id="optionsBtn" data-i18n-title="options" title="Comparison options">⚙</button>
+    <button class="btn ghost" id="optionsBtn" data-i18n-title="options" title="Comparison options"><span class="gear" aria-hidden="true">⚙</span> <span data-i18n="settingsBtn">Settings</span></button>
     <span class="sep"></span>
+    <button class="iconbtn" id="shortcutsBtn" data-i18n-title="shortcutsTitle" title="Keyboard shortcuts">⌨</button>
     <button class="iconbtn" id="themeBtn" data-i18n-title="toggleTheme" title="Toggle theme">☾</button>
     <button class="iconbtn" id="langBtn" data-i18n-title="toggleLang" title="Language"><span class="lang" id="langLabel">TR</span></button>
   </div>
@@ -169,6 +170,30 @@
     <button class="btn ghost" id="optReset" data-i18n="resetDefaults">Reset to defaults</button>
     <div class="grow"></div>
     <button class="btn primary" id="optOk" data-i18n="ok">OK</button>
+  </div>
+</div>
+
+<!-- ---------- Keyboard shortcuts dialog ---------- -->
+<div class="scrim" id="scScrim" hidden></div>
+<div class="dialog narrow" id="scDialog" hidden>
+  <div class="dialog-head">
+    <h2 data-i18n="shortcutsTitle">Keyboard shortcuts</h2>
+    <button class="x" id="scClose">✕</button>
+  </div>
+  <div class="dialog-body single">
+    <table class="sc-table">
+      <tbody>
+        <tr><td class="sc-key">↑ / ↓</td><td data-i18n="sc_move">Move the row selection up / down</td></tr>
+        <tr><td class="sc-key">E</td><td data-i18n="sc_tick">Tick / untick the selected row (include it in the script)</td></tr>
+        <tr><td class="sc-key">R</td><td data-i18n="sc_rev">Send the selected object to the reverse (⇄) section / undo</td></tr>
+        <tr><td class="sc-key" data-i18n="sc_k_shift">Shift + click</td><td data-i18n="sc_range">Range select / deselect checkboxes from the last one clicked</td></tr>
+        <tr><td class="sc-key">Ctrl + A</td><td data-i18n="sc_ctrla">Inside a diff pane: select only that pane's clean SQL</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="dialog-foot">
+    <div class="grow"></div>
+    <button class="btn primary" id="scOk" data-i18n="ok">OK</button>
   </div>
 </div>
 
