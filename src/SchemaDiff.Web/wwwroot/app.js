@@ -741,7 +741,6 @@ async function compare() {
     $('scriptBtn').disabled = false;
     renderAll();
     const r = state.result;
-    const renameCount = (r.renames || []).length;
     // Açık, kelimeyle özet: sıfır olan kategoriler gösterilmez (kalabalık yapmasın).
     const parts = [t('statObjects', { n: num(r.sourceObjects) })];
     if (r.changeCount) parts.push(t('statChanged', { n: num(r.changeCount) }));
@@ -749,9 +748,8 @@ async function compare() {
     if (r.deleteCount) parts.push(t('statRemoved', { n: num(r.deleteCount) }));
     parts.push(t('statEqual', { n: num(r.equal) }));
     parts.push(formatDuration(r.durationMs / 1000));
-    let msg = `${r.sourceLabel} → ${r.targetLabel}  ·  ${parts.join('  ·  ')}`;
-    if (renameCount > 0) msg += t('renameWarn', { n: num(renameCount) });
-    setStatus(msg, renameCount > 0 ? 'error' : '');
+    const msg = `${r.sourceLabel} → ${r.targetLabel}  ·  ${parts.join('  ·  ')}`;
+    setStatus(msg);
     $('compareBtn').disabled = false;
   });
 
