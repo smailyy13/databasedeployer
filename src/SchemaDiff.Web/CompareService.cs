@@ -13,6 +13,11 @@ public sealed class CompareSession
 {
     private readonly Lock _gate = new();
     private TaskCompletionSource _signal = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly CancellationTokenSource _cts = new();
+
+    /// <summary>Karşılaştırma görevine verilen iptal token'ı; iptal edilince çekim durur.</summary>
+    public CancellationToken CancellationToken => _cts.Token;
+    public bool Cancelled { get; private set; }
 
     public required string Id { get; init; }
     public required string SourceLabel { get; init; }
@@ -71,6 +76,19 @@ public sealed class CompareSession
             Finished = true;
             Signal();
         }
+    }
+
+    /// <summary>Devam eden karşılaştırmayı iptal eder. Token'ı işaretler; arka plan görevi
+    /// OperationCanceledException ile durur ve oturumu "iptal edildi" olarak bitirir.
+    /// _cts.Cancel() kilit DIŞINDA çağrılır (senkron iptal callback'i _gate'e girip kilitlenmesin).</summary>
+    public void Cancel()
+    {
+        lock (_gate)
+        {
+            if (Finished) return;
+            Cancelled = true;
+        }
+        _cts.Cancel();
     }
 
     private void Signal()
@@ -142,13 +160,17 @@ public sealed class CompareService
                 using var gate = new ExtractionGate(Math.Max(1, options.MaxQueries));
                 var comparison = await SchemaDiffService.CompareAsync(
                     source.ToConnectionString(), target.ToConnectionString(), snapshotOptions, gate,
-                    progress: progress);
+                    ct: session.CancellationToken, progress: progress);
 
                 session.Complete(comparison, Map(session, comparison, stopwatch.Elapsed));
             }
             catch (Exception ex)
             {
-                session.Fail(ex.Message.Split('\n')[0].Trim());
+                // İptal edilen sorgu SqlException de fırlatabilir (OCE değil). Token thread'ler
+                // arası güvenilir görünür olduğundan onu kontrol edip temiz "iptal" mesajı ver.
+                session.Fail(session.CancellationToken.IsCancellationRequested
+                    ? "İşlem iptal edildi."
+                    : ex.Message.Split('\n')[0].Trim());
             }
         });
 
