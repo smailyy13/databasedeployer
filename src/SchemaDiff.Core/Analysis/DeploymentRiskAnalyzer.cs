@@ -142,6 +142,23 @@ public static class DeploymentRiskAnalyzer
             }
         }
 
+        // Silinen ve BOŞ OLMAYAN şema: DROP SCHEMA yalnız boş şemada çalışır. Araç şemayı
+        // boşaltmak için ekstra DROP üretmez (bilinçli) — bu yüzden içinde nesne kalıyorsa
+        // deployment burada durur. "Geçmeyeceğini bildiğimiz" bu durumu riske yazıyoruz.
+        foreach (var diff in result.Differences)
+        {
+            if (diff.Key.Kind != ObjectKind.Schema || diff.Kind != DiffKind.Removed) continue;
+            var schemaName = diff.Key.Name;
+            var contained = result.Target.Objects.Values.Count(o =>
+                o.Key.Kind != ObjectKind.Schema &&
+                string.Equals(o.Key.Schema, schemaName, StringComparison.OrdinalIgnoreCase));
+            if (contained == 0) continue;   // boş şema: DROP SCHEMA sorunsuz geçer
+            risks.Add(new TableRisk(diff.Key, DeploymentRisk.BlockedIfNotEmpty, contained,
+                [new RiskFinding("(şema)", DeploymentRisk.BlockedIfNotEmpty,
+                    $"DROP SCHEMA [{schemaName}] — şema boş değil ({contained} nesne). Boş olmayan şema silinemez; " +
+                    "içindeki nesneler bu deploy'da düşürülmezse burada durur.")]));
+        }
+
         // Önce gerçekten duracaklar, sonra dolu/bilinmeyen tablolar, sonra boşlar.
         return risks
             .OrderByDescending(r => r.WillBlock)

@@ -574,3 +574,12 @@ mark.wordhit { background: #ffdf5d; color: #1f2328; border-radius: 2px; padding:
 .sc-table td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 13px; color: var(--ink); }
 .sc-table tr:last-child td { border-bottom: 0; }
 .sc-table .sc-key { white-space: nowrap; width: 34%; font-family: var(--mono); font-weight: 600; color: var(--accent); }
+
+/* Karşılaştırma ekranındaki tıklanabilir "deployment'ta geçmez" uyarı şeridi */
+.risk-warn {
+  display: block; width: 100%; text-align: left; cursor: pointer; font: inherit;
+  padding: 8px 16px; border: 0; border-bottom: 1px solid var(--line); flex-shrink: 0;
+  background: color-mix(in srgb, var(--chg) 18%, var(--panel));
+  color: var(--ink); font-size: 12px; font-weight: 600;
+}
+.risk-warn:hover { background: color-mix(in srgb, var(--chg) 30%, var(--panel)); }
