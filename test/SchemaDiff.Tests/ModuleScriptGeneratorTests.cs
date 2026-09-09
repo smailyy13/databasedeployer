@@ -75,6 +75,39 @@ public class ModuleScriptGeneratorTests
     }
 
     [Fact]
+    public void Added_schema_is_created()
+    {
+        var sch = Schema("staging");
+        var script = Generate(Database("dev", [Obj(sch, 1)]), Database("prod", []));
+
+        Assert.Contains(sch, script.Included);
+        Assert.Contains("CREATE SCHEMA [staging]", script.Sql);
+    }
+
+    [Fact]
+    public void Removed_schema_is_dropped_when_drops_enabled()
+    {
+        // Silinen şema (hedefte var, kaynakta yok) drop açıkken DROP SCHEMA üretmeli.
+        var sch = Schema("staging");
+        var result = SchemaComparer.Compare(Database("dev", []), Database("prod", [Obj(sch, 1)]));
+        var script = ModuleScriptGenerator.Generate(result, null, new ScriptOptions { IncludeDrops = true });
+
+        Assert.Contains(sch, script.Included);
+        Assert.Contains("DROP SCHEMA [staging];", script.Sql);
+    }
+
+    [Fact]
+    public void Removed_schema_is_out_of_scope_when_drops_disabled()
+    {
+        var sch = Schema("staging");
+        var result = SchemaComparer.Compare(Database("dev", []), Database("prod", [Obj(sch, 1)]));
+        var script = ModuleScriptGenerator.Generate(result, null, new ScriptOptions { IncludeDrops = false });
+
+        Assert.DoesNotContain("DROP SCHEMA", script.Sql);
+        Assert.Contains(sch, script.OutOfScope);
+    }
+
+    [Fact]
     public void Removed_module_is_dropped_with_object_id_guard()
     {
         var key = View("Legacy");

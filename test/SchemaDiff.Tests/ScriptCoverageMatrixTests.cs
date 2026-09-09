@@ -101,9 +101,8 @@ public class ScriptCoverageMatrixTests
     }
 
     /// <summary>
-    /// Silinen obje ya DROP üretmeli ya da adıyla raporlanmalı. TEK istisna şema:
-    /// <c>DROP SCHEMA</c> yalnız şema boşken çalışır ve içindeki objelerin drop sırasına
-    /// bağlıdır — bilinçli olarak üretilmiyor, "kapsam dışı" olarak sayılıyor.
+    /// Silinen obje ya DROP üretmeli ya da adıyla raporlanmalı. Şema dâhil: silinen şema
+    /// için (drop açıkken) <c>DROP SCHEMA</c> en sonda üretilir — içindeki objeler önce düşer.
     /// </summary>
     [Theory]
     [MemberData(nameof(ComparedKinds))]
@@ -113,14 +112,7 @@ public class ScriptCoverageMatrixTests
             TestFactory.Database("src", []),
             TestFactory.Database("tgt", [SnapshotFor(kind, 1, $"CREATE {kind} [dbo].[X_{kind}] AS SELECT 1")]));
 
-        var (sql, skipped, outOfScope) = Chain(cmp);
-
-        if (kind == ObjectKind.Schema)
-        {
-            Assert.Empty(sql);
-            Assert.Contains(KeyFor(kind), outOfScope);
-            return;
-        }
+        var (sql, skipped, _) = Chain(cmp);
 
         Assert.True(sql.Length > 0 || skipped.Any(s => s.Key == KeyFor(kind)),
             $"{kind} arayüzde 'Delete' olarak görünür ama ne DROP üretiliyor ne de sebebi raporlanıyor.");
