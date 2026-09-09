@@ -4,6 +4,21 @@ const $ = (id) => document.getElementById(id);
 let LANG = localStorage.getItem('lang') || 'en';
 let THEME = localStorage.getItem('theme') || 'light';
 const num = (n) => (n ?? 0).toLocaleString(LANG === 'tr' ? 'tr-TR' : 'en-US');
+
+// Backend'den gelen obje türü etiketlerinin Türkçe GÖSTERİMİ (anahtar/değer değişmez,
+// yalnız ekranda). Haritada olmayan tür İngilizce kalır.
+const TYPE_TR = {
+  'Table': 'Tablo', 'View': 'Görünüm', 'Procedure': 'Prosedür',
+  'Scalar Function': 'Skaler Fonksiyon', 'Inline Function': 'Satır İçi Fonksiyon',
+  'Table Function': 'Tablo Fonksiyonu', 'Trigger': 'Trigger', 'DDL Trigger': 'DDL Trigger',
+  'Schema': 'Şema', 'Synonym': 'Synonym', 'Sequence': 'Sequence',
+  'Role': 'Rol', 'User': 'Kullanıcı', 'User-Defined Type': 'Kullanıcı Tipi',
+  'Table Type': 'Tablo Tipi', 'Partition Function': 'Bölüm Fonksiyonu',
+  'Partition Scheme': 'Bölüm Şeması', 'Full-Text Catalog': 'Tam Metin Kataloğu',
+  'Full-Text Stoplist': 'Tam Metin Stop-listesi', 'XML Schema Collection': 'XML Şema Koleksiyonu',
+  'Plan Guide': 'Plan Guide', 'Rule or Default': 'Rule/Default', 'Database': 'Veritabanı',
+};
+const typeLabel = (s) => LANG === 'tr' ? (TYPE_TR[s] ?? s) : s;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -63,15 +78,16 @@ const I18N = {
     notComparedYet: 'No comparison yet.', noDiffForFilters: 'No differences to show with these filters.',
     listLimited: 'List limited to {n} records — there are more.',
     flagIndeterminate: 'INDETERMINATE',
-    pickInfo: '{n} objects selected',
+    pickInfo: '{n} objects selected — will be scripted',
     pickInfoAll: 'Nothing selected → the script will be empty',
     generatedScript: 'Generated script', downloadSql: 'Download .sql', copy: 'Copy',
     dirForward: 'source → target', dirReverse: 'target → source',
     emptyScriptInfo: 'No changes in this direction.',
     scriptReady: 'Script ready — review/edit, then download', scriptCopied: 'Script copied to clipboard',
     sqlDownloaded: 'Downloaded {file}', selectGroupTip: 'Select / clear all {g}',
-    statResult: '{source} → {target} · {objects} objects · {equal} equal · +{add} ~{change} −{delete} · {dur}',
-    renameWarn: ' · ⚠ {n} possible RENAME (consider sp_rename instead of drop+create)',
+    statObjects: '{n} objects', statChanged: '{n} changed', statAdded: '{n} added',
+    statRemoved: '{n} removed', statEqual: '{n} identical',
+    renameWarn: '  ·  ⚠ {n} possible RENAME (consider sp_rename instead of drop+create)',
     noStructuralRisk: 'No structural change carries risk.',
     riskS1: '<b>{n}</b> tables have structural changes.',
     riskS2: '<b>{n}</b> are <b>full</b> in target → will stop during deployment ({loss} with data-loss risk).',
@@ -181,15 +197,16 @@ const I18N = {
     notComparedYet: 'Henüz karşılaştırma yapılmadı.', noDiffForFilters: 'Bu filtrelerle gösterilecek fark yok.',
     listLimited: 'Liste {n} kayıtla sınırlandı — daha fazlası var.',
     flagIndeterminate: 'BELİRSİZ',
-    pickInfo: '{n} obje seçili',
+    pickInfo: '{n} obje seçili — script’e girecek',
     pickInfoAll: 'Hiçbiri seçili değil → script boş olur',
     generatedScript: 'Üretilen script', downloadSql: '.sql indir', copy: 'Kopyala',
     dirForward: 'kaynak → hedef', dirReverse: 'hedef → kaynak',
     emptyScriptInfo: 'Bu yönde değişiklik yok.',
     scriptReady: 'Script hazır — gözden geçir/düzenle, sonra indir', scriptCopied: 'Script panoya kopyalandı',
     sqlDownloaded: 'İndirildi: {file}', selectGroupTip: 'Tüm {g} objelerini seç / kaldır',
-    statResult: '{source} → {target} · {objects} obje · {equal} aynı · +{add} ~{change} −{delete} · {dur}',
-    renameWarn: ' · ⚠ {n} olası YENİDEN ADLANDIRMA (drop+create yerine sp_rename düşünün)',
+    statObjects: '{n} obje', statChanged: '{n} değişti', statAdded: '{n} eklendi',
+    statRemoved: '{n} silindi', statEqual: '{n} aynı',
+    renameWarn: '  ·  ⚠ {n} olası YENİDEN ADLANDIRMA (drop+create yerine sp_rename düşünün)',
     noStructuralRisk: 'Tablo yapısında risk taşıyan değişiklik yok.',
     riskS1: '<b>{n}</b> tabloda yapısal değişiklik var.',
     riskS2: '<b>{n}</b> tanesi hedefte <b>dolu</b> → deployment sırasında duracak ({loss} tanesinde veri kaybı riski).',
@@ -695,11 +712,14 @@ async function compare() {
     renderAll();
     const r = state.result;
     const renameCount = (r.renames || []).length;
-    let msg = t('statResult', {
-      source: r.sourceLabel, target: r.targetLabel, objects: num(r.sourceObjects),
-      equal: num(r.equal), add: num(r.addCount), change: num(r.changeCount),
-      delete: num(r.deleteCount), dur: formatDuration(r.durationMs / 1000),
-    });
+    // Açık, kelimeyle özet: sıfır olan kategoriler gösterilmez (kalabalık yapmasın).
+    const parts = [t('statObjects', { n: num(r.sourceObjects) })];
+    if (r.changeCount) parts.push(t('statChanged', { n: num(r.changeCount) }));
+    if (r.addCount) parts.push(t('statAdded', { n: num(r.addCount) }));
+    if (r.deleteCount) parts.push(t('statRemoved', { n: num(r.deleteCount) }));
+    parts.push(t('statEqual', { n: num(r.equal) }));
+    parts.push(formatDuration(r.durationMs / 1000));
+    let msg = `${r.sourceLabel} → ${r.targetLabel}  ·  ${parts.join('  ·  ')}`;
     if (renameCount > 0) msg += t('renameWarn', { n: num(renameCount) });
     setStatus(msg, renameCount > 0 ? 'error' : '');
     $('compareBtn').disabled = false;
@@ -925,7 +945,7 @@ function objectRow(change, objKey) {
       data-schema="${esc(change.schema)}" data-name="${esc(change.name)}" data-kind="${esc(change.objectType)}">
     <span class="c-type" style="padding-left:8px">
       <span class="caret" data-toggle="${esc(objKey)}">${expandable ? (open ? '▾' : '▸') : ''}</span>
-      <span class="otype">${esc(change.objectType)}</span>
+      <span class="otype">${esc(typeLabel(change.objectType))}</span>
     </span>
     <span class="c-name">${change.action === 'Delete' ? '' : esc(full)}</span>
     <span class="c-mid">
@@ -1130,7 +1150,7 @@ function renderCounts() {
   const types = [...new Set((r?.changes ?? []).map((c) => c.objectType))].sort();
   const current = $('typeFilter').value;
   $('typeFilter').innerHTML = `<option value="">${esc(t('allTypes'))}</option>` +
-    types.map((tp) => `<option value="${esc(tp)}" ${tp === current ? 'selected' : ''}>${esc(tp)}</option>`).join('');
+    types.map((tp) => `<option value="${esc(tp)}" ${tp === current ? 'selected' : ''}>${esc(typeLabel(tp))}</option>`).join('');
 }
 
 function renderRisk() {
@@ -1200,7 +1220,7 @@ function renderRisk() {
     return `<div class="risk sev-${tag}${sel}" data-key="${esc(key)}" data-kind="${esc(kind)}" data-schema="${esc(r.schema)}" data-name="${esc(r.name)}">
         <div class="risk-head">
           <span class="tag ${tag}">${esc(t(lk))}</span>
-          <span class="risk-kind">${esc(kind)}</span>
+          <span class="risk-kind">${esc(typeLabel(kind))}</span>
           <span class="risk-name">${ident}</span>
           <span class="grow"></span>
           <span class="rows">${countText}</span>
@@ -1242,7 +1262,7 @@ function renderAll() {
 // ================= alt panel =================
 
 async function loadDetail(schema, name, kind) {
-  $('defTitle').textContent = `${kind} ${schema}.${name}`;
+  $('defTitle').textContent = `${typeLabel(kind)} ${schema}.${name}`;
   $('defBody').innerHTML = `<p class="missing">${esc(t('loading'))}</p>`;
 
   // Ok tuşuyla hızlı gezinince birden çok istek uçar; yalnız EN SON isteğin cevabı çizilsin
