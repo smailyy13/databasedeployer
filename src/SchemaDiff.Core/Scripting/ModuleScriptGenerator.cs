@@ -78,6 +78,7 @@ public static class ModuleScriptGenerator
         var skipped = new List<SkippedObject>();
 
         var schemasToAdd = new List<ObjectKey>();
+        var schemasToDrop = new List<ObjectKey>();
         var drops = new List<ObjectKey>();
         var alters = new List<ObjectKey>();
         var creates = new List<ObjectKey>();
@@ -95,6 +96,7 @@ public static class ModuleScriptGenerator
             if (diff.Key.Kind == ObjectKind.Schema)
             {
                 if (diff.Kind == DiffKind.Added && options.CreateMissingSchemas) schemasToAdd.Add(diff.Key);
+                else if (diff.Kind == DiffKind.Removed && options.IncludeDrops) schemasToDrop.Add(diff.Key);
                 else outOfScope.Add(diff.Key);
                 continue;
             }
@@ -166,6 +168,17 @@ public static class ModuleScriptGenerator
 
         foreach (var key in alters.OrderBy(k => k.Kind).ThenBy(k => k.Name, StringComparer.OrdinalIgnoreCase))
             EmitModule(sb, key, result, isCreate: false, included, skipped);
+
+        // Şema silme EN SONDA: içindeki objeler (tablolar ayrı dilimde, modüller yukarıda)
+        // düşürülmüş olur; DROP SCHEMA yalnız boş şemada çalışır.
+        foreach (var schema in schemasToDrop.OrderBy(k => k.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            sb.AppendLine($"IF SCHEMA_ID(N'{Escape(schema.Name)}') IS NOT NULL");
+            sb.AppendLine($"    DROP SCHEMA [{schema.Name}];");
+            sb.AppendLine("GO");
+            sb.AppendLine();
+            included.Add(schema);
+        }
 
         if (options.WrapInTransaction)
         {
