@@ -11,7 +11,7 @@ namespace SchemaDiff.Web;
 
 public sealed class CompareSession
 {
-    private readonly Lock _gate = new();
+    private readonly object _gate = new();   // .NET 8: System.Threading.Lock yok, object ile lock
     private TaskCompletionSource _signal = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly CancellationTokenSource _cts = new();
 
