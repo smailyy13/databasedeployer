@@ -329,35 +329,48 @@ p { margin: 0; }
 .missing { padding: 48px 24px; color: var(--ink-3); text-align: center; font-size: 13px; }
 
 /* ---------- risk / trigger ---------- */
-/* Deployment riski — özet çipleri */
-.risk-summary { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px;
+/* Deployment riski — üstte tıklanabilir filtre çipleri */
+.risk-summary { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 12px;
                 border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 1; }
-.risk-stat { display: flex; flex-direction: column; align-items: center; min-width: 76px;
-             padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); }
-.risk-stat b { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; color: var(--ink); }
-.risk-stat span { font-size: 10px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .03em; margin-top: 3px; }
-.risk-stat.danger { border-color: var(--del); background: var(--del-bg); } .risk-stat.danger b { color: var(--del); }
-.risk-stat.warn { border-color: var(--chg); background: var(--chg-bg); } .risk-stat.warn b { color: var(--chg); }
-.risk-stat.ok { border-color: var(--add); background: var(--add-bg); } .risk-stat.ok b { color: var(--add); }
+.risk-chip { display: inline-flex; align-items: baseline; gap: 7px; cursor: pointer; font: inherit;
+             padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2);
+             color: var(--ink-2); transition: border-color .12s, box-shadow .12s; }
+.risk-chip b { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }
+.risk-chip span { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+.risk-chip:hover { border-color: var(--ink-3); }
+.risk-chip.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); color: var(--ink); }
+.risk-chip.danger b { color: var(--del); }
+.risk-chip.warn b { color: var(--chg); }
+.risk-chip.ok b { color: var(--add); }
 
-/* Risk kartları — tıklanabilir, severity'e göre sol kenar rengi */
-.risk { padding: 10px 14px; border-bottom: 1px solid var(--line-2); border-left: 3px solid transparent; cursor: pointer; }
+/* Risk kartları — yuvarlatılmış kart, severity'e göre sol kenar */
+.risk-list { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.risk { padding: 10px 12px; border: 1px solid var(--line); border-left: 4px solid var(--line);
+        border-radius: 10px; background: var(--panel); cursor: pointer;
+        transition: border-color .12s, box-shadow .12s, background .12s; }
 .risk:hover { background: var(--panel-2); }
-.risk.selected { background: var(--sel); }
+.risk.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); background: var(--sel); }
 .risk.sev-danger { border-left-color: var(--del); }
 .risk.sev-warn, .risk.sev-inplace { border-left-color: var(--chg); }
 .risk.sev-ok { border-left-color: var(--add); }
-.risk-head { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; margin-bottom: 5px; }
-.tag { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+.risk-head { display: flex; gap: 9px; align-items: center; min-width: 0; }
+.risk-kind { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3); font-weight: 600; flex-shrink: 0; }
+.risk-name { font-family: var(--mono); font-size: 12.5px; font-weight: 600; color: var(--ink);
+             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; white-space: nowrap; flex-shrink: 0;
        background: var(--panel-2); border: 1px solid var(--line); color: var(--ink-2); letter-spacing: .02em; }
 .tag.danger { background: var(--del); color: #fff; border-color: transparent; }
 .tag.warn { background: var(--chg-bg); color: var(--chg); border-color: transparent; }
 .tag.ok { background: var(--add-bg); color: var(--add); border-color: transparent; }
 .tag.inplace { background: var(--chg-bg); color: var(--chg); border-color: transparent; }
-.rows { color: var(--ink-3); font-variant-numeric: tabular-nums; font-size: 12px; }
-.finding { display: grid; grid-template-columns: 200px 1fr; gap: 10px;
-           font-family: var(--mono); font-size: 11.5px; padding: 2px 0; }
-.finding span:last-child { color: var(--ink-2); font-family: inherit; }
+.rows { color: var(--ink-3); font-variant-numeric: tabular-nums; font-size: 11.5px; white-space: nowrap; flex-shrink: 0; }
+.findings { margin-top: 8px; display: flex; flex-direction: column; gap: 5px; }
+.finding { display: flex; gap: 8px; align-items: baseline; font-size: 12px; }
+.fdot { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); align-self: center; }
+.fdot.danger { background: var(--del); } .fdot.warn { background: var(--chg); }
+.fdot.ok { background: var(--add); } .fdot.inplace { background: var(--chg); }
+.fcol { font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); flex-shrink: 0; min-width: 84px; }
+.fdesc { color: var(--ink-2); }
 
 table.trg { width: 100%; border-collapse: collapse; }
 table.trg th, table.trg td { padding: 7px 14px; text-align: left; border-bottom: 1px solid var(--line-2); }
