@@ -95,7 +95,8 @@ public sealed record ObjectChangeDto(
 public sealed record RiskFindingDto(string Column, string Risk, string Description, bool Conditional);
 
 public sealed record TableRiskDto(
-    string Schema, string Name, string Risk, bool WillBlock, bool ConditionalOnly, long? Rows, RiskFindingDto[] Findings);
+    string Schema, string Name, string Risk, bool WillBlock, bool ConditionalOnly, long? Rows, RiskFindingDto[] Findings,
+    string Kind = "Table");
 
 public sealed record TriggerDto(string Schema, string Name, bool Disabled, bool? SourceDisabled);
 

@@ -692,4 +692,31 @@ public class DeploymentRiskAnalyzerTests
         Assert.False(risk.WillBlock);
         Assert.Contains(risk.Findings, f => f.Column == "FK_T_P" && f.Risk == DeploymentRisk.Safe);
     }
+
+    [Fact]
+    public void Removed_non_empty_schema_will_block()
+    {
+        // Silinen şema içinde nesne varsa DROP SCHEMA deployment'ta durur → risk üret.
+        var source = Database("dev", []);
+        var target = Database("prod",
+        [
+            Obj(Schema("arch"), 1),
+            Obj(new ObjectKey("arch", "T", ObjectKind.Table), 2, columns: [Column("Id")], rowCount: 0),
+        ]);
+        var risks = DeploymentRiskAnalyzer.Analyze(SchemaComparer.Compare(source, target));
+
+        var schemaRisk = Assert.Single(risks, r => r.Table.Kind == ObjectKind.Schema);
+        Assert.True(schemaRisk.WillBlock);
+        Assert.Contains(schemaRisk.Findings, f => f.Description.Contains("DROP SCHEMA", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Removed_empty_schema_has_no_risk()
+    {
+        var source = Database("dev", []);
+        var target = Database("prod", [Obj(Schema("arch"), 1)]);
+        var risks = DeploymentRiskAnalyzer.Analyze(SchemaComparer.Compare(source, target));
+
+        Assert.DoesNotContain(risks, r => r.Table.Kind == ObjectKind.Schema);
+    }
 }
