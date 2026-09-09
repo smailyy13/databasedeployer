@@ -66,6 +66,7 @@ const I18N = {
     serverRequired: 'Server name is required.', databaseRequired: 'Select a database.',
     startingCompare: 'starting comparison…', couldNotStart: 'Could not start.',
     comparing: 'comparing {source} → {target}…', connectionLost: 'Connection lost.',
+    cancelCompare: 'Cancel', statusCancelled: 'Comparison cancelled.',
     progressLine: '{source} → {target} · %{percent} · {elapsed} elapsed',
     secShort: '{n}s', minShort: '{n}m',
     loadMeta: '%{percent} · {elapsed} elapsed',
@@ -78,7 +79,7 @@ const I18N = {
     notComparedYet: 'No comparison yet.', noDiffForFilters: 'No differences to show with these filters.',
     listLimited: 'List limited to {n} records — there are more.',
     flagIndeterminate: 'INDETERMINATE',
-    pickInfo: '{n} objects selected — will be scripted',
+    pickInfo: '{n} objects selected',
     pickInfoAll: 'Nothing selected → the script will be empty',
     generatedScript: 'Generated script', downloadSql: 'Download .sql', copy: 'Copy',
     dirForward: 'source → target', dirReverse: 'target → source',
@@ -185,6 +186,7 @@ const I18N = {
     serverRequired: 'Sunucu adı zorunlu.', databaseRequired: 'Bir veritabanı seçin.',
     startingCompare: 'karşılaştırma başlatılıyor…', couldNotStart: 'Başlatılamadı.',
     comparing: '{source} → {target} karşılaştırılıyor…', connectionLost: 'Bağlantı koptu.',
+    cancelCompare: 'İptal', statusCancelled: 'Karşılaştırma iptal edildi.',
     progressLine: '{source} → {target} · %{percent} · {elapsed} geçti',
     secShort: '{n}sn', minShort: '{n}dk',
     loadMeta: '%{percent} · {elapsed} geçti',
@@ -197,7 +199,7 @@ const I18N = {
     notComparedYet: 'Henüz karşılaştırma yapılmadı.', noDiffForFilters: 'Bu filtrelerle gösterilecek fark yok.',
     listLimited: 'Liste {n} kayıtla sınırlandı — daha fazlası var.',
     flagIndeterminate: 'BELİRSİZ',
-    pickInfo: '{n} obje seçili — script’e girecek',
+    pickInfo: '{n} obje seçili',
     pickInfoAll: 'Hiçbiri seçili değil → script boş olur',
     generatedScript: 'Üretilen script', downloadSql: '.sql indir', copy: 'Kopyala',
     dirForward: 'kaynak → hedef', dirReverse: 'hedef → kaynak',
@@ -1586,6 +1588,18 @@ $('scOk').addEventListener('click', closeShortcuts);
 $('scScrim').addEventListener('click', closeShortcuts);
 
 $('compareBtn').addEventListener('click', compare);
+
+// Devam eden karşılaştırmayı iptal et: SSE'yi kapat, loading'i durdur, sunucuya iptal bildir.
+async function cancelCompare() {
+  if (!state.compare) return;               // yalnız aktif karşılaştırmada
+  const id = state.runId;
+  state.eventSource?.close();               // manuel kapatma onerror tetiklemez
+  stopLoading();
+  if (id) { try { await fetch(`/api/runs/${id}/cancel`, { method: 'POST' }); } catch { /* yut */ } }
+  setStatus(t('statusCancelled'), 'error');
+  $('compareBtn').disabled = false;
+}
+$('cancelBtn').addEventListener('click', cancelCompare);
 $('showCanonical').addEventListener('change', renderDetail);
 $('prevDiff').addEventListener('click', () => gotoHunk(state.hunkIndex - 1));
 $('nextDiff').addEventListener('click', () => gotoHunk(state.hunkIndex + 1));

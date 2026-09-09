@@ -102,6 +102,15 @@ app.MapGet("/api/runs/{id}", (string id, CompareService compare) =>
     return Results.Ok(new { finished = session.Finished, result = session.Dto });
 });
 
+// Devam eden karşılaştırmayı iptal et. Çekim token'ı işaretlenir, arka plan görevi durur.
+app.MapPost("/api/runs/{id}/cancel", (string id, CompareService compare) =>
+{
+    var session = compare.Get(id);
+    if (session is null) return Results.NotFound();
+    session.Cancel();
+    return Results.Ok(new { cancelled = true });
+});
+
 app.MapGet("/api/runs/{id}/events", async (string id, HttpContext context, CompareService compare, CancellationToken ct) =>
 {
     var session = compare.Get(id);
