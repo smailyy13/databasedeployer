@@ -78,8 +78,9 @@ const I18N = {
     riskS3: '<b>{n}</b> are risky but empty in target → apply cleanly.',
     riskS4: '<b>{n}</b> are low risk → applied in place.',
     riskS5: '<b>{n}</b> have an unreadable row count → check manually.',
-    riskChipTotal: 'affected tables', riskChipBlock: 'will block', riskChipLoss: 'data loss',
-    riskChipClean: 'apply cleanly', riskChipUnknown: 'check manually',
+    riskChipTotal: 'all', riskChipBlock: 'will block', riskChipLoss: 'data loss',
+    riskChipCheck: 'check data', riskChipClean: 'apply cleanly', riskChipUnknown: 'unknown',
+    noRiskInFilter: 'Nothing in this filter.',
     rLabelDataLoss: 'DATA LOSS', rLabelBlock: 'WILL BLOCK', rLabelCheck: 'CHECK DATA', rLabelEmpty: 'empty table',
     rLabelRisky: 'RISKY (row count unreadable)', rLabelInPlace: 'in place', rLabelSafe: 'safe',
     rowsN: '{n} rows', rowsUnknown: '? rows',
@@ -195,8 +196,9 @@ const I18N = {
     riskS3: '<b>{n}</b> tanesi riskli ama hedefte boş → sorunsuz uygulanır.',
     riskS4: '<b>{n}</b> tanesi düşük riskli → yerinde uygulanır.',
     riskS5: '<b>{n}</b> tanesinin satır sayısı okunamadı → elle kontrol edin.',
-    riskChipTotal: 'etkilenen tablo', riskChipBlock: 'bloklanır', riskChipLoss: 'veri kaybı',
-    riskChipClean: 'sorunsuz', riskChipUnknown: 'elle kontrol',
+    riskChipTotal: 'tümü', riskChipBlock: 'bloklanır', riskChipLoss: 'veri kaybı',
+    riskChipCheck: 'kontrol et', riskChipClean: 'sorunsuz', riskChipUnknown: 'bilinmeyen',
+    noRiskInFilter: 'Bu filtrede bir şey yok.',
     rLabelDataLoss: 'VERİ KAYBI', rLabelBlock: 'BLOKLANIR', rLabelCheck: 'KONTROL ET', rLabelEmpty: 'boş tablo',
     rLabelRisky: 'RİSKLİ (satır sayısı okunamadı)', rLabelInPlace: 'yerinde', rLabelSafe: 'güvenli',
     rowsN: '{n} satır', rowsUnknown: '? satır',
@@ -1144,53 +1146,76 @@ function renderRisk() {
   // Önem skoru: veri kaybı > bloklanır > bilinmeyen > yerinde > güvenli.
   const sev = (r) => r.willBlock ? (r.risk === 'DataLoss' ? 4 : 3) : isUnknown(r) ? 2 : (r.risk === 'InPlace' ? 1 : 0);
 
-  const blocking = risks.filter((r) => r.willBlock);
-  const dataLoss = blocking.filter((r) => r.risk === 'DataLoss');
-  const unknown = risks.filter(isUnknown);
-  const clean = risks.length - blocking.length - unknown.length;
+  // Tıklanabilir filtre çipleri: her çip listeyi süzer.
+  const preds = {
+    all: () => true,
+    block: (r) => r.willBlock,
+    loss: (r) => r.willBlock && r.risk === 'DataLoss',
+    check: (r) => r.willBlock && r.conditionalOnly,
+    unknown: isUnknown,
+    ok: (r) => !r.willBlock && !isUnknown(r),
+  };
+  const filter = preds[state.riskFilter] ? state.riskFilter : 'all';
+  const count = (k) => risks.filter(preds[k]).length;
 
-  const chip = (n, key, cls) => `<div class="risk-stat ${cls}"><b>${num(n)}</b><span>${esc(t(key))}</span></div>`;
-  const summary = `<div class="risk-summary">
-      ${chip(risks.length, 'riskChipTotal', 'total')}
-      ${chip(blocking.length, 'riskChipBlock', 'danger')}
-      ${dataLoss.length ? chip(dataLoss.length, 'riskChipLoss', 'danger') : ''}
-      ${clean ? chip(clean, 'riskChipClean', 'ok') : ''}
-      ${unknown.length ? chip(unknown.length, 'riskChipUnknown', 'warn') : ''}
-    </div>`;
+  const chips = [
+    ['all', 'riskChipTotal', 'total'],
+    ['block', 'riskChipBlock', 'danger'],
+    ['loss', 'riskChipLoss', 'danger'],
+    ['check', 'riskChipCheck', 'warn'],
+    ['unknown', 'riskChipUnknown', 'warn'],
+    ['ok', 'riskChipClean', 'ok'],
+  ].filter(([k]) => k === 'all' || count(k) > 0)
+   .map(([k, key, cls]) =>
+     `<button class="risk-chip ${cls}${k === filter ? ' active' : ''}" data-filter="${k}">` +
+     `<b>${num(count(k))}</b><span>${esc(t(key))}</span></button>`).join('');
 
-  // En riskliden en güvenliye sırala; eşitse satır sayısına göre.
-  const sorted = [...risks].sort((a, b) => sev(b) - sev(a) || (b.rows ?? -1) - (a.rows ?? -1));
+  const labelFor = (r) =>
+      r.willBlock && r.conditionalOnly ? ['rLabelCheck', 'warn']
+    : r.willBlock && r.risk === 'DataLoss' ? ['rLabelDataLoss', 'danger']
+    : r.willBlock ? ['rLabelBlock', 'danger']
+    : r.rows === 0 && rank[r.risk] >= 2 ? ['rLabelEmpty', 'ok']
+    : isUnknown(r) ? ['rLabelRisky', 'warn']
+    : r.risk === 'InPlace' ? ['rLabelInPlace', 'inplace']
+    : ['rLabelSafe', 'ok'];
+  const fdot = (risk) => risk === 'DataLoss' ? 'danger' : risk === 'BlockedIfNotEmpty' ? 'warn' : risk === 'InPlace' ? 'inplace' : 'ok';
+
+  const sorted = [...risks]
+    .filter(preds[filter])
+    .sort((a, b) => sev(b) - sev(a) || (b.rows ?? -1) - (a.rows ?? -1));
 
   const cards = sorted.map((r) => {
-    let label = t('rLabelSafe'), tag = 'ok';
-    if (r.willBlock && r.conditionalOnly) { label = t('rLabelCheck'); tag = 'warn'; }
-    else if (r.willBlock && r.risk === 'DataLoss') { label = t('rLabelDataLoss'); tag = 'danger'; }
-    else if (r.willBlock) { label = t('rLabelBlock'); tag = 'danger'; }
-    else if (r.rows === 0 && rank[r.risk] >= 2) { label = t('rLabelEmpty'); tag = 'ok'; }
-    else if (isUnknown(r)) { label = t('rLabelRisky'); tag = 'warn'; }
-    else if (r.risk === 'InPlace') { label = t('rLabelInPlace'); tag = 'inplace'; }
-
+    const [lk, tag] = labelFor(r);
     const kind = r.kind || 'Table';
     const isSchema = kind === 'Schema';
     const key = `${kind}|${r.schema}|${r.name}`;
     const sel = state.selected === key ? ' selected' : '';
-    const heading = isSchema ? `${esc(t('schemaWord'))} [${esc(r.name)}]` : `${esc(r.schema)}.${esc(r.name)}`;
-    const rowsText = isSchema
+    const ident = isSchema ? esc(r.name) : `${esc(r.schema)}.${esc(r.name)}`;
+    const countText = isSchema
       ? esc(t('objectsN', { n: num(r.rows ?? 0) }))
       : (r.rows === null ? esc(t('rowsUnknown')) : esc(t('rowsN', { n: num(r.rows) })));
+    const findings = r.findings.map((f) =>
+      `<div class="finding"><span class="fdot ${fdot(f.risk)}"></span>` +
+      `<span class="fcol">${esc(f.column)}</span><span class="fdesc">${esc(f.description)}</span></div>`).join('');
     return `<div class="risk sev-${tag}${sel}" data-key="${esc(key)}" data-kind="${esc(kind)}" data-schema="${esc(r.schema)}" data-name="${esc(r.name)}">
         <div class="risk-head">
-          <span class="tag ${tag}">${esc(label)}</span>
-          <strong>${heading}</strong>
-          <span class="rows">${rowsText}</span>
+          <span class="tag ${tag}">${esc(t(lk))}</span>
+          <span class="risk-kind">${esc(kind)}</span>
+          <span class="risk-name">${ident}</span>
+          <span class="grow"></span>
+          <span class="rows">${countText}</span>
         </div>
-        ${r.findings.map((f) => `<div class="finding"><span>${esc(f.column)}</span><span>${esc(f.description)}</span></div>`).join('')}
+        <div class="findings">${findings}</div>
       </div>`;
   }).join('');
 
-  wrap.innerHTML = summary + cards;
+  const emptyMsg = sorted.length === 0 ? `<p class="missing">${esc(t('noRiskInFilter'))}</p>` : '';
+  wrap.innerHTML = `<div class="risk-summary">${chips}</div><div class="risk-list">${cards}${emptyMsg}</div>`;
 
-  // Karta tıkla → alt panelde o tablonun detayını aç (ağaçtaki gibi).
+  for (const c of wrap.querySelectorAll('.risk-chip'))
+    c.addEventListener('click', () => { state.riskFilter = c.dataset.filter; renderRisk(); });
+
+  // Karta tıkla → alt panelde o objenin detayını aç (ağaçtaki gibi).
   for (const el of wrap.querySelectorAll('.risk'))
     el.addEventListener('click', () => {
       state.selected = el.dataset.key;
