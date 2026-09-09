@@ -83,6 +83,8 @@ const I18N = {
     rLabelDataLoss: 'DATA LOSS', rLabelBlock: 'WILL BLOCK', rLabelCheck: 'CHECK DATA', rLabelEmpty: 'empty table',
     rLabelRisky: 'RISKY (row count unreadable)', rLabelInPlace: 'in place', rLabelSafe: 'safe',
     rowsN: '{n} rows', rowsUnknown: '? rows',
+    objectsN: '{n} objects', schemaWord: 'Schema',
+    riskWarn: '{n} change(s) will likely fail at deployment — see Deployment risk',
     noTriggers: 'No triggers found.',
     triggerMismatch: '<b>{n}</b> triggers differ in state between the two environments — highlighted below.',
     thTrigger: 'Trigger', thTarget: 'Target', thSource: 'Source', stateOff: 'DISABLED', stateOn: 'enabled',
@@ -198,6 +200,8 @@ const I18N = {
     rLabelDataLoss: 'VERİ KAYBI', rLabelBlock: 'BLOKLANIR', rLabelCheck: 'KONTROL ET', rLabelEmpty: 'boş tablo',
     rLabelRisky: 'RİSKLİ (satır sayısı okunamadı)', rLabelInPlace: 'yerinde', rLabelSafe: 'güvenli',
     rowsN: '{n} satır', rowsUnknown: '? satır',
+    objectsN: '{n} nesne', schemaWord: 'Şema',
+    riskWarn: '{n} değişiklik deployment’ta büyük olasılıkla geçmeyecek — Dağıtım riskleri’ne bak',
     noTriggers: 'Trigger bulunamadı.',
     triggerMismatch: '<b>{n}</b> trigger\'ın durumu iki ortamda farklı — aşağıda vurgulandı.',
     thTrigger: 'Trigger', thTarget: 'Hedef', thSource: 'Kaynak', stateOff: 'PASİF', stateOn: 'aktif',
@@ -1112,6 +1116,15 @@ function renderCounts() {
   badge.textContent = num(blocking);
   badge.dataset.zero = blocking === 0 ? '1' : '0';
 
+  // Deployment'ta geçmeyeceğini bildiğimiz değişiklikler için tıklanabilir uyarı şeridi.
+  const warn = $('riskWarn');
+  if (blocking > 0) {
+    warn.innerHTML = `⚠ ${esc(t('riskWarn', { n: num(blocking) }))}`;
+    warn.hidden = false;
+  } else {
+    warn.hidden = true;
+  }
+
   const types = [...new Set((r?.changes ?? []).map((c) => c.objectType))].sort();
   const current = $('typeFilter').value;
   $('typeFilter').innerHTML = `<option value="">${esc(t('allTypes'))}</option>` +
@@ -1157,13 +1170,19 @@ function renderRisk() {
     else if (isUnknown(r)) { label = t('rLabelRisky'); tag = 'warn'; }
     else if (r.risk === 'InPlace') { label = t('rLabelInPlace'); tag = 'inplace'; }
 
-    const key = `Table|${r.schema}|${r.name}`;
+    const kind = r.kind || 'Table';
+    const isSchema = kind === 'Schema';
+    const key = `${kind}|${r.schema}|${r.name}`;
     const sel = state.selected === key ? ' selected' : '';
-    return `<div class="risk sev-${tag}${sel}" data-key="${esc(key)}" data-schema="${esc(r.schema)}" data-name="${esc(r.name)}">
+    const heading = isSchema ? `${esc(t('schemaWord'))} [${esc(r.name)}]` : `${esc(r.schema)}.${esc(r.name)}`;
+    const rowsText = isSchema
+      ? esc(t('objectsN', { n: num(r.rows ?? 0) }))
+      : (r.rows === null ? esc(t('rowsUnknown')) : esc(t('rowsN', { n: num(r.rows) })));
+    return `<div class="risk sev-${tag}${sel}" data-key="${esc(key)}" data-kind="${esc(kind)}" data-schema="${esc(r.schema)}" data-name="${esc(r.name)}">
         <div class="risk-head">
           <span class="tag ${tag}">${esc(label)}</span>
-          <strong>${esc(r.schema)}.${esc(r.name)}</strong>
-          <span class="rows">${r.rows === null ? esc(t('rowsUnknown')) : esc(t('rowsN', { n: num(r.rows) }))}</span>
+          <strong>${heading}</strong>
+          <span class="rows">${rowsText}</span>
         </div>
         ${r.findings.map((f) => `<div class="finding"><span>${esc(f.column)}</span><span>${esc(f.description)}</span></div>`).join('')}
       </div>`;
@@ -1175,7 +1194,7 @@ function renderRisk() {
   for (const el of wrap.querySelectorAll('.risk'))
     el.addEventListener('click', () => {
       state.selected = el.dataset.key;
-      loadDetail(el.dataset.schema, el.dataset.name, 'Table');
+      loadDetail(el.dataset.schema, el.dataset.name, el.dataset.kind || 'Table');
       renderRisk();
     });
 }
@@ -1842,14 +1861,17 @@ $('scriptCopyBtn').addEventListener('click', async () => {
 $('typeFilter').addEventListener('change', renderTree);
 $('search').addEventListener('input', renderTree);
 
-for (const tab of document.querySelectorAll('.vtab')) {
-  tab.addEventListener('click', () => {
-    for (const other of document.querySelectorAll('.vtab')) other.classList.toggle('active', other === tab);
-    $('treeWrap').hidden = tab.dataset.view !== 'tree';
-    $('riskWrap').hidden = tab.dataset.view !== 'risk';
-    $('gridhead').hidden = tab.dataset.view !== 'tree';
-  });
+function showView(view) {
+  for (const other of document.querySelectorAll('.vtab')) other.classList.toggle('active', other.dataset.view === view);
+  $('treeWrap').hidden = view !== 'tree';
+  $('riskWrap').hidden = view !== 'risk';
+  $('gridhead').hidden = view !== 'tree';
 }
+for (const tab of document.querySelectorAll('.vtab'))
+  tab.addEventListener('click', () => showView(tab.dataset.view));
+
+// Uyarı şeridine tıkla → Dağıtım riskleri sekmesine geç.
+$('riskWarn').addEventListener('click', () => showView('risk'));
 
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;

@@ -11,7 +11,7 @@ namespace SchemaDiff.Web;
 
 public sealed class CompareSession
 {
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private TaskCompletionSource _signal = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public required string Id { get; init; }
@@ -194,7 +194,8 @@ public sealed class CompareService
             .Select(r => new TableRiskDto(
                 r.Table.Schema, r.Table.Name, r.Risk.ToString(), r.WillBlock, r.ConditionalOnly, r.TargetRowCount,
                 [.. r.Findings.OrderByDescending(f => f.Risk)
-                    .Select(f => new RiskFindingDto(f.Column, f.Risk.ToString(), f.Description, f.Conditional))]))
+                    .Select(f => new RiskFindingDto(f.Column, f.Risk.ToString(), f.Description, f.Conditional))],
+                r.Table.Kind.ToString()))
             .ToArray();
 
         var triggers = comparison.Target.Objects.Values
