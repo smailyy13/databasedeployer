@@ -84,7 +84,7 @@ const I18N = {
     rLabelRisky: 'RISKY (row count unreadable)', rLabelInPlace: 'in place', rLabelSafe: 'safe',
     rowsN: '{n} rows', rowsUnknown: '? rows',
     objectsN: '{n} objects', schemaWord: 'Schema',
-    riskWarn: '{n} change(s) will likely fail at deployment — see Deployment risk',
+    riskWarnRow: 'Will likely fail at deployment — click to show in Deployment risk',
     noTriggers: 'No triggers found.',
     triggerMismatch: '<b>{n}</b> triggers differ in state between the two environments — highlighted below.',
     thTrigger: 'Trigger', thTarget: 'Target', thSource: 'Source', stateOff: 'DISABLED', stateOn: 'enabled',
@@ -201,7 +201,7 @@ const I18N = {
     rLabelRisky: 'RİSKLİ (satır sayısı okunamadı)', rLabelInPlace: 'yerinde', rLabelSafe: 'güvenli',
     rowsN: '{n} satır', rowsUnknown: '? satır',
     objectsN: '{n} nesne', schemaWord: 'Şema',
-    riskWarn: '{n} değişiklik deployment’ta büyük olasılıkla geçmeyecek — Dağıtım riskleri’ne bak',
+    riskWarnRow: 'Deployment’ta büyük olasılıkla geçmez — Dağıtım risklerinde göstermek için tıkla',
     noTriggers: 'Trigger bulunamadı.',
     triggerMismatch: '<b>{n}</b> trigger\'ın durumu iki ortamda farklı — aşağıda vurgulandı.',
     thTrigger: 'Trigger', thTarget: 'Hedef', thSource: 'Kaynak', stateOff: 'PASİF', stateOn: 'aktif',
@@ -930,7 +930,9 @@ function objectRow(change, objKey) {
       <input type="checkbox" class="pick" data-pick="${esc(objKey)}" ${state.checked.has(objKey) ? 'checked' : ''}>
       <span class="act ${change.action}">${ACTION_ICON[change.action]}</span>
     </span>
-    <span class="c-name">${change.action === 'Add' ? '' : esc(full)}${flag}</span>
+    <span class="c-name">${change.action === 'Add' ? '' : esc(full)}${flag}${change.willBlock
+      ? `<button class="warn-jump" data-warn="${esc(objKey)}" title="${esc(t('riskWarnRow'))}" aria-label="${esc(t('riskWarnRow'))}">⚠</button>`
+      : ''}</span>
     ${state.checked.has(objKey)
       ? `<button class="rev${state.reversed.has(objKey) ? ' on' : ''}" data-rev="${esc(objKey)}" title="${esc(t('reverseTip'))}" aria-label="${esc(t('reverseTip'))}">⇄</button>`
       : ''}
@@ -1017,6 +1019,13 @@ function bindTree(tree) {
       const key = btn.dataset.rev;
       state.reversed.has(key) ? state.reversed.delete(key) : state.reversed.add(key);
       renderTree();
+    });
+
+  // ⚠ : bu değişiklik deployment'ta bloklanır → Dağıtım riskleri sekmesine götür ve orada seç.
+  for (const btn of tree.querySelectorAll('.warn-jump'))
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      jumpToRisk(btn.dataset.warn);
     });
 
   for (const el of tree.querySelectorAll('.row-obj, .row-child'))
@@ -1116,15 +1125,6 @@ function renderCounts() {
   badge.textContent = num(blocking);
   badge.dataset.zero = blocking === 0 ? '1' : '0';
 
-  // Deployment'ta geçmeyeceğini bildiğimiz değişiklikler için tıklanabilir uyarı şeridi.
-  const warn = $('riskWarn');
-  if (blocking > 0) {
-    warn.innerHTML = `⚠ ${esc(t('riskWarn', { n: num(blocking) }))}`;
-    warn.hidden = false;
-  } else {
-    warn.hidden = true;
-  }
-
   const types = [...new Set((r?.changes ?? []).map((c) => c.objectType))].sort();
   const current = $('typeFilter').value;
   $('typeFilter').innerHTML = `<option value="">${esc(t('allTypes'))}</option>` +
@@ -1197,6 +1197,15 @@ function renderRisk() {
       loadDetail(el.dataset.schema, el.dataset.name, el.dataset.kind || 'Table');
       renderRisk();
     });
+}
+
+// Sonuç satırındaki ⚠ → Dağıtım riskleri sekmesine geç, ilgili kartı seç ve göster.
+function jumpToRisk(objKey) {
+  state.selected = objKey;
+  showView('risk');
+  renderRisk();
+  const card = [...document.querySelectorAll('#riskWrap .risk')].find((c) => c.dataset.key === objKey);
+  card?.scrollIntoView({ block: 'center' });
 }
 
 function renderAll() {
@@ -1869,9 +1878,6 @@ function showView(view) {
 }
 for (const tab of document.querySelectorAll('.vtab'))
   tab.addEventListener('click', () => showView(tab.dataset.view));
-
-// Uyarı şeridine tıkla → Dağıtım riskleri sekmesine geç.
-$('riskWarn').addEventListener('click', () => showView('risk'));
 
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
