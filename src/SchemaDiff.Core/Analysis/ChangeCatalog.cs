@@ -104,6 +104,14 @@ public static class ChangeCatalog
             children.Add(new ChildChange(action, "Columns", "Column", column.Name,
                 $"{key.Schema}.{key.Name}.{column.Name}",
                 $"{column.TypeDisplay} {(column.IsNullable ? "NULL" : "NOT NULL")}"));
+
+            // Kolonun DEFAULT constraint'i, tablo tümden eklenirken/silinirken de kendi
+            // kategorisinde görünsün (SSMS'in "Constraints" klasörüyle tutarlı).
+            if (column.DefaultDefinition is not null)
+                children.Add(new ChildChange(action, "Default Constraints", "Default Constraint",
+                    column.DefaultName ?? "(default)",
+                    $"{key.Schema}.{column.DefaultName ?? column.Name}",
+                    $"DEFAULT {column.DefaultDefinition}"));
         }
 
         foreach (var part in new[] { "indexes", "statistics", "xmlIndexes", "spatialIndexes", "fullText", "checks", "foreignKeys" })
@@ -257,6 +265,12 @@ public static class ChangeCatalog
             var detail = DescribeColumnChange(existing, column);
             if (detail is not null)
                 yield return new ChildChange(ChangeAction.Change, "Columns", "Column", column.Name, qualified, detail);
+
+            // DEFAULT constraint kolona gömülü tutulmaz: diğer constraint türleri (CHECK/FK/PK)
+            // gibi kendi kategorisinde ayrı bir öğe olarak verilir — hedefte olup kaynakta yoksa
+            // "Delete" olarak görünür (SSMS'teki "Constraints" klasörüyle aynı okunur).
+            var dc = CompareColumnDefault(key, existing, column);
+            if (dc is not null) yield return dc;
         }
 
         foreach (var column in target)
@@ -266,6 +280,37 @@ public static class ChangeCatalog
                     $"{key.Schema}.{key.Name}.{column.Name}",
                     $"{column.TypeDisplay} {(column.IsNullable ? "NULL" : "NOT NULL")}");
         }
+    }
+
+    /// <summary>
+    /// İki tarafta da var olan bir kolonun DEFAULT constraint farkını "Default Constraints"
+    /// kategorisinde tek öğe olarak döndürür (yoksa null). <paramref name="target"/> hedefin
+    /// (mevcut) hâli, <paramref name="source"/> kaynağın (olması gereken) hâli. Kolonun kendisi
+    /// eklenip/silindiğinde default o kolonla birlikte gider; burası yalnız ortak kolonlar içindir.
+    /// Ad-yalnız farkı bilinçli olarak yok sayılır: sistem üretimi adlar ortamlar arası değişir
+    /// ve kanonik/hash zaten gerçek farkı belirlemiştir — tanım eşitse gürültü üretme.
+    /// </summary>
+    private static ChildChange? CompareColumnDefault(ObjectKey key, ColumnInfo target, ColumnInfo source)
+    {
+        var srcHas = source.DefaultDefinition is not null;
+        var tgtHas = target.DefaultDefinition is not null;
+        if (!srcHas && !tgtHas) return null;
+
+        var name = (srcHas ? source.DefaultName : target.DefaultName) ?? "(default)";
+        var qualified = $"{key.Schema}.{name}";
+
+        if (srcHas && !tgtHas)
+            return new ChildChange(ChangeAction.Add, "Default Constraints", "Default Constraint",
+                name, qualified, $"DEFAULT {source.DefaultDefinition}");
+
+        if (!srcHas && tgtHas)
+            return new ChildChange(ChangeAction.Delete, "Default Constraints", "Default Constraint",
+                name, qualified, $"DEFAULT {target.DefaultDefinition}");
+
+        return string.Equals(target.DefaultDefinition, source.DefaultDefinition, StringComparison.Ordinal)
+            ? null
+            : new ChildChange(ChangeAction.Change, "Default Constraints", "Default Constraint",
+                name, qualified, $"DEFAULT {target.DefaultDefinition} → {source.DefaultDefinition}");
     }
 
     /// <param name="target">Şu anki hedef hâli.</param>
@@ -302,8 +347,9 @@ public static class ChangeCatalog
         if (!string.Equals(target.Collation, source.Collation, StringComparison.OrdinalIgnoreCase))
             parts.Add($"collation {target.Collation ?? "-"} → {source.Collation ?? "-"}");
 
-        if (!string.Equals(target.DefaultDefinition, source.DefaultDefinition, StringComparison.Ordinal))
-            parts.Add($"DEFAULT {target.DefaultDefinition ?? "yok"} → {source.DefaultDefinition ?? "yok"}");
+        // DEFAULT constraint burada DEĞİL: "Default Constraints" kategorisinde ayrı öğe olarak
+        // raporlanır (CompareColumnDefault). Kolon satırına gömmek onu "silinecek constraint"
+        // olarak görünmez kılıyordu.
 
         return parts.Count == 0 ? null : string.Join(", ", parts);
     }
