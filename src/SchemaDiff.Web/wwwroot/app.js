@@ -463,7 +463,7 @@ const state = {
 
 // Ağaçtaki klasör sırası — SSDT'nin gösterdiği sırayla aynı.
 const CATEGORY_ORDER = ['Columns', 'Primary Key', 'Unique Constraints', 'Indexes',
-                        'Foreign Keys', 'Check Constraints', 'Properties'];
+                        'Foreign Keys', 'Check Constraints', 'Default Constraints', 'Properties'];
 
 // Tür alt-grupları bu mantıksal sırayla dizilir (TYPE_TR anahtar sırası). Listede
 // olmayan tür sona alınır, kendi aralarında alfabetik.
