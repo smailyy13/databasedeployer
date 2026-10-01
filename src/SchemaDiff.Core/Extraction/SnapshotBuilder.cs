@@ -633,7 +633,13 @@ internal static class SnapshotBuilder
 
                 case ObjectKind.View:
                     ApplyModule(snapshot, obj.ObjectId, modulesById, normalizedBodies, options);
-                    SetPart(snapshot, "columns", BuildColumns(columnsBy.GetValueOrDefault(obj.ObjectId), xmlCollections, options));
+                    // View kolonları TÜRETİLMİŞTİR: tip/len/prec/scale view'ın kendi tanımından
+                    // değil, SELECT'in beslediği base obje(ler)den gelir. View gövdesi aynıyken
+                    // bunların farklı olması, base'deki bir farkın yansımasıdır — view'ın kendisi
+                    // için deploy edilecek bir şey yoktur (CREATE VIEW metni aynı; ALTER ile
+                    // düzeltilemez). Bu yüzden view karşılaştırması GÖVDEYE göre yapılır;
+                    // türetilmiş kolon metadata'sı hash'e girmez (SSDT de böyle davranır).
+                    // Gerçek fark base tabloda/view'da kendi karşılaştırmasında yakalanır.
                     SetPartFoldNames(snapshot, "indexes", BuildIndexes(obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, canonicalColumnNames, indexExtrasBy, options), options);
                     // Indexed view'larda kullanıcı istatistiği olabilir: farkı GÖRÜNÜR kılıyoruz.
                     // Script'i view'ın kendi drop+create'i üzerinden gider (tablo yolu değil).
