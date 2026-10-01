@@ -115,9 +115,18 @@ internal static class SnapshotBuilder
         foreach (var o in catalog.Objects)
             keyById[o.ObjectId] = new ObjectKey(o.SchemaName, o.Name, ObjectKindMap.FromSysType(o.Type));
 
-        // (objectId, columnId) → kolon adı. Index ve FK kanonikleştirmesi buna dayanıyor.
+        // (objectId, columnId) → kolon adı (HAM). Display script'i (scriptSources.ColumnNames)
+        // bunu kullanır; gösterilen SQL'de kolonlar gerçek yazımıyla görünsün.
         var columnNames = new Dictionary<long, string>(catalog.Columns.Count);
         foreach (var c in catalog.Columns) columnNames[Pair(c.ObjectId, c.ColumnId)] = c.Name;
+
+        // Kanonik (hash) karşılaştırma için kolon adları: harfe DUYARSIZ modda küçük harfe
+        // indirilir ki index/PK/FK/istatistik kolon REFERANSLARI da BuildColumns ile tutarlı
+        // olsun. Yoksa yalnız adın yazımı değişen ([CustomerShareholderNk] ↔
+        // [CustomerShareHolderNk]) bir tablo, index kanoniği yüzünden boşuna "değişti" görünür.
+        var canonicalColumnNames = options.CaseSensitiveColumnNames
+            ? columnNames
+            : columnNames.ToDictionary(kv => kv.Key, kv => kv.Value.ToLowerInvariant());
 
         // Tipli XML kolonları id tutar, ad tutmaz: id ortamlar arasında farklıdır, bu yüzden
         // karşılaştırmaya da script'e de ADI girer.
@@ -606,18 +615,18 @@ internal static class SnapshotBuilder
                             obj.ObjectId, spatialIndexesBy, indexColumnsBy, columnNames);
                     }
                     SetPart(snapshot, "columns", BuildColumns(columnsBy.GetValueOrDefault(obj.ObjectId), xmlCollections, options));
-                    SetPart(snapshot, "indexes", BuildIndexes(obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, columnNames, indexExtrasBy, options));
-                    SetPart(snapshot, "statistics", BuildStatistics(obj.ObjectId, statisticsBy, statisticColumnsBy, columnNames, options));
-                    SetPart(snapshot, "fullText", BuildFullText(obj.ObjectId, fullTextById, fullTextColumnsBy, columnNames));
-                    SetPart(snapshot, "xmlIndexes", BuildSpecialIndexes(
-                        BuildXmlIndexDefinitions(obj.ObjectId, xmlIndexesBy, indexColumnsBy, columnNames)
+                    SetPartFoldNames(snapshot, "indexes", BuildIndexes(obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, canonicalColumnNames, indexExtrasBy, options), options);
+                    SetPartFoldNames(snapshot, "statistics", BuildStatistics(obj.ObjectId, statisticsBy, statisticColumnsBy, canonicalColumnNames, options), options);
+                    SetPart(snapshot, "fullText", BuildFullText(obj.ObjectId, fullTextById, fullTextColumnsBy, canonicalColumnNames));
+                    SetPartFoldNames(snapshot, "xmlIndexes", BuildSpecialIndexes(
+                        BuildXmlIndexDefinitions(obj.ObjectId, xmlIndexesBy, indexColumnsBy, canonicalColumnNames)
                             .Select(x => $"xmlIdx|{x.Name}|col={x.Column}|primary={(x.IsPrimary ? '1' : '0')}" +
-                                         $"|for={x.SecondaryType ?? "-"}|using={x.PrimaryIndexName ?? "-"}")));
-                    SetPart(snapshot, "spatialIndexes", BuildSpecialIndexes(
-                        BuildSpatialIndexDefinitions(obj.ObjectId, spatialIndexesBy, indexColumnsBy, columnNames)
-                            .Select(SpatialCanonical)));
-                    SetPart(snapshot, "checks", BuildChecks(checksBy.GetValueOrDefault(obj.ObjectId), options));
-                    SetPart(snapshot, "foreignKeys", BuildForeignKeys(foreignKeysBy.GetValueOrDefault(obj.ObjectId), fkColumnsBy, columnNames, keyById, options));
+                                         $"|for={x.SecondaryType ?? "-"}|using={x.PrimaryIndexName ?? "-"}")), options);
+                    SetPartFoldNames(snapshot, "spatialIndexes", BuildSpecialIndexes(
+                        BuildSpatialIndexDefinitions(obj.ObjectId, spatialIndexesBy, indexColumnsBy, canonicalColumnNames)
+                            .Select(SpatialCanonical)), options);
+                    SetPartFoldNames(snapshot, "checks", BuildChecks(checksBy.GetValueOrDefault(obj.ObjectId), options), options);
+                    SetPartFoldNames(snapshot, "foreignKeys", BuildForeignKeys(foreignKeysBy.GetValueOrDefault(obj.ObjectId), fkColumnsBy, canonicalColumnNames, keyById, options), options);
                     if (temporalById.TryGetValue(obj.ObjectId, out var temporal))
                         SetPart(snapshot, "temporal", BuildTemporal(temporal));
                     break;
@@ -625,10 +634,10 @@ internal static class SnapshotBuilder
                 case ObjectKind.View:
                     ApplyModule(snapshot, obj.ObjectId, modulesById, normalizedBodies, options);
                     SetPart(snapshot, "columns", BuildColumns(columnsBy.GetValueOrDefault(obj.ObjectId), xmlCollections, options));
-                    SetPart(snapshot, "indexes", BuildIndexes(obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, columnNames, indexExtrasBy, options));
+                    SetPartFoldNames(snapshot, "indexes", BuildIndexes(obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, canonicalColumnNames, indexExtrasBy, options), options);
                     // Indexed view'larda kullanıcı istatistiği olabilir: farkı GÖRÜNÜR kılıyoruz.
                     // Script'i view'ın kendi drop+create'i üzerinden gider (tablo yolu değil).
-                    SetPart(snapshot, "statistics", BuildStatistics(obj.ObjectId, statisticsBy, statisticColumnsBy, columnNames, options));
+                    SetPartFoldNames(snapshot, "statistics", BuildStatistics(obj.ObjectId, statisticsBy, statisticColumnsBy, canonicalColumnNames, options), options);
                     break;
 
                 case ObjectKind.Trigger:
@@ -850,7 +859,7 @@ internal static class SnapshotBuilder
             {
                 sb.Append("|default=");
                 if (!(options.IgnoreSystemNamedConstraints && c.DefaultIsSystemNamed == true))
-                    sb.Append(c.DefaultName);
+                    sb.Append(FoldName(c.DefaultName ?? string.Empty, options));
                 sb.Append(':').Append(c.DefaultDefinition);
             }
 
@@ -1200,7 +1209,7 @@ internal static class SnapshotBuilder
         {
             var name = options.IgnoreSystemNamedConstraints && fk.IsSystemNamed ? "(system-named)" : fk.Name;
             var referenced = keyById.TryGetValue(fk.ReferencedObjectId, out var refKey)
-                ? $"[{refKey.Schema}].[{refKey.Name}]"
+                ? $"[{FoldName(refKey.Schema, options)}].[{FoldName(refKey.Name, options)}]"
                 : $"#{fk.ReferencedObjectId}";
 
             var columns = (fkColumnsBy.GetValueOrDefault(fk.ObjectId) ?? [])
@@ -1776,6 +1785,38 @@ internal static class SnapshotBuilder
     }
 
     /// <summary>
+    /// <see cref="SetPart"/> gibi, ama hash'i satır ADINI (fields[1]) küçük harfe indirerek
+    /// hesaplar — PartCanonical HAM kalır (ağaçta index/constraint adı gerçek yazımıyla görünür).
+    /// Böylece harfe duyarsız modda yalnız yazımı değişen adlar ([UCIDX_...holder...] ↔
+    /// [...Holder...]) hash'i değiştirip objeyi boşuna "Change" göstermez. Yalnız ad token'ı
+    /// katlanır; değerler (tanım/ifade/kolon listesi) olduğu gibi hash'e girer, böylece gerçek
+    /// değer farkları maskelenmez.
+    /// </summary>
+    private static void SetPartFoldNames(ObjectSnapshot snapshot, string name, string canonical, SnapshotOptions options)
+    {
+        if (canonical.Length == 0) return;
+        snapshot.PartCanonical[name] = canonical;
+        snapshot.Parts[name] = Hash.Of(options.CaseSensitiveNames ? canonical : FoldLineNames(canonical));
+    }
+
+    /// <summary>Kanonik metindeki her satırın ad alanını (ilk "|" ayracından sonraki token)
+    /// küçük harfe indirir; satırın geri kalanı (değerler) değişmez. Yalnız hash girdisi için.</summary>
+    private static string FoldLineNames(string canonical)
+    {
+        var lines = canonical.Split('\n');
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var f = lines[i].Split('|');
+            if (f.Length >= 2 && f[1].Length > 0)
+            {
+                f[1] = f[1].ToLowerInvariant();
+                lines[i] = string.Join('|', f);
+            }
+        }
+        return string.Join('\n', lines);
+    }
+
+    /// <summary>
     /// Kullanıcı için okunur CREATE USER (detay paneli + script). Windows/AD principal'ları
     /// (U/G/E/X) ad ile eşleşir; SQL kullanıcısı (S) için login eşlemesi ortama özgü olduğundan
     /// WITHOUT LOGIN üretilir (DBA sonradan login'e bağlar).
@@ -1805,6 +1846,13 @@ internal static class SnapshotBuilder
 
     private static string Column(Dictionary<long, string> names, int objectId, int columnId) =>
         names.GetValueOrDefault(Pair(objectId, columnId), $"#{columnId}");
+
+    /// <summary>Harfe DUYARSIZ ad modunda (CaseSensitiveNames kapalı) bir tanımlayıcı adını
+    /// küçük harfe indirir. Index/constraint/istatistik adları çoğu kez tablo adını içerir
+    /// (UCIDX_&lt;Tablo&gt;); yalnız yazımı değişen bir obje (CustomerShareholderKey ↔
+    /// CustomerShareHolderKey) bu adlar yüzünden kanonikte boşuna "değişti" görünmesin.</summary>
+    private static string FoldName(string name, SnapshotOptions options) =>
+        options.CaseSensitiveNames ? name : name.ToLowerInvariant();
 
     private static char Flag(bool value) => value ? '1' : '0';
 
