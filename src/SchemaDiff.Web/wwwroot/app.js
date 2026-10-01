@@ -85,7 +85,6 @@ const I18N = {
     dirForward: 'source → target', dirReverse: 'target → source',
     emptyScriptInfo: 'No changes in this direction.',
     scriptReady: 'Script ready — review/edit, then download', scriptCopied: 'Script copied to clipboard',
-    scriptPlainMode: 'Large script ({lines} lines) — syntax highlighting and autocomplete are off for speed. Editing, download and copy still work.',
     scriptTooBig: 'Script is too large to show here ({size}, {lines} lines). Use Download or Copy below.',
     sqlDownloaded: 'Downloaded {file}', selectGroupTip: 'Select / clear all {g}',
     selectTypeTip: 'Select / clear all {g} objects',
@@ -208,7 +207,6 @@ const I18N = {
     dirForward: 'kaynak → hedef', dirReverse: 'hedef → kaynak',
     emptyScriptInfo: 'Bu yönde değişiklik yok.',
     scriptReady: 'Script hazır — gözden geçir/düzenle, sonra indir', scriptCopied: 'Script panoya kopyalandı',
-    scriptPlainMode: 'Büyük script ({lines} satır) — hız için renklendirme ve otomatik tamamlama kapalı. Düzenleme, indirme ve kopyalama çalışıyor.',
     scriptTooBig: 'Script burada gösterilemeyecek kadar büyük ({size}, {lines} satır). Aşağıdan İndir ya da Kopyala kullanın.',
     sqlDownloaded: 'İndirildi: {file}', selectGroupTip: 'Tüm {g} objelerini seç / kaldır',
     selectTypeTip: 'Tüm {g} objelerini seç / kaldır',
@@ -1817,28 +1815,15 @@ $('scriptBtn').addEventListener('click', () => {
   generateScripts(forwardSel, reverseSel);
 });
 
-// Bir yönün özet satırı; içerik yoksa "değişiklik yok".
-function scriptInfoLine(selLen, data) {
-  if (!data.sql || !data.sql.trim()) return t('emptyScriptInfo');
-  const parts = [selLen > 0
-    ? t('scriptIncluded', { n: num(data.included), sel: num(selLen) })
-    : t('scriptIncludedAll', { n: num(data.included) })];
-  if (!state.options.blockDataLoss) parts.push(t('dataLossIncluded'));
-  if ((data.dataLossActions || []).length) parts.push(t('stillGated', { n: num(data.dataLossActions.length) }));
-  if (data.outOfScope > 0) parts.push(t('outOfScopeN', { n: num(data.outOfScope) }));
-  if ((data.skipped || []).length) parts.push(t('skippedN', { n: num(data.skipped.length) }));
-  return parts.join(' · ');
-}
-
 // ---- üretilen script editörü (renkli + düzenlenebilir + indir + yerel oto-tamamlama) ----
 let scriptFileName = 'script.sql';
 let gutterLines = -1;
 
-// Büyük script eşiği: çok sayıda satırı renklendirip DOM'a basmak tarayıcıyı kilitler.
-// PLAIN üstünde: renklendirme + oto-tamamlama kapalı (düz textarea, düzenlenebilir).
-// VIEW üstünde: textarea'ya hiç yüklenmez; yalnız İndir/Kopyala (metin bellekte tutulur).
-const SCRIPT_PLAIN_LIMIT = 200_000;      // ~200 KB
-const SCRIPT_VIEW_LIMIT  = 2_000_000;    // ~2 MB
+// Büyük script eşiği: renkli editörün açılması ~3 sn'yi aşan script'leri editöre hiç
+// yüklemeyiz — tarayıcıyı kilitler. Süre byte değil TOKEN yoğunluğuna bağlı; yoğun T-SQL'de
+// (ALTER/ADD/[köşeli] bol) ~500 KB ≈ 2-3 sn. Bu boyutun üstünde yalnız İndir/Kopyala sunulur
+// (metin bellekte tutulur). Altında her zaman tam renkli + düzenlenebilir editör.
+const SCRIPT_MAX_RENDER = 500_000;       // ~500 KB
 
 function countLines(s) { let n = 1; for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) === 10) n++; return n; }
 function formatBytes(n) {
@@ -1872,8 +1857,8 @@ function openScriptEditor(fwdLen, revLen, forward, reverse) {
   const fwdEmpty = !(forward.sql && forward.sql.trim());
   const revEmpty = !(reverse.sql && reverse.sql.trim());
   state.scriptDirs = {
-    forward: { sql: forward.sql || '', fileName: forward.fileName || 'script.sql', info: scriptInfoLine(fwdLen, forward), empty: fwdEmpty },
-    reverse: { sql: reverse.sql || '', fileName: reverse.fileName || 'reverse.sql', info: scriptInfoLine(revLen, reverse), empty: revEmpty },
+    forward: { sql: forward.sql || '', fileName: forward.fileName || 'script.sql', empty: fwdEmpty },
+    reverse: { sql: reverse.sql || '', fileName: reverse.fileName || 'reverse.sql', empty: revEmpty },
   };
   // Boş yönü etikette ∅ ile belli et (her iki sekme için).
   const fwdTab = document.querySelector('#scriptDialog .stab[data-dir="forward"]');
@@ -1895,11 +1880,9 @@ function showScriptDir(dir) {
   state.scriptActiveDir = dir;
   for (const b of document.querySelectorAll('#scriptDialog .stab')) b.classList.toggle('active', b.dataset.dir === dir);
   scriptFileName = d.fileName;
-  $('scriptInfo').textContent = d.info || '';
 
   const len = d.sql.length;
-  state.scriptHuge = len > SCRIPT_VIEW_LIMIT;
-  state.scriptPlain = len > SCRIPT_PLAIN_LIMIT;   // "huge" de düz moddur (üst küme)
+  state.scriptHuge = len > SCRIPT_MAX_RENDER;
 
   const ta = $('codeInput'), hl = $('codeHl'), note = $('scriptBigNote'), editor = $('codeEditor');
   gutterLines = -1;
@@ -1913,24 +1896,12 @@ function showScriptDir(dir) {
     return;
   }
 
+  // Normal: her zaman tam renkli + düzenlenebilir editör.
+  note.hidden = true;
   editor.hidden = false;
   ta.value = d.sql;
   ta.scrollTop = 0;
-
-  if (state.scriptPlain) {
-    // Büyük ama görüntülenebilir: renklendirme + oto-tamamlama kapalı (düz textarea).
-    hl.innerHTML = '';
-    const lines = countLines(d.sql);
-    let nums = ''; for (let i = 1; i <= lines; i++) nums += i + '\n';
-    $('codeGutter').textContent = nums;
-    gutterLines = lines;
-    $('codeGutter').scrollTop = 0;
-    note.hidden = false;
-    note.textContent = t('scriptPlainMode', { lines });
-  } else {
-    note.hidden = true;
-    highlightEditor();
-  }
+  highlightEditor();
 }
 
 function closeScriptEditor() { closeAutocomplete(); $('scriptScrim').hidden = true; $('scriptDialog').hidden = true; }
@@ -1952,9 +1923,9 @@ function buildVocab() {
     if (c.name) add(c.name, c.objectType === 'Table' ? 'table' : 'obj');
     for (const ch of c.children ?? []) add(ch.name, ch.category === 'Columns' ? 'col' : 'id');
   }
-  // Büyük script'te [köşeli] ad taramasını atla (oto-tamamlama zaten kapalı).
+  // Çok büyük script editöre yüklenmez; [köşeli] ad taramasını yine de boyutla sınırla.
   const code = $('codeInput').value || '';
-  if (code.length <= SCRIPT_PLAIN_LIMIT)
+  if (code.length <= SCRIPT_MAX_RENDER)
     for (const m of code.matchAll(/\[([^\]\r\n]+)\]/g)) add(m[1], 'id');
   return [...map.values()];
 }
@@ -2024,11 +1995,7 @@ function caretCoords(ta) {
   return { x, y };
 }
 
-$('codeInput').addEventListener('input', () => {
-  // Büyük (düz) modda renklendirme/oto-tamamlama kapalı — tarayıcı kilitlenmesin.
-  if (state.scriptPlain) { gutterLines = -1; return; }
-  highlightEditor(); updateAutocomplete();
-});
+$('codeInput').addEventListener('input', () => { highlightEditor(); updateAutocomplete(); });
 $('codeInput').addEventListener('scroll', () => {
   $('codeHl').scrollTop = $('codeInput').scrollTop;
   $('codeHl').scrollLeft = $('codeInput').scrollLeft;
@@ -2045,15 +2012,15 @@ $('codeInput').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); acceptAutocomplete(); return; }
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeAutocomplete(); return; }
   }
-  // Ctrl+Space: öneriyi elle aç (büyük modda oto-tamamlama kapalı).
-  if (e.key === ' ' && e.ctrlKey) { if (!state.scriptPlain) { e.preventDefault(); updateAutocomplete(); } return; }
+  // Ctrl+Space: öneriyi elle aç.
+  if (e.key === ' ' && e.ctrlKey) { e.preventDefault(); updateAutocomplete(); return; }
   // Tab tuşu odağı kaydırmasın; SQL'e sekme eklesin.
   if (e.key === 'Tab') {
     e.preventDefault();
     const ta = e.target, s = ta.selectionStart, en = ta.selectionEnd;
     ta.value = ta.value.slice(0, s) + '\t' + ta.value.slice(en);
     ta.selectionStart = ta.selectionEnd = s + 1;
-    if (!state.scriptPlain) highlightEditor();
+    highlightEditor();
   }
 });
 $('scriptClose').addEventListener('click', closeScriptEditor);
