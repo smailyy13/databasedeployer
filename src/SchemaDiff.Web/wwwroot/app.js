@@ -383,7 +383,8 @@ const GROUPS = [
 // SSDT'nin "General" sekmesindeki seçenekleri gruplayarak yansıtır. Yalnızca bu araçta
 // GERÇEKTEN uygulanan seçenekler var — çalışmayan bir kutu göstermek yanıltıcı olur.
 const OPTION_GROUPS = [
-  { group: 'optgText', keys: ['ignoreWhitespace', 'ignoreComments',
+  // 'ignoreWhitespace' artık seçenek değil — boşluk/satır farkı daima yok sayılır (sunucu zorlar).
+  { group: 'optgText', keys: ['ignoreComments',
                               'ignoreSemicolons', 'ignoreAnsiNulls', 'ignoreQuotedIdentifiers'] },
   { group: 'optgCasing', keys: ['caseSensitiveNames', 'caseSensitiveColumnNames', 'caseSensitiveKeywords'] },
   { group: 'optgColumn', keys: ['ignoreColumnOrder', 'ignoreCollation',
@@ -428,7 +429,9 @@ const OPTIONS_KEY = 'options';
 function loadOptions() {
   try {
     const saved = JSON.parse(localStorage.getItem(OPTIONS_KEY) || '{}');
-    return { ...DEFAULT_OPTIONS, ...(saved && typeof saved === 'object' ? saved : {}) };
+    const merged = { ...DEFAULT_OPTIONS, ...(saved && typeof saved === 'object' ? saved : {}) };
+    merged.ignoreWhitespace = true;   // artık seçenek değil: eski kayıttaki false'u ezer
+    return merged;
   } catch { return { ...DEFAULT_OPTIONS }; }
 }
 function saveOptions() {
