@@ -490,7 +490,14 @@ mark.wordhit { background: #ffdf5d; color: #1f2328; border-radius: 2px; padding:
 }
 .dialog.narrow { width: min(540px, 94vw); }
 .dialog.wide { width: 96vw; max-width: 1600px; height: 92vh; }
-.dialog.wide .dialog-body.single { padding: 0; flex: 1 1 auto; min-height: 0; display: flex; }
+.dialog.wide .dialog-body.single { padding: 0; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+
+/* Büyük script uyarı şeridi (renklendirme kapalı / görüntüleme kapalı). Tema-uyumlu. */
+.big-note {
+  flex: none; padding: 10px 14px; font-size: 13px; line-height: 1.45;
+  color: var(--ink); background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  border-bottom: 1px solid var(--line);
+}
 
 /* Renkli + düzenlenebilir SQL editörü: solda satır-no gutter'ı, sağda boyalı <pre> +
    üstte şeffaf <textarea>. Gutter/pre/textarea aynı font+line-height → satırlar hizalı. */

@@ -85,6 +85,8 @@ const I18N = {
     dirForward: 'source → target', dirReverse: 'target → source',
     emptyScriptInfo: 'No changes in this direction.',
     scriptReady: 'Script ready — review/edit, then download', scriptCopied: 'Script copied to clipboard',
+    scriptPlainMode: 'Large script ({lines} lines) — syntax highlighting and autocomplete are off for speed. Editing, download and copy still work.',
+    scriptTooBig: 'Script is too large to show here ({size}, {lines} lines). Use Download or Copy below.',
     sqlDownloaded: 'Downloaded {file}', selectGroupTip: 'Select / clear all {g}',
     selectTypeTip: 'Select / clear all {g} objects',
     statObjects: '{n} objects', statChanged: '{n} changed', statAdded: '{n} added',
@@ -206,6 +208,8 @@ const I18N = {
     dirForward: 'kaynak → hedef', dirReverse: 'hedef → kaynak',
     emptyScriptInfo: 'Bu yönde değişiklik yok.',
     scriptReady: 'Script hazır — gözden geçir/düzenle, sonra indir', scriptCopied: 'Script panoya kopyalandı',
+    scriptPlainMode: 'Büyük script ({lines} satır) — hız için renklendirme ve otomatik tamamlama kapalı. Düzenleme, indirme ve kopyalama çalışıyor.',
+    scriptTooBig: 'Script burada gösterilemeyecek kadar büyük ({size}, {lines} satır). Aşağıdan İndir ya da Kopyala kullanın.',
     sqlDownloaded: 'İndirildi: {file}', selectGroupTip: 'Tüm {g} objelerini seç / kaldır',
     selectTypeTip: 'Tüm {g} objelerini seç / kaldır',
     statObjects: '{n} obje', statChanged: '{n} değişti', statAdded: '{n} eklendi',
@@ -1830,6 +1834,25 @@ function scriptInfoLine(selLen, data) {
 let scriptFileName = 'script.sql';
 let gutterLines = -1;
 
+// Büyük script eşiği: çok sayıda satırı renklendirip DOM'a basmak tarayıcıyı kilitler.
+// PLAIN üstünde: renklendirme + oto-tamamlama kapalı (düz textarea, düzenlenebilir).
+// VIEW üstünde: textarea'ya hiç yüklenmez; yalnız İndir/Kopyala (metin bellekte tutulur).
+const SCRIPT_PLAIN_LIMIT = 200_000;      // ~200 KB
+const SCRIPT_VIEW_LIMIT  = 2_000_000;    // ~2 MB
+
+function countLines(s) { let n = 1; for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) === 10) n++; return n; }
+function formatBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+// İndir/kopyala için aktif yönün SQL'i: düzenlenebilir modda textarea (düzenlemeler korunur),
+// çok-büyük modda bellekteki orijinal (textarea'ya yüklenmedi).
+function activeScriptSql() {
+  if (state.scriptHuge) return state.scriptDirs?.[state.scriptActiveDir]?.sql ?? '';
+  return $('codeInput').value;
+}
+
 function highlightEditor() {
   const ta = $('codeInput'), hl = $('codeHl');
   const arr = ta.value.split('\n');
@@ -1872,11 +1895,42 @@ function showScriptDir(dir) {
   state.scriptActiveDir = dir;
   for (const b of document.querySelectorAll('#scriptDialog .stab')) b.classList.toggle('active', b.dataset.dir === dir);
   scriptFileName = d.fileName;
-  $('codeInput').value = d.sql;
   $('scriptInfo').textContent = d.info || '';
+
+  const len = d.sql.length;
+  state.scriptHuge = len > SCRIPT_VIEW_LIMIT;
+  state.scriptPlain = len > SCRIPT_PLAIN_LIMIT;   // "huge" de düz moddur (üst küme)
+
+  const ta = $('codeInput'), hl = $('codeHl'), note = $('scriptBigNote'), editor = $('codeEditor');
   gutterLines = -1;
-  $('codeInput').scrollTop = 0;
-  highlightEditor();
+
+  if (state.scriptHuge) {
+    // Çok büyük: editöre hiç yükleme — tarayıcıyı kilitlemesin. Yalnız indir/kopyala.
+    ta.value = ''; hl.innerHTML = ''; $('codeGutter').textContent = '';
+    editor.hidden = true;
+    note.hidden = false;
+    note.textContent = t('scriptTooBig', { size: formatBytes(len), lines: countLines(d.sql) });
+    return;
+  }
+
+  editor.hidden = false;
+  ta.value = d.sql;
+  ta.scrollTop = 0;
+
+  if (state.scriptPlain) {
+    // Büyük ama görüntülenebilir: renklendirme + oto-tamamlama kapalı (düz textarea).
+    hl.innerHTML = '';
+    const lines = countLines(d.sql);
+    let nums = ''; for (let i = 1; i <= lines; i++) nums += i + '\n';
+    $('codeGutter').textContent = nums;
+    gutterLines = lines;
+    $('codeGutter').scrollTop = 0;
+    note.hidden = false;
+    note.textContent = t('scriptPlainMode', { lines });
+  } else {
+    note.hidden = true;
+    highlightEditor();
+  }
 }
 
 function closeScriptEditor() { closeAutocomplete(); $('scriptScrim').hidden = true; $('scriptDialog').hidden = true; }
@@ -1898,7 +1952,10 @@ function buildVocab() {
     if (c.name) add(c.name, c.objectType === 'Table' ? 'table' : 'obj');
     for (const ch of c.children ?? []) add(ch.name, ch.category === 'Columns' ? 'col' : 'id');
   }
-  for (const m of ($('codeInput').value || '').matchAll(/\[([^\]\r\n]+)\]/g)) add(m[1], 'id');
+  // Büyük script'te [köşeli] ad taramasını atla (oto-tamamlama zaten kapalı).
+  const code = $('codeInput').value || '';
+  if (code.length <= SCRIPT_PLAIN_LIMIT)
+    for (const m of code.matchAll(/\[([^\]\r\n]+)\]/g)) add(m[1], 'id');
   return [...map.values()];
 }
 
@@ -1967,7 +2024,11 @@ function caretCoords(ta) {
   return { x, y };
 }
 
-$('codeInput').addEventListener('input', () => { highlightEditor(); updateAutocomplete(); });
+$('codeInput').addEventListener('input', () => {
+  // Büyük (düz) modda renklendirme/oto-tamamlama kapalı — tarayıcı kilitlenmesin.
+  if (state.scriptPlain) { gutterLines = -1; return; }
+  highlightEditor(); updateAutocomplete();
+});
 $('codeInput').addEventListener('scroll', () => {
   $('codeHl').scrollTop = $('codeInput').scrollTop;
   $('codeHl').scrollLeft = $('codeInput').scrollLeft;
@@ -1984,15 +2045,15 @@ $('codeInput').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); acceptAutocomplete(); return; }
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeAutocomplete(); return; }
   }
-  // Ctrl+Space: öneriyi elle aç.
-  if (e.key === ' ' && e.ctrlKey) { e.preventDefault(); updateAutocomplete(); return; }
+  // Ctrl+Space: öneriyi elle aç (büyük modda oto-tamamlama kapalı).
+  if (e.key === ' ' && e.ctrlKey) { if (!state.scriptPlain) { e.preventDefault(); updateAutocomplete(); } return; }
   // Tab tuşu odağı kaydırmasın; SQL'e sekme eklesin.
   if (e.key === 'Tab') {
     e.preventDefault();
     const ta = e.target, s = ta.selectionStart, en = ta.selectionEnd;
     ta.value = ta.value.slice(0, s) + '\t' + ta.value.slice(en);
     ta.selectionStart = ta.selectionEnd = s + 1;
-    highlightEditor();
+    if (!state.scriptPlain) highlightEditor();
   }
 });
 $('scriptClose').addEventListener('click', closeScriptEditor);
@@ -2002,14 +2063,14 @@ for (const tab of document.querySelectorAll('#scriptDialog .stab'))
   tab.addEventListener('click', () => showScriptDir(tab.dataset.dir));
 $('scriptDownloadBtn').addEventListener('click', () => {
   // UTF-8 BOM: sqlcmd/SSMS Türkçe karakterleri doğru okusun.
-  const url = URL.createObjectURL(new Blob(['﻿' + $('codeInput').value], { type: 'application/sql' }));
+  const url = URL.createObjectURL(new Blob(['﻿' + activeScriptSql()], { type: 'application/sql' }));
   const link = document.createElement('a');
   link.href = url; link.download = scriptFileName; link.click();
   URL.revokeObjectURL(url);
   setStatus(t('sqlDownloaded', { file: scriptFileName }));
 });
 $('scriptCopyBtn').addEventListener('click', async () => {
-  await navigator.clipboard.writeText($('codeInput').value);
+  await navigator.clipboard.writeText(activeScriptSql());
   setStatus(t('scriptCopied'));
 });
 
