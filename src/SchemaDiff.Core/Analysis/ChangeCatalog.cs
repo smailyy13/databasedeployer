@@ -51,6 +51,11 @@ public static class ChangeCatalog
 
         var changes = new List<ObjectChange>(result.Differences.Count);
 
+        // Harfe duyarsız modda, index/constraint satırlarını karşılaştırırken yalnız ADIN
+        // yazım farkı (ör. UCIDX_...holder... ↔ ...Holder...) sahte bir "Change" çocuğu
+        // üretmesin; yalnız gerçek alan farkları (kolon/filtre/flag) çocuk olarak gösterilsin.
+        var caseSensitiveNames = result.Source.CaseSensitiveNames;
+
         foreach (var diff in result.Differences)
         {
             result.Source.Objects.TryGetValue(diff.Key, out var source);
@@ -70,7 +75,7 @@ public static class ChangeCatalog
             {
                 (ChangeAction.Add, _) => Enumerate(diff.Key, source, ChangeAction.Add),
                 (ChangeAction.Delete, _) => Enumerate(diff.Key, target, ChangeAction.Delete),
-                (_, false) => BuildChildren(diff, source, target),
+                (_, false) => BuildChildren(diff, source, target, caseSensitiveNames),
                 _ => [],
             };
 
@@ -153,7 +158,7 @@ public static class ChangeCatalog
     // --- değişen objenin farkları ---
 
     private static IReadOnlyList<ChildChange> BuildChildren(
-        ObjectDiff diff, ObjectSnapshot? source, ObjectSnapshot? target)
+        ObjectDiff diff, ObjectSnapshot? source, ObjectSnapshot? target, bool caseSensitiveNames)
     {
         var children = new List<ChildChange>();
         if (source is null || target is null) return children;
@@ -175,11 +180,11 @@ public static class ChangeCatalog
                 case "fullText":
                 case "checks":
                 case "foreignKeys":
-                    children.AddRange(CompareLines(key, source, target, part));
+                    children.AddRange(CompareLines(key, source, target, part, caseSensitiveNames));
                     break;
 
                 case "scopedConfiguration":
-                    children.AddRange(CompareLines(key, source, target, "scopedConfiguration"));
+                    children.AddRange(CompareLines(key, source, target, "scopedConfiguration", caseSensitiveNames));
                     break;
 
                 case "content":
@@ -355,7 +360,7 @@ public static class ChangeCatalog
     }
 
     private static IEnumerable<ChildChange> CompareLines(
-        ObjectKey key, ObjectSnapshot source, ObjectSnapshot target, string part)
+        ObjectKey key, ObjectSnapshot source, ObjectSnapshot target, string part, bool caseSensitiveNames)
     {
         var sourceLines = LinesByName(source.PartCanonical.GetValueOrDefault(part));
         var targetLines = LinesByName(target.PartCanonical.GetValueOrDefault(part));
@@ -371,9 +376,16 @@ public static class ChangeCatalog
                 continue;
             }
 
-            if (!string.Equals(existing, line, StringComparison.Ordinal))
-                yield return new ChildChange(ChangeAction.Change, category, itemType, name, qualified,
-                    DescribeLineChange(existing, line));
+            // Satırlar ada göre (harfe duyarsız) eşleşti. Harfe duyarsız ad modunda yalnız ADIN
+            // (fields[1]) yazım farkı gerçek bir değişiklik değildir — alan farklarına (fields[2+])
+            // bak: DescribeLineChange yoksa sahte "Change" çocuğu üretme. Duyarlı modda eski
+            // (tam metin) davranış korunur.
+            var detail = DescribeLineChange(existing, line);
+            var changed = caseSensitiveNames
+                ? !string.Equals(existing, line, StringComparison.Ordinal)
+                : detail is not null;
+            if (changed)
+                yield return new ChildChange(ChangeAction.Change, category, itemType, name, qualified, detail);
         }
 
         foreach (var (name, line) in targetLines)
