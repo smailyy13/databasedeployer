@@ -65,7 +65,10 @@ public class StatisticsTests
         var snapshot = Build(WithEmailStat()).Objects[TestFactory.Table("Customer")];
 
         Assert.True(snapshot.Parts.ContainsKey("statistics"));
-        Assert.Contains("stat|ST_Customer_Email|cols=Email", snapshot.PartCanonical["statistics"]);
+        // Kolon referansları kanonikte küçük harfe indirilir (columns parçasıyla tutarlı:
+        // harfe duyarsız modda yalnız kolon adının yazımı farkı fark sayılmaz). İstatistik ADI
+        // ise HAM kalır — ağaçta gerçek yazımıyla görünsün diye.
+        Assert.Contains("stat|ST_Customer_Email|cols=email", snapshot.PartCanonical["statistics"]);
     }
 
     [Fact]
