@@ -1819,11 +1819,12 @@ $('scriptBtn').addEventListener('click', () => {
 let scriptFileName = 'script.sql';
 let gutterLines = -1;
 
-// Büyük script eşiği: renkli editörün açılması ~3 sn'yi aşan script'leri editöre hiç
-// yüklemeyiz — tarayıcıyı kilitler. Süre byte değil TOKEN yoğunluğuna bağlı; yoğun T-SQL'de
-// (ALTER/ADD/[köşeli] bol) ~500 KB ≈ 2-3 sn. Bu boyutun üstünde yalnız İndir/Kopyala sunulur
-// (metin bellekte tutulur). Altında her zaman tam renkli + düzenlenebilir editör.
-const SCRIPT_MAX_RENDER = 500_000;       // ~500 KB
+// Büyük script eşiği: bu boyutun üstündeki script editöre hiç yüklenmez — yalnız
+// İndir/Kopyala sunulur (metin bellekte tutulur), tarayıcı kilitlenmez. Altında her
+// zaman tam renkli + düzenlenebilir editör. Gerçekçi üretilmiş SQL'de ~2 MB renkli
+// açılış tek seferlik ~3 sn sürer (düzenleme de bu boyutta yavaşlar; büyük script'i
+// indirip harici editörde düzenlemek daha iyidir).
+const SCRIPT_MAX_RENDER = 2_000_000;     // ~2 MB
 
 function countLines(s) { let n = 1; for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) === 10) n++; return n; }
 function formatBytes(n) {
