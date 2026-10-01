@@ -837,7 +837,7 @@ internal static class SnapshotBuilder
                 if (c.IdentityNotForReplication) sb.Append(";nfr");
             }
             if (c.IsComputed)
-                sb.Append("|computed=").Append(c.ComputedDefinition)
+                sb.Append("|computed=").Append(NormalizeExpression(c.ComputedDefinition, options))
                   .Append(";persisted=").Append(Flag(c.ComputedIsPersisted == true));
 
             // Temporal PERIOD kolonları: GENERATED ALWAYS AS ROW START(1)/END(2) + HIDDEN.
@@ -860,7 +860,7 @@ internal static class SnapshotBuilder
                 sb.Append("|default=");
                 if (!(options.IgnoreSystemNamedConstraints && c.DefaultIsSystemNamed == true))
                     sb.Append(FoldName(c.DefaultName ?? string.Empty, options));
-                sb.Append(':').Append(c.DefaultDefinition);
+                sb.Append(':').Append(NormalizeExpression(c.DefaultDefinition, options));
             }
 
             sb.Append('\n');
@@ -919,7 +919,7 @@ internal static class SnapshotBuilder
             if (!options.IgnoreDataCompression && ExplicitCompression(index.DataCompression) is { } comp)
                 sb.Append("|compression=").Append(comp);
 
-            if (index.FilterDefinition is not null) sb.Append("|filter=").Append(index.FilterDefinition);
+            if (index.FilterDefinition is not null) sb.Append("|filter=").Append(NormalizeExpression(index.FilterDefinition, options));
 
             var indexColumns = indexColumnsBy.GetValueOrDefault(pairKey) ?? [];
 
@@ -967,7 +967,7 @@ internal static class SnapshotBuilder
         var lines = statistics.Select(st =>
         {
             var columns = StatisticColumnNames(objectId, st.StatsId, statisticColumnsBy, columnNames);
-            var filter = st.FilterDefinition is not null ? $"|filter={st.FilterDefinition}" : string.Empty;
+            var filter = st.FilterDefinition is not null ? $"|filter={NormalizeExpression(st.FilterDefinition, options)}" : string.Empty;
             return $"stat|{st.Name}|cols={string.Join(',', columns)}{filter}" +
                    $"|noRecompute={Flag(st.NoRecompute)}|incremental={Flag(st.IsIncremental)}";
         }).ToList();
@@ -1189,7 +1189,7 @@ internal static class SnapshotBuilder
         {
             var name = options.IgnoreSystemNamedConstraints && c.IsSystemNamed ? "(system-named)" : c.Name;
             var nfr = c.IsNotForReplication ? "|nfr" : string.Empty;
-            return $"chk|{name}|{c.Definition}|disabled={Flag(c.IsDisabled)}|notTrusted={Flag(c.IsNotTrusted)}{nfr}";
+            return $"chk|{name}|{NormalizeExpression(c.Definition, options)}|disabled={Flag(c.IsDisabled)}|notTrusted={Flag(c.IsNotTrusted)}{nfr}";
         }).ToList();
 
         lines.Sort(StringComparer.Ordinal);
@@ -1853,6 +1853,21 @@ internal static class SnapshotBuilder
     /// CustomerShareHolderKey) bu adlar yüzünden kanonikte boşuna "değişti" görünmesin.</summary>
     private static string FoldName(string name, SnapshotOptions options) =>
         options.CaseSensitiveNames ? name : name.ToLowerInvariant();
+
+    /// <summary>
+    /// Serbest-metin T-SQL ifadelerini (CHECK / computed / DEFAULT / filtre tanımları) modül
+    /// gövdeleriyle AYNI kurallarla kanonikleştirir: boşluk/yorum/noktalama, tanımlayıcı alıntısı,
+    /// keyword büyüklüğü ve (harfe duyarsız modda) tanımlayıcı harf büyüklüğü katlanır; string
+    /// literal'ler KORUNUR (değer farkı maskelenmez). Böylece ör. CHECK ([Status]>0) ile
+    /// CHECK ([status] > 0) eşit sayılır ama ([Status]='A') ile ([Status]='a') sayılmaz.
+    /// Lexer (GetTokenStream) tabanlı olduğundan ifade PARÇALARINDA da güvenle çalışır.
+    /// </summary>
+    private static string NormalizeExpression(string? definition, SnapshotOptions options)
+    {
+        if (string.IsNullOrEmpty(definition)) return definition ?? string.Empty;
+        var norm = options.Normalization with { FoldIdentifierCase = !options.CaseSensitiveNames };
+        return Normalization.TSqlNormalizer.Normalize(definition, quotedIdentifiers: true, norm);
+    }
 
     private static char Flag(bool value) => value ? '1' : '0';
 
