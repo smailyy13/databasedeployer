@@ -122,9 +122,7 @@ public sealed class CompareService
         var snapshotOptions = new SnapshotOptions
         {
             Normalization = new NormalizationOptions(
-                // Boşluk/satır farkı SQL'de (string literal dışında) hiçbir zaman anlamlı
-                // değildir; bu yüzden DAİMA yok sayılır — artık kullanıcı seçeneği değil.
-                IgnoreWhitespace: true,
+                IgnoreWhitespace: options.IgnoreWhitespace,
                 IgnoreComments: options.IgnoreComments,
                 IgnoreSemicolons: options.IgnoreSemicolons,
                 IgnoreKeywordCasing: options.IgnoreKeywordCasing),
