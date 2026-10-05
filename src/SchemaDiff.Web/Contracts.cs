@@ -72,6 +72,10 @@ public sealed record ScriptRequest(
     bool ScriptValidateNewConstraints = true,
     bool RecreateChangedTableTypes = false);
 
+/// <summary>Üretilen script'i veritabanında çalıştırma isteği. Direction: "forward" | "reverse".
+/// Sql, istemcideki güncel (düzenlenmiş olabilir) script metnidir.</summary>
+public sealed record ExecuteRequest(string Direction, string Sql);
+
 /// <summary>Kullanıcının işaretlediği bir obje. ObjectType arayüzdeki görünen türdür
 /// ("Table", "Scalar Function", "Role", "Schema" …), sunucuda ObjectKind'e çevrilir.</summary>
 public sealed record SelectionItemDto(string ObjectType, string Schema, string Name);
