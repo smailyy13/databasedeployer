@@ -499,6 +499,42 @@ mark.wordhit { background: #ffdf5d; color: #1f2328; border-radius: 2px; padding:
   border-bottom: 1px solid var(--line);
 }
 
+/* "Veritabanına uygula" onay çubuğu + tehlikeli eylem butonu. */
+.btn.danger { background: #b3261e; color: #fff; border-color: #b3261e; }
+.btn.danger:hover { background: #c7362d; border-color: #c7362d; }
+.btn.sm { padding: 3px 10px; font-size: 12px; }
+.exec-confirm {
+  flex: none; display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+  background: color-mix(in srgb, #b3261e 14%, var(--surface));
+  border-bottom: 1px solid color-mix(in srgb, #b3261e 35%, var(--line));
+  font-size: 13px; color: var(--ink);
+}
+.exec-confirm .ec-text { line-height: 1.4; }
+.exec-confirm b { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+
+/* SSMS "Messages" benzeri çıktı paneli. */
+.exec-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.exec-head {
+  flex: none; display: flex; align-items: center; gap: 12px; padding: 8px 12px;
+  border-bottom: 1px solid var(--line); background: var(--surface-2, var(--surface));
+}
+.exec-status { font-size: 13px; font-weight: 600; }
+.exec-status.run { color: var(--ink-soft, #667); }
+.exec-status.ok  { color: #1e7a46; }
+.exec-status.err { color: #b3261e; }
+.exec-log {
+  flex: 1 1 auto; min-height: 0; overflow: auto; margin: 0; padding: 12px 14px;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12.5px;
+  line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+  background: var(--code-bg, #0f1620); color: var(--code-fg, #d6dee6);
+}
+:root:not([data-theme="dark"]) .exec-log { background: #1b2230; color: #e7edf3; }
+.exec-log .el-rows { color: #9fb3c8; }
+.exec-log .el-err  { color: #ff8a7a; font-weight: 600; }
+.exec-log .el-errmsg { color: #ffc9bf; }
+.exec-log .el-fail { color: #ff8a7a; font-weight: 700; }
+.exec-log .el-done { color: #7fd3a6; font-weight: 600; }
+
 /* Renkli + düzenlenebilir SQL editörü: solda satır-no gutter'ı, sağda boyalı <pre> +
    üstte şeffaf <textarea>. Gutter/pre/textarea aynı font+line-height → satırlar hizalı. */
 .code-editor {
