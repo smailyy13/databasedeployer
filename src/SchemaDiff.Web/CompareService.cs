@@ -23,6 +23,14 @@ public sealed class CompareSession
     public required string SourceLabel { get; init; }
     public required string TargetLabel { get; init; }
 
+    // Script'i veritabanına UYGULAMAK için gerekir (forward → hedef, reverse → kaynak sunucuda
+    // çalışır). Yalnızca sunucu belleğinde tutulur; tarayıcıya hiçbir zaman gönderilmez.
+    public string? SourceConnectionString { get; set; }
+    public string? TargetConnectionString { get; set; }
+
+    /// <summary>Bu oturum için en son başlatılan çalıştırma koşumu (SSMS tarzı canlı mesajlar).</summary>
+    public ExecuteRun? Execution { get; set; }
+
     public CompareResult? Comparison { get; private set; }
     public CompareResultDto? Dto { get; private set; }
     public string? Error { get; private set; }
@@ -116,6 +124,8 @@ public sealed class CompareService
             Id = Guid.NewGuid().ToString("n")[..12],
             SourceLabel = source.Label,
             TargetLabel = target.Label,
+            SourceConnectionString = source.ToConnectionString(),
+            TargetConnectionString = target.ToConnectionString(),
         };
         _sessions[session.Id] = session;
 
@@ -175,6 +185,24 @@ public sealed class CompareService
         });
 
         return session;
+    }
+
+    /// <summary>
+    /// Üretilen script'i (istemcideki güncel/düzenlenmiş metin) hedef veritabanında çalıştırır.
+    /// forward → hedef, reverse → kaynak sunucuda. Arka planda koşar; istemci akışa bağlanmasa
+    /// bile tamamlanır (yarım deploy bırakmamak için iptal YOK). Dönen koşum SSE ile dinlenir.
+    /// </summary>
+    public ExecuteRun? StartExecute(CompareSession session, string direction, string sql)
+    {
+        var connectionString = string.Equals(direction, "reverse", StringComparison.OrdinalIgnoreCase)
+            ? session.SourceConnectionString
+            : session.TargetConnectionString;
+        if (string.IsNullOrEmpty(connectionString)) return null;
+
+        var run = new ExecuteRun();
+        session.Execution = run;
+        _ = Task.Run(() => ScriptExecutor.RunAsync(connectionString, sql, run, CancellationToken.None));
+        return run;
     }
 
     public ObjectDetailDto? Detail(CompareSession session, string schema, string name, string kind)

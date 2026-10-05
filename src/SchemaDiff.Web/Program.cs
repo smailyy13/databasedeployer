@@ -357,6 +357,68 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
     });
 });
 
+// Üretilen script'i veritabanında çalıştır (forward → hedef, reverse → kaynak sunucuda).
+// İstemcideki güncel/düzenlenmiş metin gönderilir. Arka planda koşar; mesajlar SSE ile akar.
+app.MapPost("/api/runs/{id}/execute", (string id, ExecuteRequest request, CompareService compare) =>
+{
+    var session = compare.Get(id);
+    if (session?.Comparison is null) return Results.NotFound();
+    if (string.IsNullOrWhiteSpace(request.Sql))
+        return Results.BadRequest(new { error = "Çalıştırılacak script boş." });
+
+    var run = compare.StartExecute(session, request.Direction, request.Sql);
+    if (run is null)
+        return Results.BadRequest(new { error = "Bu koşum için bağlantı bilgisi yok (yeniden karşılaştırın)." });
+
+    return Results.Ok(new { started = true });
+});
+
+// Çalıştırma mesajlarını (SSMS tarzı) canlı yayınlar: her yeni mesaj + batch ilerlemesi.
+app.MapGet("/api/runs/{id}/execute/events", async (string id, HttpContext context, CompareService compare, CancellationToken ct) =>
+{
+    var run = compare.Get(id)?.Execution;
+    if (run is null)
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+
+    context.Response.Headers.ContentType = "text/event-stream";
+    context.Response.Headers.CacheControl = "no-cache";
+    context.Response.Headers["X-Accel-Buffering"] = "no";
+
+    var sent = 0;
+    try
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            var changed = run.Changed;
+
+            foreach (var m in run.MessagesFrom(sent))
+            {
+                await WriteEventAsync(context.Response, "msg", m, jsonOptions, ct);
+                sent++;
+            }
+
+            if (run.Finished)
+            {
+                await WriteEventAsync(context.Response, "done",
+                    new { success = run.Success, done = run.DoneBatches, total = run.TotalBatches }, jsonOptions, ct);
+                break;
+            }
+
+            await WriteEventAsync(context.Response, "progress",
+                new { done = run.DoneBatches, total = run.TotalBatches }, jsonOptions, ct);
+
+            await changed.WaitAsync(ct);
+        }
+    }
+    catch (OperationCanceledException)
+    {
+        // Tarayıcı kapandı; çalıştırma arka planda tamamlanır (yarım deploy bırakılmaz).
+    }
+});
+
 app.MapGet("/api/runs/{id}/detail", (
     string id, string schema, string name, string kind, CompareService compare) =>
 {

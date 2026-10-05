@@ -86,6 +86,13 @@ const I18N = {
     emptyScriptInfo: 'No changes in this direction.',
     scriptReady: 'Script ready — review/edit, then download', scriptCopied: 'Script copied to clipboard',
     scriptTooBig: 'Script is too large to show here ({size}, {lines} lines). Use Download or Copy below.',
+    deployBtn: 'Run on database', deployCancel: 'Cancel', deployYes: 'Yes, run',
+    deployConfirm: 'This runs {n} batch(es) against {target}. There is no undo — use the reverse script to roll back.',
+    backToScript: '‹ Script',
+    deployStarting: 'Connecting…', deployRunning: 'Running… batch {done}/{total}',
+    deploySuccess: '✓ Completed successfully', deployFailed: '✗ Failed — database unchanged (rolled back)',
+    deployConnLost: 'Connection to the server was lost while streaming messages.',
+    deployEmpty: 'Nothing to run — the script is empty.',
     sqlDownloaded: 'Downloaded {file}', selectGroupTip: 'Select / clear all {g}',
     selectTypeTip: 'Select / clear all {g} objects',
     statObjects: '{n} objects', statChanged: '{n} changed', statAdded: '{n} added',
@@ -208,6 +215,13 @@ const I18N = {
     emptyScriptInfo: 'Bu yönde değişiklik yok.',
     scriptReady: 'Script hazır — gözden geçir/düzenle, sonra indir', scriptCopied: 'Script panoya kopyalandı',
     scriptTooBig: 'Script burada gösterilemeyecek kadar büyük ({size}, {lines} satır). Aşağıdan İndir ya da Kopyala kullanın.',
+    deployBtn: 'Veritabanında çalıştır', deployCancel: 'Vazgeç', deployYes: 'Evet, çalıştır',
+    deployConfirm: '{target} üzerinde {n} batch çalışacak. Geri alma yoktur — geri almak için ters (reverse) script\'i kullanın.',
+    backToScript: '‹ Script',
+    deployStarting: 'Bağlanılıyor…', deployRunning: 'Çalışıyor… batch {done}/{total}',
+    deploySuccess: '✓ Başarıyla tamamlandı', deployFailed: '✗ Başarısız — veritabanı değişmedi (geri alındı)',
+    deployConnLost: 'Mesajlar akarken sunucu bağlantısı koptu.',
+    deployEmpty: 'Çalıştırılacak bir şey yok — script boş.',
     sqlDownloaded: 'İndirildi: {file}', selectGroupTip: 'Tüm {g} objelerini seç / kaldır',
     selectTypeTip: 'Tüm {g} objelerini seç / kaldır',
     statObjects: '{n} obje', statChanged: '{n} değişti', statAdded: '{n} eklendi',
@@ -1868,6 +1882,7 @@ function openScriptEditor(fwdLen, revLen, forward, reverse) {
   if (revTab) revTab.classList.toggle('empty', revEmpty);
 
   scriptVocab = buildVocab();
+  $('scriptDeployBtn').disabled = false;
   $('scriptScrim').hidden = false;
   $('scriptDialog').hidden = false;
   // İleri (source→target) boş ama ters (target→source) doluysa doğrudan ters sekmeyi aç.
@@ -1881,6 +1896,9 @@ function showScriptDir(dir) {
   state.scriptActiveDir = dir;
   for (const b of document.querySelectorAll('#scriptDialog .stab')) b.classList.toggle('active', b.dataset.dir === dir);
   scriptFileName = d.fileName;
+  // Çalıştırma görünümünden script görünümüne dön (varsa onay çubuğunu/paneli kapat).
+  $('execConfirm').hidden = true;
+  $('execPanel').hidden = true;
 
   const len = d.sql.length;
   state.scriptHuge = len > SCRIPT_MAX_RENDER;
@@ -1905,7 +1923,7 @@ function showScriptDir(dir) {
   highlightEditor();
 }
 
-function closeScriptEditor() { closeAutocomplete(); $('scriptScrim').hidden = true; $('scriptDialog').hidden = true; }
+function closeScriptEditor() { closeExecStream(); closeAutocomplete(); $('scriptScrim').hidden = true; $('scriptDialog').hidden = true; }
 
 // ===== yerel (AI'sız) şema-farkında oto-tamamlama =====
 // Sözlük: T-SQL keyword/tip/fonksiyon + karşılaştırmadaki şema/tablo/kolon/obje adları
@@ -2041,6 +2059,99 @@ $('scriptCopyBtn').addEventListener('click', async () => {
   await navigator.clipboard.writeText(activeScriptSql());
   setStatus(t('scriptCopied'));
 });
+
+// ===== script'i veritabanında çalıştır (SSMS tarzı canlı mesajlar) =====
+function scriptBatchCount(sql) {
+  return sql.split(/^[ \t]*GO[ \t]*\d*[ \t]*$/im).filter((b) => b.trim()).length;
+}
+function execTargetLabel(dir) {
+  const r = state.result || {};
+  return dir === 'reverse' ? (r.sourceLabel || '') : (r.targetLabel || '');
+}
+function closeExecStream() { state.execSource?.close(); state.execSource = null; }
+function setExecStatus(text, cls) { const el = $('execStatus'); el.textContent = text; el.className = 'exec-status ' + (cls || ''); }
+
+function appendExecLine(m) {
+  const log = $('execLog');
+  const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 4;
+  // Terminal hata: SSMS gibi iki satır — "Msg …, Level …, State …, Line …" + mesaj.
+  if (m.kind === 'error' && (m.number != null || m.line != null)) {
+    const bits = [];
+    if (m.number != null) bits.push(`Msg ${m.number}`);
+    if (m.level != null) bits.push(`Level ${m.level}`);
+    if (m.state != null) bits.push(`State ${m.state}`);
+    if (m.line != null) bits.push(`Line ${m.line}`);
+    const head = document.createElement('div'); head.className = 'el-err'; head.textContent = bits.join(', ');
+    const body = document.createElement('div'); body.className = 'el-errmsg'; body.textContent = m.text;
+    log.appendChild(head); log.appendChild(body);
+  } else {
+    const div = document.createElement('div');
+    div.className = m.kind === 'rows' ? 'el-rows'
+      : (m.kind === 'error' || m.kind === 'fail') ? 'el-fail'
+      : m.kind === 'done' ? 'el-done' : '';
+    div.textContent = m.text;
+    log.appendChild(div);
+  }
+  if (atBottom) log.scrollTop = log.scrollHeight;
+}
+
+$('scriptDeployBtn').addEventListener('click', () => {
+  const sql = activeScriptSql();
+  if (!sql.trim()) { setStatus(t('deployEmpty'), 'error'); return; }
+  const n = scriptBatchCount(sql);
+  $('execConfirmText').innerHTML = t('deployConfirm', { n, target: `<b>${esc(execTargetLabel(state.scriptActiveDir))}</b>` });
+  $('execConfirm').hidden = false;
+});
+$('execCancelBtn').addEventListener('click', () => { $('execConfirm').hidden = true; });
+$('execBackBtn').addEventListener('click', () => { closeExecStream(); showScriptDir(state.scriptActiveDir); });
+$('execRunBtn').addEventListener('click', startExecute);
+
+async function startExecute() {
+  const dir = state.scriptActiveDir;
+  const sql = activeScriptSql();
+  if (!sql.trim()) { setStatus(t('deployEmpty'), 'error'); return; }
+
+  $('execConfirm').hidden = true;
+  $('codeEditor').hidden = true;
+  $('scriptBigNote').hidden = true;
+  $('execPanel').hidden = false;
+  $('execLog').textContent = '';
+  setExecStatus(t('deployStarting'), 'run');
+  $('scriptDeployBtn').disabled = true;
+
+  try {
+    const res = await fetch(`/api/runs/${state.runId}/execute`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ direction: dir, sql }),
+    });
+    if (!res.ok) {
+      let msg = t('scriptFailed');
+      try { msg = (await res.json()).error || msg; } catch { /* yut */ }
+      setExecStatus('✗ ' + msg, 'err'); $('scriptDeployBtn').disabled = false; return;
+    }
+  } catch { setExecStatus('✗ ' + t('scriptFailed'), 'err'); $('scriptDeployBtn').disabled = false; return; }
+
+  closeExecStream();
+  const source = new EventSource(`/api/runs/${state.runId}/execute/events`);
+  state.execSource = source;
+  let done = false;
+
+  source.addEventListener('msg', (e) => { try { appendExecLine(JSON.parse(e.data)); } catch { /* yut */ } });
+  source.addEventListener('progress', (e) => {
+    if (done) return;
+    try { const p = JSON.parse(e.data); if (p.total) setExecStatus(t('deployRunning', { done: p.done, total: p.total }), 'run'); } catch { /* yut */ }
+  });
+  source.addEventListener('done', (e) => {
+    done = true; source.close(); state.execSource = null; $('scriptDeployBtn').disabled = false;
+    let ok = true; try { ok = JSON.parse(e.data).success; } catch { /* yut */ }
+    setExecStatus(ok ? t('deploySuccess') : t('deployFailed'), ok ? 'ok' : 'err');
+  });
+  source.onerror = () => {
+    if (done) return;
+    source.close(); state.execSource = null; $('scriptDeployBtn').disabled = false;
+    setExecStatus('✗ ' + t('deployConnLost'), 'err');
+  };
+}
 
 $('typeFilter').addEventListener('change', renderTree);
 $('search').addEventListener('input', renderTree);
