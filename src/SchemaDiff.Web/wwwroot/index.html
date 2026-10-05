@@ -212,6 +212,12 @@
   </div>
   <div class="dialog-body single">
     <div class="big-note" id="scriptBigNote" hidden></div>
+    <div class="exec-confirm" id="execConfirm" hidden>
+      <span class="ec-text" id="execConfirmText"></span>
+      <div class="grow"></div>
+      <button class="btn ghost" id="execCancelBtn" data-i18n="deployCancel">Cancel</button>
+      <button class="btn danger" id="execRunBtn" data-i18n="deployYes">Yes, run</button>
+    </div>
     <div class="code-editor" id="codeEditor">
       <div class="code-gutter" id="codeGutter" aria-hidden="true"></div>
       <div class="code-area">
@@ -219,8 +225,16 @@
         <textarea class="code-input" id="codeInput" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off"></textarea>
       </div>
     </div>
+    <div class="exec-panel" id="execPanel" hidden>
+      <div class="exec-head">
+        <button class="btn ghost sm" id="execBackBtn" data-i18n="backToScript">‹ Script</button>
+        <span class="exec-status" id="execStatus"></span>
+      </div>
+      <pre class="exec-log" id="execLog" tabindex="0"></pre>
+    </div>
   </div>
   <div class="dialog-foot">
+    <button class="btn danger" id="scriptDeployBtn" data-i18n="deployBtn">Run on database</button>
     <div class="grow"></div>
     <button class="btn ghost" id="scriptCopyBtn" data-i18n="copy">Copy</button>
     <button class="btn primary" id="scriptDownloadBtn" data-i18n="downloadSql">Download .sql</button>
