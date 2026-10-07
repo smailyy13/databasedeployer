@@ -2,8 +2,8 @@ namespace SchemaDiff.Core.Extraction;
 
 /// <summary>
 /// Süreç genelinde eşzamanlı sorgu sayısını sınırlar.
-/// Tek veritabanı karşılaştırması 18 sorgu × 2 taraf açar; 7 katmanlı bir EDW
-/// deployment'ında bu 252 eşzamanlı bağlantı demektir — sunucuyu boğar.
+/// Tek veritabanı karşılaştırması 51 sorgu × 2 taraf açar; 7 katmanlı bir EDW
+/// deployment'ında bu 714 eşzamanlı bağlantı demektir — sunucuyu boğar.
 /// Kapı, katmanları paralel koşarken bağlantı sayısını makul tutar.
 /// </summary>
 public sealed class ExtractionGate(int maxConcurrent) : IDisposable
