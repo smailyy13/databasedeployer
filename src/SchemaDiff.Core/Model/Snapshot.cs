@@ -13,8 +13,19 @@ public sealed class ObjectSnapshot
     public required UInt128 Hash { get; set; }
     public DateTime ModifyDate { get; init; }
 
-    /// <summary>Objenin kanonik metni (normalize edilmiş). Detay diff burada üretilir.</summary>
-    public string Canonical { get; set; } = string.Empty;
+    /// <summary>
+    /// Objenin kanonik metni (normalize edilmiş) — <see cref="PartCanonical"/> parçalarının
+    /// Ordinal sırada birleşimi. Detay diff burada üretilir.
+    ///
+    /// SAKLANMAZ, istendiğinde kurulur. Saklandığında her objenin kanonik metni bellekte
+    /// iki kez duruyordu (bir parça parça, bir de birleşik) — oysa bu metin tek seferde
+    /// yalnızca TEK obje için okunur: arayüzün "kanonik metin" kutusu ve CLI'nin
+    /// <c>--show</c> raporu. 10.000 objeli bir karşılaştırmada ikinci kopya tamamen ölü
+    /// yüktü ve aracın kendi ilkesine ("eşit hash'li objenin metnine hiç bakılmaz") aykırıydı.
+    /// </summary>
+    public string Canonical => string.Join('\n',
+        Parts.Keys.OrderBy(k => k, StringComparer.Ordinal)
+            .Select(k => $"-- [{k}]\n{PartCanonical.GetValueOrDefault(k, string.Empty)}"));
 
     /// <summary>
     /// Alt-parça hash'leri ("columns", "indexes", "constraints", "foreignKeys", "body").

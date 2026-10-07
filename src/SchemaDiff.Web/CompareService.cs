@@ -23,6 +23,36 @@ public sealed class CompareSession
     public required string SourceLabel { get; init; }
     public required string TargetLabel { get; init; }
 
+    /// <summary>Oturumun açılma anı.</summary>
+    public DateTime CreatedUtc { get; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// Sekmeden en son haber alınma anı. Sekme açık durdukça düzenli olarak yenilenir
+    /// (<c>/api/runs/{id}/touch</c>). Tarayıcı çökerse ya da zorla kapatılırsa kapanış
+    /// bildirimi gelmez; o oturumu süresiz taşımamak için tek sinyal budur.
+    /// </summary>
+    public DateTime LastSeenUtc { get; private set; } = DateTime.UtcNow;
+
+    public void Touch() => LastSeenUtc = DateTime.UtcNow;
+
+    /// <summary>
+    /// Oturumun tuttuğu ağır durumu (iki tam şema snapshot'ı, DTO ağacı, bağlantı dizeleri,
+    /// çalıştırma mesajları) bırakır. Sözlükten silmek normalde yeter, ama bir istek o anda
+    /// oturum nesnesini elinde tutuyorsa snapshot'lar onunla birlikte hayatta kalır —
+    /// alanları boşaltmak belleğin o durumda da gerçekten serbest kalmasını sağlar.
+    /// </summary>
+    public void Release()
+    {
+        lock (_gate)
+        {
+            Comparison = null;
+            Dto = null;
+            Execution = null;
+            SourceConnectionString = null;
+            TargetConnectionString = null;
+        }
+    }
+
     // Script'i veritabanına UYGULAMAK için gerekir (forward → hedef, reverse → kaynak sunucuda
     // çalışır). Yalnızca sunucu belleğinde tutulur; tarayıcıya hiçbir zaman gönderilmez.
     public string? SourceConnectionString { get; set; }
@@ -113,9 +143,51 @@ public sealed class CompareService
     // açıkça söylenir — sessizce kesmek "hepsi bu kadar" izlenimi verir.
     private const int MaxChanges = 5000;
 
+    // Oturum SAYISI sınırlanmaz. Olağan kullanım 7 katmanı 7 sekmede AYNI ANDA
+    // karşılaştırmaktır; bir üst sınır, kullanıcının açık durduğu sekmenin sonucunu
+    // silmek demekti. Oturum, ait olduğu sekme kapanınca silinir — aşağıya bakın.
+
+    /// <summary>
+    /// Kapanış bildirimi hiç gelmeyen oturumun bellekte kalma süresi. Sekme açıkken
+    /// <see cref="CompareSession.Touch"/> dakikada bir yenilendiği için bu süre yalnızca
+    /// tarayıcı çöktüğünde ya da zorla kapatıldığında devreye girer. Uzun tutulur: koşan
+    /// bir karşılaştırmayı ya da kullanıcının incelediği bir sonucu kesmek daha kötüdür.
+    /// </summary>
+    private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(30);
+
     private readonly ConcurrentDictionary<string, CompareSession> _sessions = new();
 
     public CompareSession? Get(string id) => _sessions.GetValueOrDefault(id);
+
+    /// <summary>
+    /// Sekme kapandı: oturumun tuttuğu her şeyi bırakır. Sekme kapanırken
+    /// <c>sendBeacon</c> ile çağrılır; sayfa yenilenmesinde de çalışır, çünkü arayüz
+    /// koşum kimliğini saklamaz — yenilenen sayfa o oturuma bir daha erişemez.
+    ///
+    /// Karşılaştırma hâlâ sürüyorsa İPTAL edilir: sonucu okuyacak kimse kalmadığı için
+    /// çekimi sürdürmek hem belleği hem de SQL Server'ı boşa meşgul eder.
+    /// </summary>
+    public bool Dispose(string id)
+    {
+        if (!_sessions.TryRemove(id, out var session)) return false;
+        if (!session.Finished) session.Cancel();
+        session.Release();
+        return true;
+    }
+
+    /// <summary>
+    /// Kapanış bildirimi gelmemiş ve <see cref="IdleTimeout"/> boyunca hiç haber alınmamış
+    /// oturumları siler — tarayıcı çökmesi/zorla kapatma için güvenlik ağı. Zamanlayıcı
+    /// yerine yeni karşılaştırma başlatıldığında çağrılır: yeni oturum açan kullanıcı,
+    /// eskilerinin temizlenmesini isteyen kullanıcıdır.
+    /// </summary>
+    private void SweepIdleSessions()
+    {
+        var deadline = DateTime.UtcNow - IdleTimeout;
+        foreach (var session in _sessions.Values)
+            if (session.LastSeenUtc < deadline)
+                Dispose(session.Id);
+    }
 
     public CompareSession Start(SqlConnectionInfo source, SqlConnectionInfo target, CompareOptionsDto options)
     {
@@ -128,6 +200,7 @@ public sealed class CompareService
             TargetConnectionString = target.ToConnectionString(),
         };
         _sessions[session.Id] = session;
+        SweepIdleSessions();
 
         var snapshotOptions = new SnapshotOptions
         {

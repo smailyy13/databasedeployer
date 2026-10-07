@@ -12,6 +12,25 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+
+    <!--
+      ASP.NET Core SDK'sı Server GC'yi VARSAYILAN olarak açar. Bu, çok çekirdekli bir
+      sunucuda binlerce eşzamanlı isteğe hizmet veren bir uygulama için doğru tercihtir:
+      çekirdek başına ayrı heap açar, çöpü uzun süre biriktirir ve belleği işletim
+      sistemine isteksizce geri verir — amaç verimi en yükseğe çıkarmaktır.
+
+      Bu araç ise TEK kullanıcılı, 127.0.0.1'e bağlı yerel bir masaüstü aracı. Burada
+      Server GC'nin tüm getirisi boşa gider, bedeli ise doğrudan RSS olarak görünür:
+      8 çekirdekli bir makinede 8 heap, 32 çekirdekli bir deployment sunucusunda 32.
+      Karşılaştırma başına yüzlerce MB geçici ayırma yapıldığı için fark küçük değil.
+
+      Workstation GC daha erken toplar ve belleği geri verir. Tek kullanıcıda verim
+      kaybı hissedilmez; bellek kazancı hissedilir.
+    -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+
+    <!-- Arka plan (eşzamanlı) GC açık kalır: toplama duraklamaları arayüzü dondurmasın. -->
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
   </PropertyGroup>
 
 </Project>

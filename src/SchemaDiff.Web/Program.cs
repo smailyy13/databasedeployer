@@ -102,6 +102,26 @@ app.MapGet("/api/runs/{id}", (string id, CompareService compare) =>
     return Results.Ok(new { finished = session.Finished, result = session.Dto });
 });
 
+// Sekme kapandı: oturumun tuttuğu her şey (iki tam şema snapshot'ı, DTO ağacı, bağlantı
+// dizeleri) silinir; karşılaştırma sürüyorsa iptal edilir. Tarayıcı bunu sekme kapanırken
+// navigator.sendBeacon ile çağırır — beacon yanıtı okumaz, bu yüzden gövde döndürmek
+// gereksizdir ve her durumda 204 verilir (olmayan oturum da "artık yok" sayılır).
+app.MapPost("/api/runs/{id}/dispose", (string id, CompareService compare) =>
+{
+    compare.Dispose(id);
+    return Results.NoContent();
+});
+
+// Sekme hâlâ açık. Kapanış bildirimi hiç gelmeyen (tarayıcı çöktü/zorla kapatıldı)
+// oturumları ayırt etmek için tek sinyal budur.
+app.MapPost("/api/runs/{id}/touch", (string id, CompareService compare) =>
+{
+    var session = compare.Get(id);
+    if (session is null) return Results.NotFound();
+    session.Touch();
+    return Results.NoContent();
+});
+
 // Devam eden karşılaştırmayı iptal et. Çekim token'ı işaretlenir, arka plan görevi durur.
 app.MapPost("/api/runs/{id}/cancel", (string id, CompareService compare) =>
 {
