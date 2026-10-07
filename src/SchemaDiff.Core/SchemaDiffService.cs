@@ -51,8 +51,17 @@ public static class SchemaDiffService
         // Kurma toplamını iki tarafın modül sayısından ÖNCEDEN belirle: aksi hâlde ikinci
         // tarafın kurulumu başlarken toplam büyür ve yüzde geri düşerdi.
         progress.AddBuildItems(sourceCatalog.Modules.Count + targetCatalog.Modules.Count);
+
+        // Her ham katalog yalnızca kendi Build'i süresince gerekir, ama async durum
+        // makinesi yerel değişkeni metot bitene kadar KÖKTE tutar. Böylece zirvede iki ham
+        // katalog (51 satır listesi × 2 taraf — 37.500 ColumnRow, 9.000 IndexRow…) ile iki
+        // kurulmuş snapshot aynı anda bellekte durur. Referansı Build'den hemen sonra
+        // bırakmak GC'nin ikinci taraf kurulurken birincinin satırlarını toplamasına izin
+        // verir; zirve kullanım ham kataloğun bir katı kadar düşer.
         var source = SnapshotBuilder.Build(sourceCatalog, sourceReport, options, progress);
+        sourceCatalog = null!;
         var target = SnapshotBuilder.Build(targetCatalog, targetReport, options, progress);
+        targetCatalog = null!;
 
         progress.EnterPhase(ComparePhase.Comparing);
         var result = SchemaComparer.Compare(source, target);

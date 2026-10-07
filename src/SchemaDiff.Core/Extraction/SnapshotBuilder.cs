@@ -1835,12 +1835,16 @@ internal static class SnapshotBuilder
         return $"CREATE USER [{user.Name}]{login}{schema};";
     }
 
+    /// <summary>
+    /// Objenin birleşik hash'ini parça hash'lerinden kurar. Birleşik kanonik METİN burada
+    /// ÜRETİLMEZ: <see cref="ObjectSnapshot.Canonical"/> onu PartCanonical'dan istendiğinde
+    /// kurar. Tek obje için okunan bir metni her obje için saklamak, 10.000 objeli bir
+    /// karşılaştırmada kanonik metnin tamamını bellekte ikinci kez tutmak demekti.
+    /// </summary>
     private static void Finalize(ObjectSnapshot snapshot)
     {
-        var ordered = snapshot.Parts.OrderBy(p => p.Key, StringComparer.Ordinal).ToList();
-        snapshot.Hash = Hash.Combine(ordered.Select(p => p.Value));
-        snapshot.Canonical = string.Join('\n',
-            ordered.Select(p => $"-- [{p.Key}]\n{snapshot.PartCanonical[p.Key]}"));
+        snapshot.Hash = Hash.Combine(
+            snapshot.Parts.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => p.Value));
     }
 
     private static string MarkIncomparable(ObjectSnapshot snapshot, string reason)

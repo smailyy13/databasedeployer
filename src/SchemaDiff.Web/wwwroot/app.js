@@ -456,6 +456,7 @@ const state = {
   target: null,
   options: loadOptions(),
   runId: null,
+  keepAlive: null,          // sekme açık sinyali (setInterval id)
   result: null,
   compare: null,            // aktif karşılaştırma ilerlemesi (loading ekranı için)
   compareTimer: null,       // geçen süre sayacı (setInterval id)
@@ -734,7 +735,9 @@ async function compare() {
     return;
   }
 
+  releaseSession();         // aynı sekmede önceki karşılaştırma varsa sunucuda bırak
   state.runId = data.runId;
+  startKeepAlive();
   startLoading(data.source, data.target);
 
   const source = new EventSource(`/api/runs/${data.runId}/events`);
@@ -1691,6 +1694,50 @@ $('scOk').addEventListener('click', closeShortcuts);
 $('scScrim').addEventListener('click', closeShortcuts);
 
 $('compareBtn').addEventListener('click', compare);
+
+// --- Oturum ömrü ---
+//
+// Bir karşılaştırma oturumu sunucuda İKİ tam şema snapshot'ı tutar; büyük bir şemada bu
+// yüz MB'larla ölçülür. 7 katman 7 sekmede aynı anda karşılaştırıldığında hepsi birden
+// bellekte durur, ki olağan kullanım bu. Bu yüzden oturum sayısı sınırlanmaz; onun yerine
+// sekme kapanınca oturum SİLİNİR.
+
+// Sunucuya "bu sekme hâlâ açık" der. Tek amacı, kapanış bildirimi hiç gelmeyen durumu
+// (tarayıcı çöktü ya da zorla kapatıldı) ayırt edilebilir kılmak. Dakikada bir yeter:
+// sunucudaki boşta kalma süresi 30 dakika.
+function startKeepAlive() {
+  stopKeepAlive();
+  state.keepAlive = setInterval(() => {
+    if (!state.runId) return;
+    fetch(`/api/runs/${state.runId}/touch`, { method: 'POST' }).catch(() => { /* yut */ });
+  }, 60_000);
+}
+
+function stopKeepAlive() {
+  if (state.keepAlive) { clearInterval(state.keepAlive); state.keepAlive = null; }
+}
+
+// Sekme kapanıyor (ya da sayfa yenileniyor): oturumu sunucuda serbest bırak.
+//
+// 'pagehide', 'beforeunload'dan güvenilirdir — Safari ve mobil tarayıcılarda sayfa
+// önbelleğe alınırken de tetiklenir. sendBeacon kullanılır çünkü normal fetch sayfa
+// yıkılırken iptal edilir; beacon'ı tarayıcı sayfadan bağımsız olarak gönderir.
+//
+// Sayfa YENİLENMESİNDE de çalışması doğrudur: koşum kimliği hiçbir yerde saklanmıyor,
+// yani yenilenen sayfa o oturuma bir daha erişemez — bırakılmazsa öksüz kalıp sızar.
+function releaseSession() {
+  const id = state.runId;
+  if (!id) return;
+  state.runId = null;
+  stopKeepAlive();
+  try {
+    navigator.sendBeacon(`/api/runs/${id}/dispose`);
+  } catch {
+    // sendBeacon yoksa/engellendiyse: keepalive susar, sunucu 30 dakika sonra düşürür.
+  }
+}
+
+window.addEventListener('pagehide', releaseSession);
 
 // Devam eden karşılaştırmayı iptal et: SSE'yi kapat, loading'i durdur, sunucuya iptal bildir.
 async function cancelCompare() {
