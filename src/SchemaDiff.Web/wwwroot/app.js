@@ -31,6 +31,7 @@ const I18N = {
     newComparison: 'New comparison', newComparisonTip: 'Open a new comparison in a separate tab',
     favorites: 'Favorites', favAdd: '+ Save current pair', favEmpty: 'No favorites yet — pick a source and target, then "Save current pair".',
     favNeedBoth: 'Pick both source and target first.', favNamePrompt: 'Favorite name:',
+    favNameTitle: 'Save favorite', save: 'Save',
     favLoaded: 'Favorite loaded — review and Compare.', favRemove: 'Remove', favNoPass: '(password not saved — enter it if asked)',
     reverseTip: 'Mark for reverse (rollback) — included when you Generate Script',
     reverseIncluded: '{n} reversed in the reverse section',
@@ -163,6 +164,7 @@ const I18N = {
     newComparison: 'Yeni karşılaştırma', newComparisonTip: 'Yeni karşılaştırmayı ayrı sekmede aç',
     favorites: 'Favoriler', favAdd: '+ Bu çifti kaydet', favEmpty: 'Henüz favori yok — kaynak ve hedef seç, sonra "Bu çifti kaydet".',
     favNeedBoth: 'Önce kaynak ve hedefi seç.', favNamePrompt: 'Favori adı:',
+    favNameTitle: 'Favori kaydet', save: 'Kaydet',
     favLoaded: 'Favori yüklendi — kontrol edip Karşılaştır.', favRemove: 'Kaldır', favNoPass: '(parola kaydedilmez — sorulursa gir)',
     reverseTip: 'Ters (geri alma) için işaretle — Generate Script\'te dahil edilir',
     reverseIncluded: '{n} obje ters bölümde',
@@ -732,12 +734,29 @@ function loadFav(fav) {
 
 function addCurrentFav() {
   if (!(state.source && state.target)) { setStatus(t('favNeedBoth'), 'error'); return; }
-  const def = `${connLabel(state.source)} → ${connLabel(state.target)}`;
-  const name = (window.prompt(t('favNamePrompt'), def) || '').trim();
-  if (!name) return;
+  const pair = `${connLabel(state.source)} → ${connLabel(state.target)}`;
+  $('favNameInput').value = pair;
+  $('favNameSub').textContent = pair;
+  $('favPanel').hidden = true;
+  $('favNameScrim').hidden = false;
+  $('favNameDialog').hidden = false;
+  const input = $('favNameInput');
+  input.focus(); input.select();
+}
+
+function closeFavName() {
+  $('favNameScrim').hidden = true;
+  $('favNameDialog').hidden = true;
+}
+
+function saveFavFromDialog() {
+  if (!(state.source && state.target)) { closeFavName(); return; }
+  const name = $('favNameInput').value.trim();
+  if (!name) { $('favNameInput').focus(); return; }
   const favs = loadFavs();
   favs.push({ name, source: stripPw(state.source), target: stripPw(state.target), options: { ...state.options } });
   saveFavs(favs);
+  closeFavName();
   renderFavList();
 }
 
@@ -1300,7 +1319,7 @@ document.addEventListener('keydown', (e) => {
   // Bir metin alanına yazılıyorsa ya da bir diyalog açıksa karışma.
   const ae = document.activeElement;
   if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable)) return;
-  if (!$('scriptDialog').hidden || !$('connDialog').hidden || !$('optDialog').hidden || !$('scDialog').hidden) return;
+  if (!$('scriptDialog').hidden || !$('connDialog').hidden || !$('optDialog').hidden || !$('scDialog').hidden || !$('favNameDialog').hidden) return;
 
   switch (e.key) {
     case 'ArrowDown': e.preventDefault(); moveSelection(1); break;
@@ -1725,6 +1744,15 @@ $('favBtn').addEventListener('click', (e) => {
 $('favAddBtn').addEventListener('click', (e) => { e.stopPropagation(); addCurrentFav(); });
 $('favPanel').addEventListener('click', (e) => e.stopPropagation());
 document.addEventListener('click', () => { $('favPanel').hidden = true; });
+
+// Favori adı diyaloğu (tarayıcı prompt'u yerine kendi penceremiz).
+$('favNameClose').addEventListener('click', closeFavName);
+$('favNameCancel').addEventListener('click', closeFavName);
+$('favNameScrim').addEventListener('click', closeFavName);
+$('favNameSave').addEventListener('click', saveFavFromDialog);
+$('favNameInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); saveFavFromDialog(); }
+});
 
 $('connClose').addEventListener('click', closeConnect);
 $('connCancel').addEventListener('click', closeConnect);
@@ -2301,6 +2329,7 @@ document.addEventListener('keydown', (e) => {
   if (!$('optDialog').hidden) closeOptions();
   if (!$('scDialog').hidden) closeShortcuts();
   if (!$('scriptDialog').hidden) closeScriptEditor();
+  if (!$('favNameDialog').hidden) closeFavName();
 });
 
 // Üst/alt panel arasındaki sürüklenebilir ayırıcı.
