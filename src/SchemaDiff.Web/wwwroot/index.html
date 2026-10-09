@@ -29,12 +29,21 @@
     <button class="btn primary" id="compareBtn" disabled data-i18n="compare">Compare</button>
     <button class="btn ghost" id="scriptBtn" disabled data-i18n="generateScript" data-i18n-title="generateScriptTip" title="Generate a deployment script from selected changes">Generate Script</button>
     <span class="sep"></span>
+    <button class="iconbtn" id="favBtn" data-i18n-title="favorites" title="Favorites">★</button>
     <button class="iconbtn" id="optionsBtn" data-i18n-title="options" title="Comparison options">⚙️</button>
     <button class="iconbtn" id="shortcutsBtn" data-i18n-title="shortcutsTitle" title="Keyboard shortcuts">⌨</button>
     <button class="iconbtn" id="themeBtn" data-i18n-title="toggleTheme" title="Toggle theme">☾</button>
     <button class="iconbtn" id="langBtn" data-i18n-title="toggleLang" title="Language"><span class="lang" id="langLabel">TR</span></button>
   </div>
 </header>
+
+<div class="fav-panel" id="favPanel" hidden>
+  <div class="fav-head">
+    <span data-i18n="favorites">Favorites</span>
+    <button class="btn ghost sm" id="favAddBtn" data-i18n="favAdd">+ Save current pair</button>
+  </div>
+  <div class="fav-list" id="favList"></div>
+</div>
 
 <div class="statusbar" id="statusbar" data-i18n="pickTwo">Select two connections to compare.</div>
 
