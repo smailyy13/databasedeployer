@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using SchemaDiff.Core.Model;
 
 namespace SchemaDiff.Core.Scripting;
@@ -29,6 +30,14 @@ public sealed record TableScriptOptions
 
     /// <summary>Başlığa yazılacak zaman damgası. Çağıran verir; üretim deterministik kalsın.</summary>
     public string? GeneratedAt { get; init; }
+
+    /// <summary>
+    /// Doluysa (ör. "INDEX_FG"), üretilen NONCLUSTERED index CREATE'lerinin sonuna
+    /// <c>ON [&lt;ad&gt;]</c> dosya grubu yerleşimi eklenir. Ortama özel bir kural için
+    /// çağıran koşulu belirler (bkz. Program.cs: yalnız belirli sunucu çiftinde). Clustered,
+    /// PK/UNIQUE ve columnstore index'lere dokunulmaz; boş/null ise hiçbir şey değişmez.
+    /// </summary>
+    public string? NonclusteredIndexFilegroup { get; init; }
 
     public static readonly TableScriptOptions Default = new();
 }
@@ -120,7 +129,7 @@ public static class TableScriptGenerator
         var body = new StringBuilder(4096);
 
         foreach (var key in orderedCreates)
-            EmitCreate(body, key, result, included, skipped);
+            EmitCreate(body, key, result, included, skipped, options.NonclusteredIndexFilegroup);
 
         foreach (var key in changes.OrderBy(k => k.Schema, StringComparer.OrdinalIgnoreCase)
                                     .ThenBy(k => k.Name, StringComparer.OrdinalIgnoreCase))
@@ -167,7 +176,7 @@ public static class TableScriptGenerator
 
     private static void EmitCreate(
         StringBuilder sb, ObjectKey key, CompareResult result,
-        List<ObjectKey> included, List<SkippedObject> skipped)
+        List<ObjectKey> included, List<SkippedObject> skipped, string? nonclusteredFilegroup)
     {
         if (!result.Source.Objects.TryGetValue(key, out var snapshot) ||
             string.IsNullOrWhiteSpace(snapshot.DisplayScript))
@@ -180,7 +189,9 @@ public static class TableScriptGenerator
         // Bu yüzden IF/BEGIN/END ile sarmalanamaz — GO bir batch ayıracıdır, blok içinde
         // geçersizdir. Script'i olduğu gibi yayınlıyoruz; tablo zaten varsa CREATE hata
         // verir ve XACT_ABORT işlemi geri alır (yeni tablo zaten var olmamalıdır).
-        sb.AppendLine(snapshot.DisplayScript!.TrimEnd());
+        // Ortama özel: istenirse NONCLUSTERED index CREATE'lerine dosya grubu yerleşimi eklenir.
+        var createScript = InjectNonclusteredIndexFilegroup(snapshot.DisplayScript!.TrimEnd(), nonclusteredFilegroup);
+        sb.AppendLine(createScript);
         sb.AppendLine("GO");
         sb.AppendLine();
         included.Add(key);
@@ -316,7 +327,8 @@ public static class TableScriptGenerator
         // (kolonu kilitleyen index önce düşmeli), add'ler SONRA.
         var pre = new List<string>();
         var post = new List<string>();
-        AppendIndexConstraintDiff(qualified, source, target, pre, post, fkDrops, fkAdds, options.ValidateNewConstraints);
+        AppendIndexConstraintDiff(qualified, source, target, pre, post, fkDrops, fkAdds,
+            options.ValidateNewConstraints, options.NonclusteredIndexFilegroup);
         AppendStatisticsDiff(qualified, source, target, pre, post);
         AppendFullTextDiff(qualified, source, target, pre, post);
         AppendSpecialIndexDiff(qualified, source, target, pre, post);
@@ -397,7 +409,7 @@ public static class TableScriptGenerator
     private static void AppendIndexConstraintDiff(
         string qualified, ObjectSnapshot source, ObjectSnapshot target,
         List<string> pre, List<string> post, List<string> fkDrops, List<string> fkAdds,
-        bool validateConstraints)
+        bool validateConstraints, string? nonclusteredFilegroup)
     {
         // WITH CHECK: mevcut veri doğrulanır (SSDT varsayılanı). WITH NOCHECK: doğrulama
         // atlanır — dolu tabloya constraint eklenebilir ama "not trusted" olur.
@@ -459,7 +471,7 @@ public static class TableScriptGenerator
         var idxAdds = new List<string>();
         foreach (var (name, idx) in srcIdx)
             if (!tgtIdx.TryGetValue(name, out var t) || Sig(t) != Sig(idx))
-                idxAdds.Add(CreateIndex(qualified, idx));
+                idxAdds.Add(CreateIndex(qualified, idx, nonclusteredFilegroup));
 
         // Tablo içi add sırası: index/PK-UQ → check. (FK'ler global, en sonda.)
         post.AddRange(idxAdds);
@@ -673,7 +685,30 @@ public static class TableScriptGenerator
         ? $"ALTER TABLE {qualified} DROP CONSTRAINT [{idx.Name}];"
         : $"DROP INDEX [{idx.Name}] ON {qualified};";
 
-    private static string CreateIndex(string qualified, IndexDefinition idx)
+    // Klasik NONCLUSTERED index CREATE ifadesi: CREATE [UNIQUE] NONCLUSTERED INDEX … ;
+    // (COLUMNSTORE hariç — MatchEvaluator'da ayrıca elenir). Non-greedy ".*?;" ilk ";"de durur;
+    // index CREATE'inde (filtre/WITH dahil) ";" bulunmaz, o yüzden güvenli.
+    private static readonly Regex NonclusteredCreate = new(
+        @"CREATE\s+(?:UNIQUE\s+)?NONCLUSTERED\s+INDEX\b.*?;",
+        RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
+
+    /// <summary>
+    /// DisplayScript metnindeki her klasik NONCLUSTERED index CREATE'inin sonundaki ";"den
+    /// önce <c>ON [&lt;fg&gt;]</c> ekler (columnstore ve zaten yerleşimi olan atlanır).
+    /// </summary>
+    private static string InjectNonclusteredIndexFilegroup(string script, string? filegroup)
+    {
+        if (string.IsNullOrEmpty(filegroup)) return script;
+        return NonclusteredCreate.Replace(script, m =>
+        {
+            var stmt = m.Value;
+            if (stmt.Contains("COLUMNSTORE", StringComparison.OrdinalIgnoreCase)) return stmt;
+            if (stmt.Contains($"ON [{filegroup}]", StringComparison.OrdinalIgnoreCase)) return stmt;
+            return stmt[..^1] + " ON [" + filegroup + "];";   // ";" öncesine yerleşim ekle
+        });
+    }
+
+    private static string CreateIndex(string qualified, IndexDefinition idx, string? nonclusteredFilegroup = null)
     {
         if (idx.IsConstraint)
         {
@@ -700,7 +735,13 @@ public static class TableScriptGenerator
             sb.Append(" INCLUDE (").Append(string.Join(", ", idx.IncludedColumns.Select(c => $"[{c}]"))).Append(')');
         if (idx.FilterDefinition is not null)
             sb.Append(" WHERE ").Append(idx.FilterDefinition);
-        sb.Append(WithOptions(idx)).Append(';');
+        sb.Append(WithOptions(idx));
+        // Ortama özel: klasik NONCLUSTERED index'i belirtilen dosya grubuna yerleştir
+        // (columnstore hariç — onun filegroup/placement sözdizimi farklıdır).
+        if (!string.IsNullOrEmpty(nonclusteredFilegroup) && !columnstore
+            && idx.TypeDesc.Equals("NONCLUSTERED", StringComparison.OrdinalIgnoreCase))
+            sb.Append(" ON [").Append(nonclusteredFilegroup).Append(']');
+        sb.Append(';');
         return sb.ToString();
     }
 
