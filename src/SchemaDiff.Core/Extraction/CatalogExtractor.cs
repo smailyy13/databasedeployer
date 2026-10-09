@@ -58,6 +58,9 @@ internal sealed class CatalogSet
     public List<PartitionRangeValueRow> PartitionRangeValues { get; set; } = [];
     public List<PartitionSchemeRow> PartitionSchemes { get; set; } = [];
     public List<PartitionSchemeFileRow> PartitionSchemeFiles { get; set; } = [];
+    public List<DataSpaceRow> DataSpaces { get; set; } = [];
+    public List<TablePlacementRow> TablePlacements { get; set; } = [];
+    public List<PartitionColumnRow> PartitionColumns { get; set; } = [];
 
     public string ServerName { get; set; } = "";
     public string DatabaseName { get; set; } = "";
@@ -67,7 +70,9 @@ internal sealed class CatalogSet
 
 /// <summary>
 /// Tüm şema metadata'sını obje başına değil, obje SINIFI başına tek sorguyla çeker.
-/// 10 sorgu paralel bağlantılarda koşar; DacFx'in semantik model kurmasına gerek yok.
+/// 51 sorgu paralel bağlantılarda koşar; DacFx'in semantik model kurmasına gerek yok.
+/// 38'i opsiyoneldir: eski bir sürümde ya da yetki eksikliğinde düşen sorgu karşılaştırmayı
+/// durdurmaz, adı ExtractionReport.FailedQueries'e yazılır — "okunamadı" ile "yok" ayrılır.
 /// </summary>
 public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTimeoutSeconds = 300)
 {
@@ -85,7 +90,7 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
         await PreflightAsync(connectionString, catalog, report, ct);
         progress.EnterPhase(ComparePhase.Extracting);
 
-        // Her sorgu kendi bağlantısında — 10 sorgu paralel koşar, toplam süre en yavaş sorgu kadardır.
+        // Her sorgu kendi bağlantısında — hepsi paralel koşar, toplam süre en yavaş sorgu kadardır.
         var tasks = new List<Task>
         {
             Run("schemas", Sql.Schemas, r => new SchemaRow(Rdr.Int(r, 0), Rdr.Str(r, 1)), rows => catalog.Schemas = rows),
@@ -193,6 +198,12 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
                 rows => catalog.PartitionSchemes = rows, optional: true),
             Run("partitionSchemeFiles", Sql.PartitionSchemeFiles, MapPartitionSchemeFile,
                 rows => catalog.PartitionSchemeFiles = rows, optional: true),
+            Run("dataSpaces", Sql.DataSpaces, MapDataSpace,
+                rows => catalog.DataSpaces = rows, optional: true),
+            Run("tablePlacement", Sql.TablePlacement, MapTablePlacement,
+                rows => catalog.TablePlacements = rows, optional: true),
+            Run("partitionColumns", Sql.PartitionColumns, MapPartitionColumn,
+                rows => catalog.PartitionColumns = rows, optional: true),
         };
 
         await Task.WhenAll(tasks);
@@ -327,7 +338,16 @@ public sealed class CatalogExtractor(ExtractionGate? gate = null, int commandTim
         Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.NStr(r, 2), Rdr.Str(r, 3),
         Rdr.Bool(r, 4), Rdr.Bool(r, 5), Rdr.Bool(r, 6),
         Rdr.Byte(r, 7), Rdr.Bool(r, 8), Rdr.Bool(r, 9), Rdr.NStr(r, 10), Rdr.NStr(r, 11),
-        Rdr.Bool(r, 12), Rdr.Bool(r, 13));
+        Rdr.Bool(r, 12), Rdr.Bool(r, 13), Rdr.Int(r, 14));
+
+    private static DataSpaceRow MapDataSpace(SqlDataReader r) => new(
+        Rdr.Int(r, 0), Rdr.Str(r, 1), Rdr.Str(r, 2).Trim());
+
+    private static TablePlacementRow MapTablePlacement(SqlDataReader r) => new(
+        Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.Int(r, 2));
+
+    private static PartitionColumnRow MapPartitionColumn(SqlDataReader r) => new(
+        Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.Str(r, 2));
 
     private static IndexColumnRow MapIndexColumn(SqlDataReader r) => new(
         Rdr.Int(r, 0), Rdr.Int(r, 1), Rdr.Int(r, 2), Rdr.Int(r, 3),
