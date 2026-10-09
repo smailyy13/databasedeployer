@@ -29,6 +29,9 @@ const I18N = {
     source: 'Source', target: 'Target', selectConnection: 'select connection',
     swap: 'Source ↔ Target', compare: 'Compare', generateScript: 'Generate Script',
     newComparison: 'New comparison', newComparisonTip: 'Open a new comparison in a separate tab',
+    favorites: 'Favorites', favAdd: '+ Save current pair', favEmpty: 'No favorites yet — pick a source and target, then "Save current pair".',
+    favNeedBoth: 'Pick both source and target first.', favNamePrompt: 'Favorite name:',
+    favLoaded: 'Favorite loaded — review and Compare.', favRemove: 'Remove', favNoPass: '(password not saved — enter it if asked)',
     reverseTip: 'Mark for reverse (rollback) — included when you Generate Script',
     reverseIncluded: '{n} reversed in the reverse section',
     generateScriptTip: 'Generate a deployment script from selected changes',
@@ -158,6 +161,9 @@ const I18N = {
     source: 'Kaynak', target: 'Hedef', selectConnection: 'bağlantı seçin',
     swap: 'Kaynak ↔ Hedef', compare: 'Karşılaştır', generateScript: 'Script Üret',
     newComparison: 'Yeni karşılaştırma', newComparisonTip: 'Yeni karşılaştırmayı ayrı sekmede aç',
+    favorites: 'Favoriler', favAdd: '+ Bu çifti kaydet', favEmpty: 'Henüz favori yok — kaynak ve hedef seç, sonra "Bu çifti kaydet".',
+    favNeedBoth: 'Önce kaynak ve hedefi seç.', favNamePrompt: 'Favori adı:',
+    favLoaded: 'Favori yüklendi — kontrol edip Karşılaştır.', favRemove: 'Kaldır', favNoPass: '(parola kaydedilmez — sorulursa gir)',
     reverseTip: 'Ters (geri alma) için işaretle — Generate Script\'te dahil edilir',
     reverseIncluded: '{n} obje ters bölümde',
     generateScriptTip: 'Seçili değişikliklerden dağıtım script\'i üret',
@@ -666,6 +672,69 @@ function renderEndpoints() {
     value.textContent = connection ? `${connection.server}.${connection.database}` : t('selectConnection');
   }
   $('compareBtn').disabled = !(state.source && state.target);
+}
+
+// ================= favori bağlantı çiftleri =================
+// Cihazda (localStorage) saklanır: {name, source, target, options}. PAROLA saklanmaz —
+// SQL auth'ta "parolayı hatırla" ile sunucuda tutulan parola (recent id ile) çözülür.
+const FAV_KEY = 'favorites';
+function loadFavs() {
+  try { const v = JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); return Array.isArray(v) ? v : []; }
+  catch { return []; }
+}
+function saveFavs(favs) { try { localStorage.setItem(FAV_KEY, JSON.stringify(favs)); } catch { /* yut */ } }
+function stripPw(conn) { return conn ? { ...conn, password: null } : conn; }
+function connLabel(c) { return c ? `${c.server}.${c.database ?? ''}` : '—'; }
+
+function renderFavList() {
+  const list = $('favList');
+  const favs = loadFavs();
+  if (!favs.length) { list.innerHTML = `<p class="fav-empty">${esc(t('favEmpty'))}</p>`; return; }
+  list.innerHTML = favs.map((f, i) => `
+    <div class="fav-item" data-i="${i}">
+      <div class="fi-main">
+        <div class="fi-name">${esc(f.name)}</div>
+        <div class="fi-sub">${esc(connLabel(f.source))} → ${esc(connLabel(f.target))}</div>
+      </div>
+      <button class="fi-x" data-del="${i}" title="${esc(t('favRemove'))}">✕</button>
+    </div>`).join('');
+  for (const el of list.querySelectorAll('.fav-item')) {
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.fi-x')) return;
+      loadFav(loadFavs()[Number(el.dataset.i)]);
+    });
+  }
+  for (const btn of list.querySelectorAll('.fi-x')) {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const favs2 = loadFavs(); favs2.splice(Number(btn.dataset.del), 1); saveFavs(favs2); renderFavList();
+    });
+  }
+}
+
+function loadFav(fav) {
+  if (!fav) return;
+  state.source = fav.source ? { ...fav.source } : null;
+  state.target = fav.target ? { ...fav.target } : null;
+  if (fav.options && typeof fav.options === 'object') {
+    state.options = { ...DEFAULT_OPTIONS, ...fav.options, ignoreWhitespace: true };
+    saveOptions(); renderOptions();
+  }
+  renderEndpoints();
+  $('favPanel').hidden = true;
+  const needsPw = [state.source, state.target].some(c => c && c.authentication === 'SqlLogin');
+  setStatus(t('favLoaded') + (needsPw ? '  ' + t('favNoPass') : ''));
+}
+
+function addCurrentFav() {
+  if (!(state.source && state.target)) { setStatus(t('favNeedBoth'), 'error'); return; }
+  const def = `${connLabel(state.source)} → ${connLabel(state.target)}`;
+  const name = (window.prompt(t('favNamePrompt'), def) || '').trim();
+  if (!name) return;
+  const favs = loadFavs();
+  favs.push({ name, source: stripPw(state.source), target: stripPw(state.target), options: { ...state.options } });
+  saveFavs(favs);
+  renderFavList();
 }
 
 // ================= seçenekler =================
@@ -1642,6 +1711,16 @@ $('swapBtn').addEventListener('click', () => {
   [state.source, state.target] = [state.target, state.source];
   renderEndpoints();
 });
+
+// Favoriler: ★ paneli aç/kapat, çifti kaydet, dışarı tıklayınca kapat.
+$('favBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const panel = $('favPanel');
+  if (panel.hidden) { renderFavList(); panel.hidden = false; } else { panel.hidden = true; }
+});
+$('favAddBtn').addEventListener('click', (e) => { e.stopPropagation(); addCurrentFav(); });
+$('favPanel').addEventListener('click', (e) => e.stopPropagation());
+document.addEventListener('click', () => { $('favPanel').hidden = true; });
 
 $('connClose').addEventListener('click', closeConnect);
 $('connCancel').addEventListener('click', closeConnect);
