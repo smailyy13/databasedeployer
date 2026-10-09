@@ -15,6 +15,10 @@ public sealed record ScriptOptions
     /// <summary>Modüllerin ihtiyaç duyduğu ve hedefte olmayan şemaları oluştur.</summary>
     public bool CreateMissingSchemas { get; init; } = true;
 
+    /// <summary>YALNIZCA eksik şemaların CREATE'ini üret; modül/drop ve şema DROP'u atla.
+    /// Birleşik script'te şemalar EN BAŞTA (tablolardan önce) oluşturulsun diye kullanılır.</summary>
+    public bool SchemasOnly { get; init; }
+
     /// <summary>Başlığa yazılacak zaman damgası. Çağıran verir; üretim deterministik kalsın.</summary>
     public string? GeneratedAt { get; init; }
 
@@ -87,6 +91,9 @@ public static class ModuleScriptGenerator
         {
             if (selection is not null && !selection.Contains(diff.Key)) continue;
 
+            // SchemasOnly: yalnız şema diff'leriyle ilgilen; gerisini (sayaç şişmesin diye) atla.
+            if (options.SchemasOnly && diff.Key.Kind != ObjectKind.Schema) continue;
+
             if (diff.Kind == DiffKind.Indeterminate)
             {
                 skipped.Add(new SkippedObject(diff.Key, "karşılaştırılamadı — tanımı okunamıyor"));
@@ -96,6 +103,7 @@ public static class ModuleScriptGenerator
             if (diff.Key.Kind == ObjectKind.Schema)
             {
                 if (diff.Kind == DiffKind.Added && options.CreateMissingSchemas) schemasToAdd.Add(diff.Key);
+                else if (options.SchemasOnly) { /* yalnız create; drop ana modül geçişinde */ }
                 else if (diff.Kind == DiffKind.Removed && options.IncludeDrops) schemasToDrop.Add(diff.Key);
                 else outOfScope.Add(diff.Key);
                 continue;
