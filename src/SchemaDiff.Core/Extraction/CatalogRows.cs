@@ -121,7 +121,17 @@ internal sealed record IndexRow(
     bool IsUnique, bool IsPrimaryKey, bool IsUniqueConstraint,
     byte FillFactor, bool IsPadded, bool IgnoreDupKey, string? FilterDefinition,
     string? DataCompression = null,
-    bool AllowRowLocks = true, bool AllowPageLocks = true);
+    bool AllowRowLocks = true, bool AllowPageLocks = true,
+    int DataSpaceId = 0);
+
+/// <summary>Filegroup ya da partition scheme (type='PS'). CREATE'teki "ON [...]" yerleşimi.</summary>
+internal sealed record DataSpaceRow(int Id, string Name, string Type);
+
+/// <summary>Tablonun temel yerleşimi: heap (0) / clustered (1) index'in data_space'i.</summary>
+internal sealed record TablePlacementRow(int ObjectId, int IndexId, int DataSpaceId);
+
+/// <summary>Partition'lı obje/index'in bölümleme kolonu (partition_ordinal = 1).</summary>
+internal sealed record PartitionColumnRow(int ObjectId, int IndexId, string Column);
 
 /// <summary><paramref name="UsingXmlIndexId"/> null ise primary XML index, aksi hâlde
 /// <paramref name="PrimaryIndexName"/> adlı primary'ye bağlı secondary'dir.</summary>
