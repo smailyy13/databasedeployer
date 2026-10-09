@@ -69,6 +69,10 @@ public sealed class ObjectSnapshot
     /// </summary>
     public IReadOnlyList<IndexDefinition>? IndexDefinitions { get; set; }
 
+    /// <summary>Tablonun depolama yerleşimi: "[filegroup]" ya da "[scheme]([kolon])"; yoksa null.
+    /// CREATE TABLE'ın sonundaki "ON [...]" bundan üretilir.</summary>
+    public string? Placement { get; set; }
+
     public IReadOnlyList<CheckDefinition>? CheckDefinitions { get; set; }
 
     public IReadOnlyList<ForeignKeyDefinition>? ForeignKeyDefinitions { get; set; }
@@ -121,7 +125,8 @@ public sealed record IndexDefinition(
     bool AllowRowLocks = true,
     bool AllowPageLocks = true,
     bool OptimizeForSequentialKey = false,
-    bool StatisticsNoRecompute = false)
+    bool StatisticsNoRecompute = false,
+    string? Placement = null)
 {
     /// <summary>PK ve UNIQUE constraint'ler ALTER TABLE ADD CONSTRAINT ile yazılır; ötekiler CREATE INDEX.</summary>
     public bool IsConstraint => IsPrimaryKey || IsUniqueConstraint;

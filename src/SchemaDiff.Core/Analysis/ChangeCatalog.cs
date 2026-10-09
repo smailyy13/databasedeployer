@@ -202,6 +202,13 @@ public static class ChangeCatalog
                         "ANSI_NULLS / QUOTED_IDENTIFIER", $"{key.Schema}.{key.Name}", null));
                     break;
 
+                case "placement":
+                    children.Add(new ChildChange(ChangeAction.Change, "Storage", "Placement",
+                        "dosya grubu / partition şeması", $"{key.Schema}.{key.Name}",
+                        $"{target.PartCanonical.GetValueOrDefault("placement", "-")} → " +
+                        $"{source.PartCanonical.GetValueOrDefault("placement", "-")}"));
+                    break;
+
                 case "temporal":
                     children.Add(new ChildChange(ChangeAction.Change, "Properties", "System Versioning",
                         "temporal ayarı", $"{key.Schema}.{key.Name}",
