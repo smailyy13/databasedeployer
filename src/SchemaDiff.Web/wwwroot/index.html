@@ -45,6 +45,24 @@
   <div class="fav-list" id="favList"></div>
 </div>
 
+<div class="scrim" id="favNameScrim" hidden></div>
+<div class="dialog narrow" id="favNameDialog" hidden>
+  <div class="dialog-head">
+    <h2 data-i18n="favNameTitle">Save favorite</h2>
+    <button class="x" id="favNameClose">✕</button>
+  </div>
+  <div class="dialog-body single">
+    <label class="row"><span data-i18n="favNamePrompt">Favorite name:</span>
+      <input type="text" id="favNameInput" autocomplete="off"></label>
+    <p class="hint" id="favNameSub"></p>
+  </div>
+  <div class="dialog-foot">
+    <div class="grow"></div>
+    <button class="btn ghost" id="favNameCancel" data-i18n="cancel">Cancel</button>
+    <button class="btn primary" id="favNameSave" data-i18n="save">Save</button>
+  </div>
+</div>
+
 <div class="statusbar" id="statusbar" data-i18n="pickTwo">Select two connections to compare.</div>
 
 <main class="split">
