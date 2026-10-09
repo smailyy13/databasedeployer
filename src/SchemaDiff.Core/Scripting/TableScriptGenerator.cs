@@ -692,9 +692,16 @@ public static class TableScriptGenerator
         @"CREATE\s+(?:UNIQUE\s+)?NONCLUSTERED\s+INDEX\b.*?;",
         RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
 
+    // İfadenin SONUNDAKİ yerleşim eki: " ON [fg]" / " ON [scheme]([kolon])" + ";". Tablo
+    // referansı "ON [şema].[tablo]" buna uymaz (içinde "].[" var; "." ne "(" ne ";" ile sürer).
+    private static readonly Regex TrailingPlacement = new(
+        @"\s+ON\s+\[[^\]]+\](?:\s*\(\s*\[[^\]]+\]\s*\))?\s*;$",
+        RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
+
     /// <summary>
-    /// DisplayScript metnindeki her klasik NONCLUSTERED index CREATE'inin sonundaki ";"den
-    /// önce <c>ON [&lt;fg&gt;]</c> ekler (columnstore ve zaten yerleşimi olan atlanır).
+    /// DisplayScript metnindeki her klasik NONCLUSTERED index CREATE'inin yerleşimini
+    /// <c>ON [&lt;fg&gt;]</c> ile DEĞİŞTİRİR (yoksa ekler). DisplayScript artık kaynaktaki gerçek
+    /// yerleşimi taşıdığından override, var olan " ON [x]"i söker ve INDEX_FG koyar. Columnstore atlanır.
     /// </summary>
     private static string InjectNonclusteredIndexFilegroup(string script, string? filegroup)
     {
@@ -703,8 +710,8 @@ public static class TableScriptGenerator
         {
             var stmt = m.Value;
             if (stmt.Contains("COLUMNSTORE", StringComparison.OrdinalIgnoreCase)) return stmt;
-            if (stmt.Contains($"ON [{filegroup}]", StringComparison.OrdinalIgnoreCase)) return stmt;
-            return stmt[..^1] + " ON [" + filegroup + "];";   // ";" öncesine yerleşim ekle
+            var withoutPlacement = TrailingPlacement.Replace(stmt, ";");   // mevcut yerleşimi sök
+            return withoutPlacement[..^1] + " ON [" + filegroup + "];";
         });
     }
 
@@ -736,11 +743,13 @@ public static class TableScriptGenerator
         if (idx.FilterDefinition is not null)
             sb.Append(" WHERE ").Append(idx.FilterDefinition);
         sb.Append(WithOptions(idx));
-        // Ortama özel: klasik NONCLUSTERED index'i belirtilen dosya grubuna yerleştir
-        // (columnstore hariç — onun filegroup/placement sözdizimi farklıdır).
-        if (!string.IsNullOrEmpty(nonclusteredFilegroup) && !columnstore
-            && idx.TypeDesc.Equals("NONCLUSTERED", StringComparison.OrdinalIgnoreCase))
-            sb.Append(" ON [").Append(nonclusteredFilegroup).Append(']');
+        // Depolama yerleşimi: normalde kaynaktaki gerçek yerleşim (idx.Placement). Ancak ortama
+        // özel INDEX_FG override'ı açıksa (belirli sunucu çifti), klasik NONCLUSTERED index'i
+        // onun yerine o dosya grubuna koyar (columnstore hariç).
+        var overrideFg = !string.IsNullOrEmpty(nonclusteredFilegroup) && !columnstore
+            && idx.TypeDesc.Equals("NONCLUSTERED", StringComparison.OrdinalIgnoreCase);
+        var place = overrideFg ? $"[{nonclusteredFilegroup}]" : idx.Placement;
+        if (!string.IsNullOrEmpty(place)) sb.Append(" ON ").Append(place);
         sb.Append(';');
         return sb.ToString();
     }
@@ -805,7 +814,7 @@ public static class TableScriptGenerator
         $"keys={string.Join(",", i.KeyColumns.Select(k => $"{k.Column}:{(k.Descending ? "D" : "A")}"))}|" +
         $"inc={string.Join(",", i.IncludedColumns)}|f={i.FilterDefinition ?? ""}|" +
         $"comp={i.ExplicitCompression ?? ""}|rowLocks={i.AllowRowLocks}|pageLocks={i.AllowPageLocks}|" +
-        $"seqKey={i.OptimizeForSequentialKey}|statsNoRecompute={i.StatisticsNoRecompute}";
+        $"seqKey={i.OptimizeForSequentialKey}|statsNoRecompute={i.StatisticsNoRecompute}|place={i.Placement ?? ""}";
 
     private static string Sig(XmlIndexDefinition x) =>
         $"col={x.Column}|primary={x.IsPrimary}|for={x.SecondaryType}|using={x.PrimaryIndexName}";

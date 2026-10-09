@@ -18,6 +18,10 @@ internal sealed class TableScriptSources
     public required Dictionary<long, string> ColumnNames { get; init; }
     public Dictionary<int, string> XmlCollections { get; init; } = [];
     public required Dictionary<int, ObjectKey> KeyById { get; init; }
+    /// <summary>object_id → "[filegroup]" / "[scheme]([kolon])" (CREATE TABLE "ON [...]"); yoksa yok.</summary>
+    public Dictionary<int, string?> TablePlacement { get; init; } = [];
+    /// <summary>Pair(object_id,index_id) → index yerleşimi (CREATE INDEX "ON [...]"); yoksa yok.</summary>
+    public Dictionary<long, string?> IndexPlacement { get; init; } = [];
     public Dictionary<int, TemporalRow> TemporalBy { get; init; } = [];
     public Dictionary<int, List<StatisticRow>> StatisticsBy { get; init; } = [];
     public Dictionary<long, List<StatisticColumnRow>> StatisticColumnsBy { get; init; } = [];
@@ -66,7 +70,11 @@ internal static class TableScriptWriter
         for (var i = 0; i < body.Count; i++)
             sb.Append(body[i]).AppendLine(i < body.Count - 1 ? "," : string.Empty);
 
-        sb.Append(')').Append(SystemVersioningSuffix(temporal)).AppendLine(";");
+        // Depolama yerleşimi: ") ON [filegroup]" / ") ON [scheme]([kolon])". SQL sözdiziminde
+        // ON, temporal WITH (SYSTEM_VERSIONING…) ekinden ÖNCE gelir.
+        var placement = sources.TablePlacement.GetValueOrDefault(objectId);
+        var placementClause = string.IsNullOrEmpty(placement) ? string.Empty : $" ON {placement}";
+        sb.Append(')').Append(placementClause).Append(SystemVersioningSuffix(temporal)).AppendLine(";");
 
         foreach (var line in WriteIndexes(key, objectId, sources, options))
         {
@@ -319,6 +327,10 @@ internal static class TableScriptWriter
                 if (withOptions.Count > 0)
                     sb.AppendLine().Append("    WITH (").Append(string.Join(", ", withOptions)).Append(')');
             }
+
+            // Depolama yerleşimi: " ON [filegroup]" / " ON [scheme]([kolon])".
+            var place = sources.IndexPlacement.GetValueOrDefault(Pair(objectId, index.IndexId));
+            if (!string.IsNullOrEmpty(place)) sb.Append(" ON ").Append(place);
 
             sb.Append(';');
             lines.Add(sb.ToString());
