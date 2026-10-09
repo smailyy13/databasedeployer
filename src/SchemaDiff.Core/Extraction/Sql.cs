@@ -112,7 +112,7 @@ internal static class Sql
                i.is_unique, i.is_primary_key, i.is_unique_constraint,
                i.fill_factor, i.is_padded, i.ignore_dup_key, i.filter_definition,
                p.data_compression_desc,
-               i.allow_row_locks, i.allow_page_locks
+               i.allow_row_locks, i.allow_page_locks, i.data_space_id
         FROM sys.indexes AS i
         INNER JOIN sys.objects AS o
             ON o.object_id = i.object_id AND o.is_ms_shipped = 0 AND o.type IN ('U','V')
@@ -413,6 +413,34 @@ internal static class Sql
         FROM sys.destination_data_spaces AS dds
         INNER JOIN sys.filegroups AS fg ON fg.data_space_id = dds.data_space_id
         ORDER BY dds.partition_scheme_id, dds.destination_id;
+        """;
+
+    // --- Depolama yerleşimi (CREATE TABLE/INDEX'teki "ON [filegroup]" / "ON [scheme]([kolon])") ---
+    // data_space: hem filegroup hem partition scheme'i kapsar; type 'PS' → partition scheme.
+    public const string DataSpaces = """
+        SELECT data_space_id, name, type FROM sys.data_spaces;
+        """;
+
+    // Tablonun temel yerleşimi: heap (index_id 0) ya da clustered index (index_id 1) hangi
+    // data_space'te duruyor. CREATE TABLE'ın sonundaki "ON [...]" bundan gelir.
+    public const string TablePlacement = """
+        SELECT i.object_id, i.index_id, i.data_space_id
+        FROM sys.indexes AS i
+        INNER JOIN sys.objects AS o
+            ON o.object_id = i.object_id AND o.is_ms_shipped = 0 AND o.type = 'U'
+        WHERE i.index_id IN (0, 1);
+        """;
+
+    // Partition'lı obje/index'in bölümleme kolonu (partition_ordinal = 1). scheme yerleşiminde
+    // "ON [scheme]([kolon])" için gerekir.
+    public const string PartitionColumns = """
+        SELECT ic.object_id, ic.index_id, c.name
+        FROM sys.index_columns AS ic
+        INNER JOIN sys.columns AS c
+            ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+        INNER JOIN sys.objects AS o
+            ON o.object_id = ic.object_id AND o.is_ms_shipped = 0 AND o.type IN ('U','V')
+        WHERE ic.partition_ordinal = 1;
         """;
 
     // Table type'lar (CREATE TYPE dbo.IdList AS TABLE(...)). Kolonları ayrı sorguda çekilir;
