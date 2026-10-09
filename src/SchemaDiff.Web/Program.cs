@@ -216,7 +216,20 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
     // Bir yön için tüm dilimleri (tip → tablo → modül → rol → EP/izin) doğru sırada yazar.
     void BuildBody(CompareResult comparison, ISet<ObjectKey>? selection)
     {
-        // Kullanıcı tanımlı tipler EN BAŞTA: tablo ve modüller onlara bağlı olabilir.
+        // Şemalar EN BAŞTA: yeni tablo/tip/modül onlara bağlı; şema yoksa CREATE TABLE patlar.
+        // (Şema DROP'u en sonda — aşağıdaki ana modül geçişinde.)
+        if (wantTables || wantModules)
+        {
+            var schemas = ModuleScriptGenerator.Generate(comparison, selection, new ScriptOptions
+            {
+                GeneratedAt = generatedAt,
+                SchemasOnly = true,
+                IncludeDrops = request.DropNotInSource,
+            });
+            if (!schemas.IsEmpty) { sb.AppendLine(schemas.Sql); sb.AppendLine(); included += schemas.Included.Count; }
+        }
+
+        // Kullanıcı tanımlı tipler: tablo ve modüller onlara bağlı olabilir.
         if (wantTables || wantModules)
         {
             var types = TypeScriptGenerator.Generate(comparison, selection,
@@ -258,6 +271,7 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
                 GeneratedAt = generatedAt,
                 TablesHandledElsewhere = wantTables,
                 IncludeDrops = request.DropNotInSource,
+                CreateMissingSchemas = false,   // şemalar en başta ayrı geçişte üretildi (DROP burada kalır)
                 // Tip üretecinin listesinden türetilir; elle kopyalanınca sürekli ayrışıyordu.
                 HandledElsewhere = new HashSet<ObjectKind>(TypeScriptGenerator.HandledKinds)
                 {
