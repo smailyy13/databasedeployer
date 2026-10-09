@@ -690,14 +690,18 @@ function renderFavList() {
   const list = $('favList');
   const favs = loadFavs();
   if (!favs.length) { list.innerHTML = `<p class="fav-empty">${esc(t('favEmpty'))}</p>`; return; }
-  list.innerHTML = favs.map((f, i) => `
+  list.innerHTML = favs.map((f, i) => {
+    const pair = `${connLabel(f.source)} → ${connLabel(f.target)}`;
+    const sub = (f.name || '').trim() === pair ? '' : `<div class="fi-sub">${esc(pair)}</div>`;
+    return `
     <div class="fav-item" data-i="${i}">
       <div class="fi-main">
         <div class="fi-name">${esc(f.name)}</div>
-        <div class="fi-sub">${esc(connLabel(f.source))} → ${esc(connLabel(f.target))}</div>
+        ${sub}
       </div>
       <button class="fi-x" data-del="${i}" title="${esc(t('favRemove'))}">✕</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   for (const el of list.querySelectorAll('.fav-item')) {
     el.addEventListener('click', (e) => {
       if (e.target.closest('.fi-x')) return;
