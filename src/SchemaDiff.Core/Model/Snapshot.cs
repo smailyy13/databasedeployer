@@ -13,19 +13,8 @@ public sealed class ObjectSnapshot
     public required UInt128 Hash { get; set; }
     public DateTime ModifyDate { get; init; }
 
-    /// <summary>
-    /// Objenin kanonik metni (normalize edilmiş) — <see cref="PartCanonical"/> parçalarının
-    /// Ordinal sırada birleşimi. Detay diff burada üretilir.
-    ///
-    /// SAKLANMAZ, istendiğinde kurulur. Saklandığında her objenin kanonik metni bellekte
-    /// iki kez duruyordu (bir parça parça, bir de birleşik) — oysa bu metin tek seferde
-    /// yalnızca TEK obje için okunur: arayüzün "kanonik metin" kutusu ve CLI'nin
-    /// <c>--show</c> raporu. 10.000 objeli bir karşılaştırmada ikinci kopya tamamen ölü
-    /// yüktü ve aracın kendi ilkesine ("eşit hash'li objenin metnine hiç bakılmaz") aykırıydı.
-    /// </summary>
-    public string Canonical => string.Join('\n',
-        Parts.Keys.OrderBy(k => k, StringComparer.Ordinal)
-            .Select(k => $"-- [{k}]\n{PartCanonical.GetValueOrDefault(k, string.Empty)}"));
+    /// <summary>Objenin kanonik metni (normalize edilmiş). Detay diff burada üretilir.</summary>
+    public string Canonical { get; set; } = string.Empty;
 
     /// <summary>
     /// Alt-parça hash'leri ("columns", "indexes", "constraints", "foreignKeys", "body").
@@ -80,6 +69,10 @@ public sealed class ObjectSnapshot
     /// </summary>
     public IReadOnlyList<IndexDefinition>? IndexDefinitions { get; set; }
 
+    /// <summary>Tablonun depolama yerleşimi: "[filegroup]" ya da "[scheme]([kolon])"; yoksa null.
+    /// CREATE TABLE'ın sonundaki "ON [...]" bundan üretilir.</summary>
+    public string? Placement { get; set; }
+
     public IReadOnlyList<CheckDefinition>? CheckDefinitions { get; set; }
 
     public IReadOnlyList<ForeignKeyDefinition>? ForeignKeyDefinitions { get; set; }
@@ -132,7 +125,8 @@ public sealed record IndexDefinition(
     bool AllowRowLocks = true,
     bool AllowPageLocks = true,
     bool OptimizeForSequentialKey = false,
-    bool StatisticsNoRecompute = false)
+    bool StatisticsNoRecompute = false,
+    string? Placement = null)
 {
     /// <summary>PK ve UNIQUE constraint'ler ALTER TABLE ADD CONSTRAINT ile yazılır; ötekiler CREATE INDEX.</summary>
     public bool IsConstraint => IsPrimaryKey || IsUniqueConstraint;

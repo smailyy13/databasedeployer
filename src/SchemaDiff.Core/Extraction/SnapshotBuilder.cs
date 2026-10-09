@@ -128,6 +128,28 @@ internal static class SnapshotBuilder
             ? columnNames
             : columnNames.ToDictionary(kv => kv.Key, kv => kv.Value.ToLowerInvariant());
 
+        // Depolama yerleşimi: her tablo/index "ON [filegroup]" ya da "ON [scheme]([kolon])"
+        // üzerinde durur. data_space hem filegroup hem partition scheme'i kapsar (type 'PS').
+        var dataSpaces = new Dictionary<int, (string Name, bool IsScheme)>(catalog.DataSpaces.Count);
+        foreach (var d in catalog.DataSpaces) dataSpaces[d.Id] = (d.Name, d.Type == "PS");
+        var partitionCols = new Dictionary<long, string>(catalog.PartitionColumns.Count);
+        foreach (var p in catalog.PartitionColumns) partitionCols[Pair(p.ObjectId, p.IndexId)] = p.Column;
+
+        string? ResolvePlacement(int dataSpaceId, int objectId, int indexId)
+        {
+            if (dataSpaceId <= 0 || !dataSpaces.TryGetValue(dataSpaceId, out var ds)) return null;
+            if (!ds.IsScheme) return $"[{ds.Name}]";
+            var col = partitionCols.GetValueOrDefault(Pair(objectId, indexId));
+            return col is null ? $"[{ds.Name}]" : $"[{ds.Name}]([{col}])";
+        }
+
+        var indexPlacement = new Dictionary<long, string?>(catalog.Indexes.Count);
+        foreach (var i in catalog.Indexes)
+            indexPlacement[Pair(i.ObjectId, i.IndexId)] = ResolvePlacement(i.DataSpaceId, i.ObjectId, i.IndexId);
+        var tablePlacement = new Dictionary<int, string?>(catalog.TablePlacements.Count);
+        foreach (var tp in catalog.TablePlacements)
+            tablePlacement[tp.ObjectId] = ResolvePlacement(tp.DataSpaceId, tp.ObjectId, tp.IndexId);
+
         // Tipli XML kolonları id tutar, ad tutmaz: id ortamlar arasında farklıdır, bu yüzden
         // karşılaştırmaya da script'e de ADI girer.
         var xmlCollections = new Dictionary<int, string>(catalog.XmlSchemaCollections.Count);
@@ -219,6 +241,8 @@ internal static class SnapshotBuilder
             FkColumnsBy = fkColumnsBy,
             ColumnNames = columnNames,
             KeyById = keyById,
+            TablePlacement = tablePlacement,
+            IndexPlacement = indexPlacement,
             TemporalBy = temporalById,
             StatisticsBy = statisticsBy,
             StatisticColumnsBy = statisticColumnsBy,
@@ -601,7 +625,7 @@ internal static class SnapshotBuilder
                         snapshot.DisplayScript = Scripting.TableScriptWriter.Write(key, obj.ObjectId, scriptSources, options);
                         snapshot.IndexDefinitions = BuildIndexDefinitions(
                             obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, columnNames,
-                            indexExtrasBy, options);
+                            indexExtrasBy, indexPlacement, options);
                         snapshot.CheckDefinitions = BuildCheckDefinitions(checksBy.GetValueOrDefault(obj.ObjectId), options);
                         snapshot.ForeignKeyDefinitions = BuildForeignKeyDefinitions(
                             foreignKeysBy.GetValueOrDefault(obj.ObjectId), fkColumnsBy, columnNames, keyById, options);
@@ -615,7 +639,7 @@ internal static class SnapshotBuilder
                             obj.ObjectId, spatialIndexesBy, indexColumnsBy, columnNames);
                     }
                     SetPart(snapshot, "columns", BuildColumns(columnsBy.GetValueOrDefault(obj.ObjectId), xmlCollections, options));
-                    SetPartFoldNames(snapshot, "indexes", BuildIndexes(obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, canonicalColumnNames, indexExtrasBy, options), options);
+                    SetPartFoldNames(snapshot, "indexes", BuildIndexes(obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, canonicalColumnNames, indexExtrasBy, indexPlacement, options), options);
                     SetPartFoldNames(snapshot, "statistics", BuildStatistics(obj.ObjectId, statisticsBy, statisticColumnsBy, canonicalColumnNames, options), options);
                     SetPart(snapshot, "fullText", BuildFullText(obj.ObjectId, fullTextById, fullTextColumnsBy, canonicalColumnNames));
                     SetPartFoldNames(snapshot, "xmlIndexes", BuildSpecialIndexes(
@@ -629,6 +653,12 @@ internal static class SnapshotBuilder
                     SetPartFoldNames(snapshot, "foreignKeys", BuildForeignKeys(foreignKeysBy.GetValueOrDefault(obj.ObjectId), fkColumnsBy, canonicalColumnNames, keyById, options), options);
                     if (temporalById.TryGetValue(obj.ObjectId, out var temporal))
                         SetPart(snapshot, "temporal", BuildTemporal(temporal));
+                    // Depolama yerleşimi (filegroup / partition scheme): hem script'e girer hem
+                    // farkı kanonikte tespit edilir. İsimler folded (CI'de yalnız yazım farkı
+                    // fark sayılmasın); null/boşsa part yazılmaz.
+                    snapshot.Placement = tablePlacement.GetValueOrDefault(obj.ObjectId);
+                    if (!string.IsNullOrEmpty(snapshot.Placement))
+                        SetPart(snapshot, "placement", FoldName(snapshot.Placement, options));
                     break;
 
                 case ObjectKind.View:
@@ -640,7 +670,7 @@ internal static class SnapshotBuilder
                     // düzeltilemez). Bu yüzden view karşılaştırması GÖVDEYE göre yapılır;
                     // türetilmiş kolon metadata'sı hash'e girmez (SSDT de böyle davranır).
                     // Gerçek fark base tabloda/view'da kendi karşılaştırmasında yakalanır.
-                    SetPartFoldNames(snapshot, "indexes", BuildIndexes(obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, canonicalColumnNames, indexExtrasBy, options), options);
+                    SetPartFoldNames(snapshot, "indexes", BuildIndexes(obj.ObjectId, indexesBy, indexColumnsBy, keyConstraintByIndex, canonicalColumnNames, indexExtrasBy, indexPlacement, options), options);
                     // Indexed view'larda kullanıcı istatistiği olabilir: farkı GÖRÜNÜR kılıyoruz.
                     // Script'i view'ın kendi drop+create'i üzerinden gider (tablo yolu değil).
                     SetPartFoldNames(snapshot, "statistics", BuildStatistics(obj.ObjectId, statisticsBy, statisticColumnsBy, canonicalColumnNames, options), options);
@@ -881,6 +911,7 @@ internal static class SnapshotBuilder
         Dictionary<long, KeyConstraintRow> keyConstraintByIndex,
         Dictionary<long, string> columnNames,
         Dictionary<long, IndexExtraRow> indexExtrasBy,
+        Dictionary<long, string?> indexPlacement,
         SnapshotOptions options)
     {
         if (!indexesBy.TryGetValue(objectId, out var indexes) || indexes.Count == 0) return string.Empty;
@@ -948,6 +979,10 @@ internal static class SnapshotBuilder
                 .Order(StringComparer.Ordinal)
                 .ToList();
             if (unordered.Count > 0) sb.Append("|cols=").Append(string.Join(',', unordered));
+
+            // Depolama yerleşimi (filegroup / partition scheme): farkı kanonikte yakalansın.
+            if (indexPlacement.GetValueOrDefault(pairKey) is { Length: > 0 } place)
+                sb.Append("|place=").Append(FoldName(place, options));
 
             lines.Add(sb.ToString());
         }
@@ -1540,6 +1575,7 @@ internal static class SnapshotBuilder
         Dictionary<long, KeyConstraintRow> keyConstraintByIndex,
         Dictionary<long, string> columnNames,
         Dictionary<long, IndexExtraRow> indexExtrasBy,
+        Dictionary<long, string?> indexPlacement,
         SnapshotOptions options)
     {
         var result = new List<IndexDefinition>();
@@ -1586,7 +1622,8 @@ internal static class SnapshotBuilder
                 !options.IgnoreIndexPhysicalOptions
                     && indexExtrasBy.GetValueOrDefault(pairKey)?.OptimizeForSequentialKey == true,
                 !options.IgnoreIndexPhysicalOptions
-                    && indexExtrasBy.GetValueOrDefault(pairKey)?.StatisticsNoRecompute == true));
+                    && indexExtrasBy.GetValueOrDefault(pairKey)?.StatisticsNoRecompute == true,
+                indexPlacement.GetValueOrDefault(pairKey)));
         }
 
         return result;
@@ -1835,16 +1872,12 @@ internal static class SnapshotBuilder
         return $"CREATE USER [{user.Name}]{login}{schema};";
     }
 
-    /// <summary>
-    /// Objenin birleşik hash'ini parça hash'lerinden kurar. Birleşik kanonik METİN burada
-    /// ÜRETİLMEZ: <see cref="ObjectSnapshot.Canonical"/> onu PartCanonical'dan istendiğinde
-    /// kurar. Tek obje için okunan bir metni her obje için saklamak, 10.000 objeli bir
-    /// karşılaştırmada kanonik metnin tamamını bellekte ikinci kez tutmak demekti.
-    /// </summary>
     private static void Finalize(ObjectSnapshot snapshot)
     {
-        snapshot.Hash = Hash.Combine(
-            snapshot.Parts.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => p.Value));
+        var ordered = snapshot.Parts.OrderBy(p => p.Key, StringComparer.Ordinal).ToList();
+        snapshot.Hash = Hash.Combine(ordered.Select(p => p.Value));
+        snapshot.Canonical = string.Join('\n',
+            ordered.Select(p => $"-- [{p.Key}]\n{snapshot.PartCanonical[p.Key]}"));
     }
 
     private static string MarkIncomparable(ObjectSnapshot snapshot, string reason)
