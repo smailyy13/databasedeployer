@@ -238,6 +238,10 @@ app.MapPost("/api/runs/{id}/script", (string id, ScriptRequest request, CompareS
                 AllowDataLoss = allowDataLoss,
                 IncludeDrops = request.DropNotInSource,
                 ValidateNewConstraints = request.ScriptValidateNewConstraints,
+                // Ortama özel kural: yalnız SRVDEV\PASIFIK → PASIFIK deploy'unda NONCLUSTERED
+                // index'ler INDEX_FG dosya grubuna yerleşir. Yön otomatik doğru: forwardCmp'te
+                // Source=SRVDEV\PASIFIK/Target=PASIFIK, reverseCmp'te takas olduğundan eşleşmez.
+                NonclusteredIndexFilegroup = PasifikIndexDeploy(comparison) ? "INDEX_FG" : null,
             });
             if (!table.IsEmpty) { sb.AppendLine(table.Sql); sb.AppendLine(); }
             included += table.Included.Count;
@@ -477,6 +481,14 @@ return 0;
 /// kayıtlı bir bağlantı seçilmişse, parola sunucu tarafında çözülür — tarayıcıya
 /// hiçbir zaman gönderilmez.
 /// </summary>
+// Ortama özel kural: deploy yönü SRVDEV\PASIFIK → PASIFIK ise NONCLUSTERED index'ler
+// INDEX_FG dosya grubuna yazılır. Sunucu adı SERVERPROPERTY('ServerName')'den gelir
+// (named instance'ta "SRVDEV\PASIFIK" / "PASIFIK" döner). Yalnız bu çift; başka hiçbir
+// karşılaştırma etkilenmez. İsimler değişirse tek yer burası.
+static bool PasifikIndexDeploy(CompareResult comparison) =>
+    string.Equals(comparison.Source.Server?.Trim(), @"SRVDEV\PASIFIK", StringComparison.OrdinalIgnoreCase) &&
+    string.Equals(comparison.Target.Server?.Trim(), "PASIFIK", StringComparison.OrdinalIgnoreCase);
+
 static SqlConnectionInfo ToConnectionInfo(ConnectionDto dto, RecentConnections recent)
 {
     var authentication = string.Equals(dto.Authentication, "SqlLogin", StringComparison.OrdinalIgnoreCase)
