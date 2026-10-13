@@ -512,28 +512,67 @@ mark.wordhit { background: #ffdf5d; color: #1f2328; border-radius: 2px; padding:
 .exec-confirm .ec-text { line-height: 1.4; }
 .exec-confirm b { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
 
-/* SSMS "Messages" benzeri çıktı paneli. */
+/* SSMS benzeri çalıştırma paneli: Results (grid) + Messages (metin) sekmeleri. */
 .exec-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .exec-head {
-  flex: none; display: flex; align-items: center; gap: 12px; padding: 8px 12px;
-  border-bottom: 1px solid var(--line); background: var(--surface-2, var(--surface));
+  flex: none; display: flex; align-items: center; gap: 10px; padding: 6px 12px;
+  border-bottom: 1px solid var(--line); background: var(--panel-2);
 }
+.exec-tabs { display: flex; gap: 2px; }
+.exec-tab {
+  border: 1px solid transparent; border-bottom: none; background: transparent; color: var(--ink-2);
+  font-size: 12.5px; padding: 4px 14px; cursor: pointer; border-radius: 6px 6px 0 0;
+}
+.exec-tab:hover { background: var(--panel); }
+.exec-tab.active { background: var(--panel); color: var(--ink); border-color: var(--line); font-weight: 600; }
 .exec-status { font-size: 13px; font-weight: 600; }
-.exec-status.run { color: var(--ink-soft, #667); }
+.exec-status.run { color: var(--ink-3); }
 .exec-status.ok  { color: #1e7a46; }
 .exec-status.err { color: #b3261e; }
+
+.exec-body { flex: 1 1 auto; min-height: 0; display: flex; }
+
+/* Messages = SSMS: düz zemin + metin, yalnız hatalar kırmızı (tema token'larıyla). */
 .exec-log {
-  flex: 1 1 auto; min-height: 0; overflow: auto; margin: 0; padding: 12px 14px;
+  flex: 1 1 auto; min-height: 0; overflow: auto; margin: 0; padding: 10px 14px;
   font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12.5px;
   line-height: 1.5; white-space: pre-wrap; word-break: break-word;
-  background: var(--code-bg, #0f1620); color: var(--code-fg, #d6dee6);
+  background: var(--panel); color: var(--ink);
 }
-:root:not([data-theme="dark"]) .exec-log { background: #1b2230; color: #e7edf3; }
-.exec-log .el-rows { color: #9fb3c8; }
-.exec-log .el-err  { color: #ff8a7a; font-weight: 600; }
-.exec-log .el-errmsg { color: #ffc9bf; }
-.exec-log .el-fail { color: #ff8a7a; font-weight: 700; }
-.exec-log .el-done { color: #7fd3a6; font-weight: 600; }
+.exec-log .el-rows { color: inherit; }
+.exec-log .el-err  { color: #c62828; font-weight: 600; }
+.exec-log .el-errmsg { color: #c62828; }
+.exec-log .el-fail { color: #c62828; font-weight: 700; }
+.exec-log .el-done { color: inherit; }
+:root[data-theme="dark"] .exec-log .el-err,
+:root[data-theme="dark"] .exec-log .el-errmsg,
+:root[data-theme="dark"] .exec-log .el-fail { color: #f48771; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .exec-log .el-err,
+  :root:not([data-theme="light"]) .exec-log .el-errmsg,
+  :root:not([data-theme="light"]) .exec-log .el-fail { color: #f48771; }
+}
+
+/* Results = SSMS grid. */
+.exec-results { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 8px; background: var(--panel); }
+.ssms-grid {
+  border-collapse: collapse; font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 12px; width: max-content; min-width: calc(100% - 2px); margin-bottom: 12px;
+}
+.ssms-grid th, .ssms-grid td {
+  border: 1px solid var(--line); padding: 2px 10px; text-align: left; white-space: pre;
+  color: var(--ink); background: var(--panel); max-width: 480px; overflow: hidden; text-overflow: ellipsis;
+}
+.ssms-grid thead th { background: var(--panel-2); font-weight: 600; position: sticky; top: 0; z-index: 1; }
+.ssms-grid .rh {
+  background: var(--panel-2); color: var(--ink-3); text-align: right; font-weight: 400;
+  position: sticky; left: 0; min-width: 30px; user-select: none;
+}
+.ssms-grid thead .rh { z-index: 2; }
+.ssms-grid td.cell-null { color: var(--ink-3); font-style: italic; }
+.ssms-grid tbody tr:hover td { background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+.ssms-grid tbody tr:hover td.rh { background: var(--panel-2); }
+.grid-trunc { padding: 4px 10px 12px; font-size: 12px; color: var(--ink-3); }
 
 /* Favori bağlantı çiftleri — sağ üstte açılan kart. */
 .fav-panel {
