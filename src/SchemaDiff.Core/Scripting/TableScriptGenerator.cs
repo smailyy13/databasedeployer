@@ -686,10 +686,11 @@ public static class TableScriptGenerator
         : $"DROP INDEX [{idx.Name}] ON {qualified};";
 
     // Klasik NONCLUSTERED index CREATE ifadesi: CREATE [UNIQUE] NONCLUSTERED INDEX … ;
-    // (COLUMNSTORE hariç — MatchEvaluator'da ayrıca elenir). Non-greedy ".*?;" ilk ";"de durur;
-    // index CREATE'inde (filtre/WITH dahil) ";" bulunmaz, o yüzden güvenli.
+    // (COLUMNSTORE hariç — MatchEvaluator'da ayrıca elenir). Sonlandırıcı ";" SATIR SONUNDA
+    // (ya da metin sonunda) olmalı: böylece filtre metnindeki string içi ";" (ör. WHERE
+    // [x]='a;b') ifadeyi erken kesmez. Non-greedy ".*?" ilk SATIR-SONU ";"sine kadar genişler.
     private static readonly Regex NonclusteredCreate = new(
-        @"CREATE\s+(?:UNIQUE\s+)?NONCLUSTERED\s+INDEX\b.*?;",
+        @"CREATE\s+(?:UNIQUE\s+)?NONCLUSTERED\s+INDEX\b.*?;(?=[ \t]*(?:\r?\n|$))",
         RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
 
     // İfadenin SONUNDAKİ yerleşim eki: " ON [fg]" / " ON [scheme]([kolon])" + ";". Tablo
