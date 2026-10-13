@@ -63,6 +63,23 @@
   </div>
 </div>
 
+<div class="scrim" id="execConfirmScrim" hidden></div>
+<div class="dialog narrow" id="execConfirmDialog" hidden>
+  <div class="dialog-head">
+    <h2 data-i18n="deployConfirmTitle">Run on database?</h2>
+    <button class="x" id="execConfirmClose">✕</button>
+  </div>
+  <div class="dialog-body single">
+    <p class="ec-dir" id="execConfirmDir"></p>
+    <p class="ec-text" id="execConfirmText"></p>
+  </div>
+  <div class="dialog-foot">
+    <div class="grow"></div>
+    <button class="btn ghost" id="execCancelBtn" data-i18n="deployCancel">Cancel</button>
+    <button class="btn danger" id="execRunBtn" data-i18n="deployYes">Yes, run</button>
+  </div>
+</div>
+
 <div class="statusbar" id="statusbar" data-i18n="pickTwo">Select two connections to compare.</div>
 
 <main class="split">
@@ -239,12 +256,6 @@
   </div>
   <div class="dialog-body single">
     <div class="big-note" id="scriptBigNote" hidden></div>
-    <div class="exec-confirm" id="execConfirm" hidden>
-      <span class="ec-text" id="execConfirmText"></span>
-      <div class="grow"></div>
-      <button class="btn ghost" id="execCancelBtn" data-i18n="deployCancel">Cancel</button>
-      <button class="btn danger" id="execRunBtn" data-i18n="deployYes">Yes, run</button>
-    </div>
     <div class="code-editor" id="codeEditor">
       <div class="code-gutter" id="codeGutter" aria-hidden="true"></div>
       <div class="code-area">
