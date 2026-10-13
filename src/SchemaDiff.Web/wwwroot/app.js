@@ -92,7 +92,8 @@ const I18N = {
     scriptReady: 'Script ready — review/edit, then download', scriptCopied: 'Script copied to clipboard',
     scriptTooBig: 'Script is too large to show here ({size}, {lines} lines). Use Download or Copy below.',
     deployBtn: 'Run on database', deployCancel: 'Cancel', deployYes: 'Yes, run',
-    deployConfirm: 'This runs {n} batch(es) against {target}. There is no undo — use the reverse script to roll back.',
+    deployConfirmTitle: 'Run on database?',
+    deployConfirm: 'These changes will be applied to {target} ({n} batch(es)). There is no undo — use the reverse script to roll back. Do you confirm?',
     backToScript: '‹ Script',
     deployStarting: 'Connecting…', deployRunning: 'Running… batch {done}/{total}',
     deploySuccess: '✓ Completed successfully', deployFailed: '✗ Failed — rolled back (earlier committed steps may remain)',
@@ -226,7 +227,8 @@ const I18N = {
     scriptReady: 'Script hazır — gözden geçir/düzenle, sonra indir', scriptCopied: 'Script panoya kopyalandı',
     scriptTooBig: 'Script burada gösterilemeyecek kadar büyük ({size}, {lines} satır). Aşağıdan İndir ya da Kopyala kullanın.',
     deployBtn: 'Veritabanında çalıştır', deployCancel: 'Vazgeç', deployYes: 'Evet, çalıştır',
-    deployConfirm: '{target} üzerinde {n} batch çalışacak. Geri alma yoktur — geri almak için ters (reverse) script\'i kullanın.',
+    deployConfirmTitle: 'Veritabanında çalıştır?',
+    deployConfirm: 'Bu değişiklikler {target} üzerinde uygulanacak ({n} batch). Geri alma yoktur — geri almak için ters (reverse) script\'i kullanın. Onaylıyor musunuz?',
     backToScript: '‹ Script',
     deployStarting: 'Bağlanılıyor…', deployRunning: 'Çalışıyor… batch {done}/{total}',
     deploySuccess: '✓ Başarıyla tamamlandı', deployFailed: '✗ Başarısız — geri alındı (önceki commit\'li adımlar kalmış olabilir)',
@@ -2307,16 +2309,29 @@ function appendExecLine(m) {
   if (atBottom) log.scrollTop = log.scrollHeight;
 }
 
-$('scriptDeployBtn').addEventListener('click', () => {
+// Deploy onayı: ortada popup. Yalnız AKTİF yön (kaynak→hedef ya da hedef→kaynak) uygulanır.
+function openDeployConfirm() {
   const sql = activeScriptSql();
   if (!sql.trim()) { setStatus(t('deployEmpty'), 'error'); return; }
-  const n = scriptBatchCount(sql);
-  $('execConfirmText').innerHTML = t('deployConfirm', { n, target: `<b>${esc(execTargetLabel(state.scriptActiveDir))}</b>` });
-  $('execConfirm').hidden = false;
-});
+  const dir = state.scriptActiveDir;
+  const r = state.result || {};
+  const from = dir === 'reverse' ? (r.targetLabel || '') : (r.sourceLabel || '');
+  const to   = dir === 'reverse' ? (r.sourceLabel || '') : (r.targetLabel || '');
+  $('execConfirmDir').innerHTML = `<b>${esc(from)}</b> &rarr; <b>${esc(to)}</b>`;
+  $('execConfirmText').innerHTML = t('deployConfirm', {
+    n: scriptBatchCount(sql), target: `<b>${esc(execTargetLabel(dir))}</b>`,
+  });
+  $('execConfirmScrim').hidden = false;
+  $('execConfirmDialog').hidden = false;
+}
+function closeDeployConfirm() { $('execConfirmScrim').hidden = true; $('execConfirmDialog').hidden = true; }
+
+$('scriptDeployBtn').addEventListener('click', openDeployConfirm);
+$('execConfirmClose').addEventListener('click', closeDeployConfirm);
+$('execConfirmScrim').addEventListener('click', closeDeployConfirm);
 $('execTabResults').addEventListener('click', () => showExecTab('results'));
 $('execTabMessages').addEventListener('click', () => showExecTab('messages'));
-$('execCancelBtn').addEventListener('click', () => { $('execConfirm').hidden = true; });
+$('execCancelBtn').addEventListener('click', closeDeployConfirm);
 $('execBackBtn').addEventListener('click', () => { closeExecStream(); showScriptDir(state.scriptActiveDir); });
 $('execRunBtn').addEventListener('click', startExecute);
 
@@ -2325,7 +2340,7 @@ async function startExecute() {
   const sql = activeScriptSql();
   if (!sql.trim()) { setStatus(t('deployEmpty'), 'error'); return; }
 
-  $('execConfirm').hidden = true;
+  closeDeployConfirm();
   $('codeEditor').hidden = true;
   $('scriptBigNote').hidden = true;
   $('execPanel').hidden = false;
@@ -2390,6 +2405,7 @@ document.addEventListener('keydown', (e) => {
   if (!$('scDialog').hidden) closeShortcuts();
   if (!$('scriptDialog').hidden) closeScriptEditor();
   if (!$('favNameDialog').hidden) closeFavName();
+  if (!$('execConfirmDialog').hidden) closeDeployConfirm();
 });
 
 // Üst/alt panel arasındaki sürüklenebilir ayırıcı.
