@@ -1670,7 +1670,6 @@ function gotoHunk(index) {
  */
 function alignLines(a, b) {
   const A = a.split('\n'), B = b.split('\n');
-  const LIMIT = 2000;
 
   // Eşleştirme boşluk farklarını yok sayar: tablo CREATE'inde kolon hizalama boşluğu
   // (en uzun ada göre PadRight) bir kolon eklenince tüm satırlarda kayar; bu, yalnızca
@@ -1680,15 +1679,46 @@ function alignLines(a, b) {
   const norm = (s) => (s ?? '').replace(/\s+/g, ' ').trim().replace(/,$/, '');
   const An = A.map(norm), Bn = B.map(norm);
 
+  // Ortak ÖN ve ARKA ek (normalize eşit) satırları ayır: değişiklik lokalse LCS'ye yalnız
+  // küçük ORTA kısım kalır. Böylece tek bir satır kayması (ör. baştan boş satır) koca gövdeyi
+  // "değişti" göstermez ve içteki gerçek değişiklik görünür kalır; büyük metinlerde de
+  // ölçeklenir (O(n*m) tablo yalnız küçük ortaya kurulur).
+  let p = 0;
+  while (p < A.length && p < B.length && An[p] === Bn[p]) p++;
+  let ea = A.length, eb = B.length;
+  while (ea > p && eb > p && An[ea - 1] === Bn[eb - 1]) { ea--; eb--; }
+
+  const rows = [];
+  let lNo = 0, rNo = 0;
+  for (let i = 0; i < p; i++)
+    rows.push({ type: 'same', left: A[i], right: B[i], leftNo: ++lNo, rightNo: ++rNo });
+
+  for (const r of lcsAlign(A.slice(p, ea), B.slice(p, eb), An.slice(p, ea), Bn.slice(p, eb)))
+    rows.push({
+      type: r.type, left: r.left, right: r.right,
+      leftNo: r.left !== null ? ++lNo : '', rightNo: r.right !== null ? ++rNo : '',
+    });
+
+  for (let k = 0; ea + k < A.length; k++)
+    rows.push({ type: 'same', left: A[ea + k], right: B[eb + k], leftNo: ++lNo, rightNo: ++rNo });
+
+  return rows;
+}
+
+// Ortak ön/arka ek ayıklandıktan sonra kalan bölümü satır-LCS ile hizalar; aşırı büyük
+// kalırsa (nadiren) konum bazlı karşılaştırmaya düşer. Satır numarası vermez; {type,left,right}.
+function lcsAlign(A, B, An, Bn) {
+  const LIMIT = 2500;
+  if (A.length === 0 && B.length === 0) return [];
+
   if (A.length > LIMIT || B.length > LIMIT) {
-    const rows = [];
+    const out = [];
     for (let i = 0; i < Math.max(A.length, B.length); i++)
-      rows.push({
-        type: An[i] === Bn[i] ? 'same' : 'diff',
-        left: A[i] ?? null, right: B[i] ?? null,
-        leftNo: i < A.length ? i + 1 : '', rightNo: i < B.length ? i + 1 : '',
+      out.push({
+        type: (An[i] ?? null) === (Bn[i] ?? null) ? 'same' : 'diff',
+        left: i < A.length ? A[i] : null, right: i < B.length ? B[i] : null,
       });
-    return rows;
+    return out;
   }
 
   const table = Array.from({ length: A.length + 1 }, () => new Uint32Array(B.length + 1));
@@ -1707,29 +1737,23 @@ function alignLines(a, b) {
   while (j < B.length) ops.push({ t: 'add', b: B[j++] });
 
   // Silme ve ekleme bloklarını yan yana eşle — okunması kolay olsun.
-  const rows = [];
-  let leftNo = 0, rightNo = 0, k = 0;
+  const out = [];
+  let k = 0;
   while (k < ops.length) {
-    if (ops[k].t === 'same') {
-      rows.push({ type: 'same', left: ops[k].a, right: ops[k].b, leftNo: ++leftNo, rightNo: ++rightNo });
-      k++;
-      continue;
-    }
+    if (ops[k].t === 'same') { out.push({ type: 'same', left: ops[k].a, right: ops[k].b }); k++; continue; }
     const dels = [], adds = [];
     while (k < ops.length && ops[k].t !== 'same') {
       (ops[k].t === 'del' ? dels : adds).push(ops[k].t === 'del' ? ops[k].a : ops[k].b);
       k++;
     }
     for (let n = 0; n < Math.max(dels.length, adds.length); n++)
-      rows.push({
+      out.push({
         type: 'diff',
         left: n < dels.length ? dels[n] : null,
         right: n < adds.length ? adds[n] : null,
-        leftNo: n < dels.length ? ++leftNo : '',
-        rightNo: n < adds.length ? ++rightNo : '',
       });
   }
-  return rows;
+  return out;
 }
 
 // ================= olaylar =================
