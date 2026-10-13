@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Microsoft.Data.SqlClient;
 
@@ -65,6 +66,8 @@ public static class ScriptExecutor
 
             await conn.OpenAsync(ct);
 
+            var producedOutput = false;   // sonuç kümesi ya da "(N rows affected)" üretildi mi
+
             for (var i = 0; i < batches.Count; i++)
             {
                 ct.ThrowIfCancellationRequested();
@@ -74,12 +77,23 @@ public static class ScriptExecutor
                 cmd.StatementCompleted += (_, e) =>
                 {
                     if (e.RecordCount < 0) return;
+                    producedOutput = true;
                     run.Push(ExecuteMessage.Info(e.RecordCount == 1 ? "(1 row affected)" : $"({e.RecordCount} rows affected)"));
                 };
 
                 try
                 {
-                    await cmd.ExecuteNonQueryAsync(ct);
+                    // ExecuteReader: SSMS gibi hem sonuç kümelerini (grid) hem mesajları yakalar.
+                    await using var reader = await cmd.ExecuteReaderAsync(ct);
+                    do
+                    {
+                        if (reader.FieldCount > 0)
+                        {
+                            producedOutput = true;
+                            run.Push(await ReadResultSetAsync(reader, ct));
+                        }
+                    }
+                    while (await reader.NextResultAsync(ct));
                 }
                 catch (SqlException ex)
                 {
@@ -87,7 +101,8 @@ public static class ScriptExecutor
                     foreach (SqlError err in ex.Errors)
                         run.Push(ExecuteMessage.Server("error", err));
                     run.Push(ExecuteMessage.Fail(
-                        "İşlem başarısız oldu. XACT_ABORT ile transaction geri alındı — veritabanı değişmedi."));
+                        "İşlem başarısız oldu. Açık transaction geri alındı — önceki commit'li adımlar (ör. şema oluşturma) kalmış olabilir."));
+                    run.Push(ExecuteMessage.Info($"Completion time: {DateTimeOffset.Now:yyyy-MM-ddTHH:mm:ss.fffffffK}"));
                     run.Complete(false);
                     return;
                 }
@@ -95,7 +110,10 @@ public static class ScriptExecutor
                 run.BatchDone();
             }
 
-            run.Push(ExecuteMessage.Done("Commands completed successfully."));
+            // SSMS: sonuç/row-count yoksa "Commands completed successfully."; her zaman tamamlanma zamanı.
+            if (!producedOutput)
+                run.Push(ExecuteMessage.Done("Commands completed successfully."));
+            run.Push(ExecuteMessage.Info($"Completion time: {DateTimeOffset.Now:yyyy-MM-ddTHH:mm:ss.fffffffK}"));
             run.Complete(true);
         }
         catch (OperationCanceledException)
@@ -109,15 +127,56 @@ public static class ScriptExecutor
             run.Complete(false);
         }
     }
+
+    // Tek sonuç kümesini (SSMS "Results" grid'i) kolon adları + satırlarla okur. Çok büyük
+    // sonuçlarda tarayıcıyı korumak için üst satır sınırı uygulanır.
+    private const int MaxResultRows = 10_000;
+
+    private static async Task<ExecuteMessage> ReadResultSetAsync(SqlDataReader reader, CancellationToken ct)
+    {
+        var columns = new string[reader.FieldCount];
+        for (var c = 0; c < reader.FieldCount; c++)
+            columns[c] = reader.GetName(c) is { Length: > 0 } n ? n : $"(No column name)";
+
+        var rows = new List<string?[]>();
+        var truncated = false;
+        while (await reader.ReadAsync(ct))
+        {
+            var row = new string?[reader.FieldCount];
+            for (var c = 0; c < reader.FieldCount; c++)
+                row[c] = await reader.IsDBNullAsync(c, ct) ? null : Stringify(reader.GetValue(c));
+            rows.Add(row);
+            if (rows.Count >= MaxResultRows) { truncated = true; break; }
+        }
+        return ExecuteMessage.Result(columns, rows, truncated);
+    }
+
+    // SSMS grid hücre biçimleri: bit → 0/1, tarih → "yyyy-MM-dd HH:mm:ss.fff", ikili → 0xHEX.
+    private static string Stringify(object value) => value switch
+    {
+        byte[] bytes => "0x" + Convert.ToHexString(bytes),
+        bool b => b ? "1" : "0",
+        DateTime dt => dt.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture),
+        DateTimeOffset dto => dto.ToString("yyyy-MM-dd HH:mm:ss.fff zzz", CultureInfo.InvariantCulture),
+        _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty,
+    };
 }
 
-/// <summary>SSMS "Messages" satırı. Kind: info | rows | error | fail | done.</summary>
-public sealed record ExecuteMessage(string Kind, string Text, int? Number, int? Level, int? State, int? Line)
+/// <summary>SSMS "Messages" satırı ya da "Results" grid'i. Kind: info | rows | error | fail |
+/// done | result. result için <see cref="Columns"/>/<see cref="Rows"/> dolu, Text boştur.</summary>
+public sealed record ExecuteMessage(
+    string Kind, string Text, int? Number, int? Level, int? State, int? Line,
+    IReadOnlyList<string>? Columns = null,
+    IReadOnlyList<IReadOnlyList<string?>>? Rows = null,
+    bool Truncated = false)
 {
     public static ExecuteMessage Info(string text) => new("info", text, null, null, null, null);
     public static ExecuteMessage Simple(string kind, string text) => new(kind, text, null, null, null, null);
     public static ExecuteMessage Fail(string text) => new("fail", text, null, null, null, null);
     public static ExecuteMessage Done(string text) => new("done", text, null, null, null, null);
+
+    public static ExecuteMessage Result(IReadOnlyList<string> columns, IReadOnlyList<IReadOnlyList<string?>> rows, bool truncated) =>
+        new("result", string.Empty, null, null, null, null, columns, rows, truncated);
 
     public static ExecuteMessage Server(string kind, SqlError err) => new(
         kind,
