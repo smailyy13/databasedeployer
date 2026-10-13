@@ -255,9 +255,17 @@
     <div class="exec-panel" id="execPanel" hidden>
       <div class="exec-head">
         <button class="btn ghost sm" id="execBackBtn" data-i18n="backToScript">‹ Script</button>
+        <div class="exec-tabs" id="execTabs" hidden>
+          <button class="exec-tab" id="execTabResults" data-tab="results" data-i18n="tabResults">Results</button>
+          <button class="exec-tab active" id="execTabMessages" data-tab="messages" data-i18n="tabMessages">Messages</button>
+        </div>
+        <div class="grow"></div>
         <span class="exec-status" id="execStatus"></span>
       </div>
-      <pre class="exec-log" id="execLog" tabindex="0"></pre>
+      <div class="exec-body">
+        <div class="exec-results" id="execResults" hidden></div>
+        <pre class="exec-log" id="execLog" tabindex="0"></pre>
+      </div>
     </div>
   </div>
   <div class="dialog-foot">

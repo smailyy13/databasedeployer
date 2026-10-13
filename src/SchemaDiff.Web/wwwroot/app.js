@@ -48,6 +48,7 @@ const I18N = {
     pickTwo: 'Select two connections to compare.', allTypes: 'All types',
     searchPh: 'search schema or object…',
     tabDiff: 'Differences', tabRisk: 'Deployment risk', tabTriggers: 'Triggers',
+    tabResults: 'Results', tabMessages: 'Messages', execNull: 'NULL', execRowsTrunc: '(first {n} rows shown)',
     type: 'Type', objectDefinitions: 'Object Definitions',
     prevDiff: 'Previous difference', nextDiff: 'Next difference', canonicalText: 'canonical text',
     metaOnlyDiff: 'The CREATE script is identical — the difference is in metadata (extended properties, permissions, SET options…). Showing canonical text.',
@@ -94,7 +95,7 @@ const I18N = {
     deployConfirm: 'This runs {n} batch(es) against {target}. There is no undo — use the reverse script to roll back.',
     backToScript: '‹ Script',
     deployStarting: 'Connecting…', deployRunning: 'Running… batch {done}/{total}',
-    deploySuccess: '✓ Completed successfully', deployFailed: '✗ Failed — database unchanged (rolled back)',
+    deploySuccess: '✓ Completed successfully', deployFailed: '✗ Failed — rolled back (earlier committed steps may remain)',
     deployConnLost: 'Connection to the server was lost while streaming messages.',
     deployEmpty: 'Nothing to run — the script is empty.',
     sqlDownloaded: 'Downloaded {file}', selectGroupTip: 'Select / clear all {g}',
@@ -181,6 +182,7 @@ const I18N = {
     pickTwo: 'Karşılaştırmak için iki bağlantı seçin.', allTypes: 'Tüm türler',
     searchPh: 'şema veya obje ara…',
     tabDiff: 'Farklar', tabRisk: 'Deployment riski', tabTriggers: 'Trigger\'lar',
+    tabResults: 'Sonuçlar', tabMessages: 'Mesajlar', execNull: 'NULL', execRowsTrunc: '(ilk {n} satır gösteriliyor)',
     type: 'Tür', objectDefinitions: 'Obje Tanımları',
     prevDiff: 'Önceki fark', nextDiff: 'Sonraki fark', canonicalText: 'kanonik metin',
     metaOnlyDiff: 'CREATE metni iki tarafta aynı — fark meta veride (extended property, izin, SET seçenekleri…). Kanonik metin gösteriliyor.',
@@ -227,7 +229,7 @@ const I18N = {
     deployConfirm: '{target} üzerinde {n} batch çalışacak. Geri alma yoktur — geri almak için ters (reverse) script\'i kullanın.',
     backToScript: '‹ Script',
     deployStarting: 'Bağlanılıyor…', deployRunning: 'Çalışıyor… batch {done}/{total}',
-    deploySuccess: '✓ Başarıyla tamamlandı', deployFailed: '✗ Başarısız — veritabanı değişmedi (geri alındı)',
+    deploySuccess: '✓ Başarıyla tamamlandı', deployFailed: '✗ Başarısız — geri alındı (önceki commit\'li adımlar kalmış olabilir)',
     deployConnLost: 'Mesajlar akarken sunucu bağlantısı koptu.',
     deployEmpty: 'Çalıştırılacak bir şey yok — script boş.',
     sqlDownloaded: 'İndirildi: {file}', selectGroupTip: 'Tüm {g} objelerini seç / kaldır',
@@ -2229,7 +2231,59 @@ function execTargetLabel(dir) {
 function closeExecStream() { state.execSource?.close(); state.execSource = null; }
 function setExecStatus(text, cls) { const el = $('execStatus'); el.textContent = text; el.className = 'exec-status ' + (cls || ''); }
 
+// SSMS gibi iki sekme: "Results" (grid'ler) ve "Messages" (metin). Sonuç kümesi gelince
+// Results'a geçilir; aksi halde Messages aktif kalır.
+function showExecTab(which) {
+  const onResults = which === 'results';
+  $('execResults').hidden = !onResults;
+  $('execLog').hidden = onResults;
+  $('execTabResults').classList.toggle('active', onResults);
+  $('execTabMessages').classList.toggle('active', !onResults);
+}
+
+function renderResultGrid(m) {
+  const wrap = $('execResults');
+  const cols = m.columns || [];
+  const rows = m.rows || [];
+
+  const table = document.createElement('table');
+  table.className = 'ssms-grid';
+
+  const thead = document.createElement('thead');
+  const htr = document.createElement('tr');
+  htr.appendChild(document.createElement('th')).className = 'rh';   // sol satır-başlığı köşesi
+  for (const c of cols) { const th = document.createElement('th'); th.textContent = c; htr.appendChild(th); }
+  thead.appendChild(htr);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  rows.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    const rh = document.createElement('td'); rh.className = 'rh'; rh.textContent = String(i + 1); tr.appendChild(rh);
+    for (const cell of r) {
+      const td = document.createElement('td');
+      if (cell === null) { td.className = 'cell-null'; td.textContent = t('execNull'); }
+      else td.textContent = cell;
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+
+  if (m.truncated) {
+    const note = document.createElement('div');
+    note.className = 'grid-trunc';
+    note.textContent = t('execRowsTrunc', { n: rows.length });
+    wrap.appendChild(note);
+  }
+
+  $('execTabs').hidden = false;
+  showExecTab('results');
+}
+
 function appendExecLine(m) {
+  if (m.kind === 'result') { renderResultGrid(m); return; }
   const log = $('execLog');
   const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 4;
   // Terminal hata: SSMS gibi iki satır — "Msg …, Level …, State …, Line …" + mesaj.
@@ -2260,6 +2314,8 @@ $('scriptDeployBtn').addEventListener('click', () => {
   $('execConfirmText').innerHTML = t('deployConfirm', { n, target: `<b>${esc(execTargetLabel(state.scriptActiveDir))}</b>` });
   $('execConfirm').hidden = false;
 });
+$('execTabResults').addEventListener('click', () => showExecTab('results'));
+$('execTabMessages').addEventListener('click', () => showExecTab('messages'));
 $('execCancelBtn').addEventListener('click', () => { $('execConfirm').hidden = true; });
 $('execBackBtn').addEventListener('click', () => { closeExecStream(); showScriptDir(state.scriptActiveDir); });
 $('execRunBtn').addEventListener('click', startExecute);
@@ -2274,6 +2330,10 @@ async function startExecute() {
   $('scriptBigNote').hidden = true;
   $('execPanel').hidden = false;
   $('execLog').textContent = '';
+  $('execResults').innerHTML = '';
+  $('execResults').hidden = true;
+  $('execTabs').hidden = true;
+  showExecTab('messages');
   setExecStatus(t('deployStarting'), 'run');
   $('scriptDeployBtn').disabled = true;
 
