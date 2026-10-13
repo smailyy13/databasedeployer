@@ -93,7 +93,7 @@ const I18N = {
     scriptTooBig: 'Script is too large to show here ({size}, {lines} lines). Use Download or Copy below.',
     deployBtn: 'Run on database', deployCancel: 'Cancel', deployYes: 'Yes, run',
     deployConfirmTitle: 'Run on database?',
-    deployConfirm: 'These changes will be applied to {target} ({n} batch(es)). There is no undo — use the reverse script to roll back. Do you confirm?',
+    deployConfirm: 'These changes will be applied to {target} ({n} batch(es)). Do you confirm?',
     backToScript: '‹ Script',
     deployStarting: 'Connecting…', deployRunning: 'Running… batch {done}/{total}',
     deploySuccess: '✓ Completed successfully', deployFailed: '✗ Failed — rolled back (earlier committed steps may remain)',
@@ -228,7 +228,7 @@ const I18N = {
     scriptTooBig: 'Script burada gösterilemeyecek kadar büyük ({size}, {lines} satır). Aşağıdan İndir ya da Kopyala kullanın.',
     deployBtn: 'Veritabanında çalıştır', deployCancel: 'Vazgeç', deployYes: 'Evet, çalıştır',
     deployConfirmTitle: 'Veritabanında çalıştır?',
-    deployConfirm: 'Bu değişiklikler {target} üzerinde uygulanacak ({n} batch). Geri alma yoktur — geri almak için ters (reverse) script\'i kullanın. Onaylıyor musunuz?',
+    deployConfirm: 'Bu değişiklikler {target} üzerinde uygulanacak ({n} batch). Onaylıyor musunuz?',
     backToScript: '‹ Script',
     deployStarting: 'Bağlanılıyor…', deployRunning: 'Çalışıyor… batch {done}/{total}',
     deploySuccess: '✓ Başarıyla tamamlandı', deployFailed: '✗ Başarısız — geri alındı (önceki commit\'li adımlar kalmış olabilir)',
@@ -967,12 +967,14 @@ function renderTree() {
   const tree = $('tree');
   if (!state.result) {
     tree.innerHTML = `<p class="missing">${esc(t('notComparedYet'))}</p>`;
+    $('pickedInfo').hidden = true;   // karşılaştırma yok → önceki seçim sayısı kalıntısı kalmasın
     return;
   }
 
   const changes = visibleChanges();
   if (changes.length === 0) {
     tree.innerHTML = `<p class="missing">${esc(t('noDiffForFilters'))}</p>`;
+    renderPickInfo();                // gerçek seçim durumunu yansıt (eski sayıyı gösterme)
     return;
   }
 
