@@ -1705,13 +1705,14 @@ function alignLines(a, b) {
   return rows;
 }
 
-// Ortak ön/arka ek ayıklandıktan sonra kalan bölümü satır-LCS ile hizalar; aşırı büyük
-// kalırsa (nadiren) konum bazlı karşılaştırmaya düşer. Satır numarası vermez; {type,left,right}.
+// Kalan bölümü Myers O(ND) diff ile hizalar: maliyet DÜZENLEME SAYISINA (D) göre, satır
+// sayısına değil. Birkaç değişiklik olan koca metinler bile hızlı ve DOĞRU hizalanır (kayma
+// tüm gövdeyi boyamaz). D aşırı büyükse (iki metin neredeyse tümüyle farklı) konum bazlıya
+// düşer — o durumda zaten her satır farklıdır. Satır numarası vermez; {type,left,right}.
 function lcsAlign(A, B, An, Bn) {
-  const LIMIT = 2500;
   if (A.length === 0 && B.length === 0) return [];
-
-  if (A.length > LIMIT || B.length > LIMIT) {
+  const ops = myersOps(An, Bn, 2000);
+  if (ops === null) {
     const out = [];
     for (let i = 0; i < Math.max(A.length, B.length); i++)
       out.push({
@@ -1721,39 +1722,68 @@ function lcsAlign(A, B, An, Bn) {
     return out;
   }
 
-  const table = Array.from({ length: A.length + 1 }, () => new Uint32Array(B.length + 1));
-  for (let i = A.length - 1; i >= 0; i--)
-    for (let j = B.length - 1; j >= 0; j--)
-      table[i][j] = An[i] === Bn[j] ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1]);
-
-  const ops = [];
-  let i = 0, j = 0;
-  while (i < A.length && j < B.length) {
-    if (An[i] === Bn[j]) { ops.push({ t: 'same', a: A[i], b: B[j] }); i++; j++; }
-    else if (table[i + 1][j] >= table[i][j + 1]) { ops.push({ t: 'del', a: A[i] }); i++; }
-    else { ops.push({ t: 'add', b: B[j] }); j++; }
-  }
-  while (i < A.length) ops.push({ t: 'del', a: A[i++] });
-  while (j < B.length) ops.push({ t: 'add', b: B[j++] });
-
-  // Silme ve ekleme bloklarını yan yana eşle — okunması kolay olsun.
+  // Myers op'ları (same/del/add) → yan yana satırlar; ardışık del+add blokları eşlenir.
   const out = [];
   let k = 0;
   while (k < ops.length) {
-    if (ops[k].t === 'same') { out.push({ type: 'same', left: ops[k].a, right: ops[k].b }); k++; continue; }
+    const op = ops[k];
+    if (op.t === 'same') { out.push({ type: 'same', left: A[op.x], right: B[op.y] }); k++; continue; }
     const dels = [], adds = [];
     while (k < ops.length && ops[k].t !== 'same') {
-      (ops[k].t === 'del' ? dels : adds).push(ops[k].t === 'del' ? ops[k].a : ops[k].b);
+      if (ops[k].t === 'del') dels.push(A[ops[k].x]); else adds.push(B[ops[k].y]);
       k++;
     }
     for (let n = 0; n < Math.max(dels.length, adds.length); n++)
-      out.push({
-        type: 'diff',
-        left: n < dels.length ? dels[n] : null,
-        right: n < adds.length ? adds[n] : null,
-      });
+      out.push({ type: 'diff', left: n < dels.length ? dels[n] : null, right: n < adds.length ? adds[n] : null });
   }
   return out;
+}
+
+// Myers greedy shortest-edit-script. Normalize satır dizileri (A,B) üzerinde çalışır;
+// {t:'same'|'del'|'add', x, y} op'ları sırayla döndürür (x: A indeksi, y: B indeksi).
+// Düzenleme mesafesi cap'i aşarsa null (çağıran fallback'e düşer).
+function myersOps(A, B, cap) {
+  const N = A.length, M = B.length;
+  if (N === 0 && M === 0) return [];
+  const MAX = N + M;
+  const limit = Math.min(MAX, cap);
+  const offset = MAX;
+  let v = new Int32Array(2 * MAX + 1);
+  const trace = [];
+  let found = -1;
+
+  for (let d = 0; d <= limit; d++) {
+    trace.push(v.slice());
+    for (let k = -d; k <= d; k += 2) {
+      let x;
+      if (k === -d || (k !== d && v[offset + k - 1] < v[offset + k + 1])) x = v[offset + k + 1];
+      else x = v[offset + k - 1] + 1;
+      let y = x - k;
+      while (x < N && y < M && A[x] === B[y]) { x++; y++; }
+      v[offset + k] = x;
+      if (x >= N && y >= M) { found = d; break; }
+    }
+    if (found >= 0) break;
+  }
+  if (found < 0) return null;
+
+  const ops = [];
+  let x = N, y = M;
+  for (let d = found; d > 0; d--) {
+    const vPrev = trace[d];
+    const k = x - y;
+    const prevK = (k === -d || (k !== d && vPrev[offset + k - 1] < vPrev[offset + k + 1])) ? k + 1 : k - 1;
+    const prevX = vPrev[offset + prevK];
+    const prevY = prevX - prevK;
+    while (x > prevX && y > prevY) { x--; y--; ops.push({ t: 'same', x, y }); }
+    if (x === prevX) { y--; ops.push({ t: 'add', x, y }); }
+    else { x--; ops.push({ t: 'del', x, y }); }
+  }
+  while (x > 0 && y > 0) { x--; y--; ops.push({ t: 'same', x, y }); }
+  while (x > 0) { x--; ops.push({ t: 'del', x, y }); }
+  while (y > 0) { y--; ops.push({ t: 'add', x, y }); }
+  ops.reverse();
+  return ops;
 }
 
 // ================= olaylar =================
