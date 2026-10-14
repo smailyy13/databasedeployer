@@ -96,6 +96,7 @@ const I18N = {
     deployConfirm: 'These changes will be applied to {target} ({n} batch(es)). Do you confirm?',
     backToScript: '‹ Script',
     deployStarting: 'Connecting…', deployRunning: 'Running… batch {done}/{total}',
+    deployStop: 'Stop', deployStopping: 'Stopping…', deployCancelled: '✗ Stopped — rolled back (earlier committed steps may remain)',
     deploySuccess: '✓ Completed successfully', deployFailed: '✗ Failed — rolled back (earlier committed steps may remain)',
     deployConnLost: 'Connection to the server was lost while streaming messages.',
     deployEmpty: 'Nothing to run — the script is empty.',
@@ -231,6 +232,7 @@ const I18N = {
     deployConfirm: 'Bu değişiklikler {target} üzerinde uygulanacak ({n} batch). Onaylıyor musunuz?',
     backToScript: '‹ Script',
     deployStarting: 'Bağlanılıyor…', deployRunning: 'Çalışıyor… batch {done}/{total}',
+    deployStop: 'Durdur', deployStopping: 'Durduruluyor…', deployCancelled: '✗ Durduruldu — geri alındı (önceki commit\'li adımlar kalmış olabilir)',
     deploySuccess: '✓ Başarıyla tamamlandı', deployFailed: '✗ Başarısız — geri alındı (önceki commit\'li adımlar kalmış olabilir)',
     deployConnLost: 'Mesajlar akarken sunucu bağlantısı koptu.',
     deployEmpty: 'Çalıştırılacak bir şey yok — script boş.',
@@ -2405,6 +2407,8 @@ async function startExecute() {
   $('execResults').hidden = true;
   $('execTabs').hidden = true;
   showExecTab('messages');
+  $('execStopBtn').hidden = true;
+  state.execStopping = false;
   setExecStatus(t('deployStarting'), 'run');
   $('scriptDeployBtn').disabled = true;
 
@@ -2424,6 +2428,8 @@ async function startExecute() {
   const source = new EventSource(`/api/runs/${state.runId}/execute/events`);
   state.execSource = source;
   let done = false;
+  $('execStopBtn').hidden = false;      // koşum başladı → "Durdur" göster
+  $('execStopBtn').disabled = false;
 
   source.addEventListener('msg', (e) => { try { appendExecLine(JSON.parse(e.data)); } catch { /* yut */ } });
   source.addEventListener('progress', (e) => {
@@ -2431,16 +2437,28 @@ async function startExecute() {
     try { const p = JSON.parse(e.data); if (p.total) setExecStatus(t('deployRunning', { done: p.done, total: p.total }), 'run'); } catch { /* yut */ }
   });
   source.addEventListener('done', (e) => {
-    done = true; source.close(); state.execSource = null; $('scriptDeployBtn').disabled = false;
+    done = true; source.close(); state.execSource = null;
+    $('scriptDeployBtn').disabled = false; $('execStopBtn').hidden = true;
     let ok = true; try { ok = JSON.parse(e.data).success; } catch { /* yut */ }
-    setExecStatus(ok ? t('deploySuccess') : t('deployFailed'), ok ? 'ok' : 'err');
+    setExecStatus(ok ? t('deploySuccess') : (state.execStopping ? t('deployCancelled') : t('deployFailed')), ok ? 'ok' : 'err');
   });
   source.onerror = () => {
     if (done) return;
-    source.close(); state.execSource = null; $('scriptDeployBtn').disabled = false;
+    source.close(); state.execSource = null;
+    $('scriptDeployBtn').disabled = false; $('execStopBtn').hidden = true;
     setExecStatus('✗ ' + t('deployConnLost'), 'err');
   };
 }
+
+// Çalışan deploy'u durdur: sunucuya iptal isteği gönder; açık batch iptal edilir,
+// transaction geri alınır. Son durumu 'done' olayı (success:false) ile gelir.
+$('execStopBtn').addEventListener('click', async () => {
+  if (!state.runId) return;
+  state.execStopping = true;
+  $('execStopBtn').disabled = true;
+  setExecStatus(t('deployStopping'), 'run');
+  try { await fetch(`/api/runs/${state.runId}/execute/cancel`, { method: 'POST' }); } catch { /* yut */ }
+});
 
 $('typeFilter').addEventListener('change', renderTree);
 $('search').addEventListener('input', renderTree);

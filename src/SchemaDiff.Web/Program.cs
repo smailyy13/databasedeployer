@@ -411,6 +411,15 @@ app.MapPost("/api/runs/{id}/execute", (string id, ExecuteRequest request, Compar
     return Results.Ok(new { started = true });
 });
 
+// Çalışan deploy'u yarıda durdur: açık batch iptal edilir, transaction geri alınır.
+app.MapPost("/api/runs/{id}/execute/cancel", (string id, CompareService compare) =>
+{
+    var run = compare.Get(id)?.Execution;
+    if (run is null) return Results.NotFound();
+    run.Cancel();
+    return Results.Ok(new { cancelled = true });
+});
+
 // Çalıştırma mesajlarını (SSMS tarzı) canlı yayınlar: her yeni mesaj + batch ilerlemesi.
 app.MapGet("/api/runs/{id}/execute/events", async (string id, HttpContext context, CompareService compare, CancellationToken ct) =>
 {

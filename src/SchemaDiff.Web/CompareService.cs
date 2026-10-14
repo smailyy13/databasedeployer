@@ -263,7 +263,8 @@ public sealed class CompareService
     /// <summary>
     /// Üretilen script'i (istemcideki güncel/düzenlenmiş metin) hedef veritabanında çalıştırır.
     /// forward → hedef, reverse → kaynak sunucuda. Arka planda koşar; istemci akışa bağlanmasa
-    /// bile tamamlanır (yarım deploy bırakmamak için iptal YOK). Dönen koşum SSE ile dinlenir.
+    /// bile tamamlanır (yarım deploy bırakmamak için istemci KOPMASI iptal etmez). Kullanıcı
+    /// açıkça "Durdur" derse run.Cancel() ile yarıda kesilir. Dönen koşum SSE ile dinlenir.
     /// </summary>
     public ExecuteRun? StartExecute(CompareSession session, string direction, string sql)
     {
@@ -274,7 +275,7 @@ public sealed class CompareService
 
         var run = new ExecuteRun();
         session.Execution = run;
-        _ = Task.Run(() => ScriptExecutor.RunAsync(connectionString, sql, run, CancellationToken.None));
+        _ = Task.Run(() => ScriptExecutor.RunAsync(connectionString, sql, run, run.Token));
         return run;
     }
 
