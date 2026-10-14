@@ -220,7 +220,13 @@ public static class TableScriptGenerator
         var sourceByName = source.Columns.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
         var targetByName = target.Columns.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
 
-        var statements = new List<string>();
+        // Kolon işlemleri ayrı listelerde toplanıp DROP → ALTER → ADD sırasıyla yazılır.
+        // DROP önce gelir: dolu/geniş tabloda önce ADD edilirse satır boyutu (8060 bayt) ya da
+        // kolon sayısı (1024) sınırı geçici aşılabilir; ayrıca aynı ada sahip kolon drop+add
+        // edilirse ADD önce olursa "kolon zaten var" hatası verir. (SSDT de drop'ları önce yapar.)
+        var statements = new List<string>();   // ALTER COLUMN + kolon öznitelik farkları
+        var addStmts = new List<string>();      // ADD COLUMN
+        var dropStmts = new List<string>();     // DROP COLUMN
         var localSkips = new List<string>();
 
         // RENAME (yalnızca büyük/küçük harf farkı): kolon eşleşmesi harf-duyarsız olduğundan
@@ -247,7 +253,7 @@ public static class TableScriptGenerator
 
             if (column.IsComputed)
             {
-                statements.Add($"ALTER TABLE {qualified} ADD [{column.Name}] AS {ComputedFallback(column)};");
+                addStmts.Add($"ALTER TABLE {qualified} ADD [{column.Name}] AS {ComputedFallback(column)};");
                 continue;
             }
 
@@ -264,7 +270,7 @@ public static class TableScriptGenerator
                 continue;
             }
 
-            statements.Add(sql);
+            addStmts.Add(sql);
         }
 
         // DROP: hedefte var, kaynakta yok → veri kaybı.
@@ -276,7 +282,7 @@ public static class TableScriptGenerator
             var action = new GatedAction(key, column.Name,
                 $"Kolon siliniyor ({column.TypeDisplay}) — içindeki veri kaybolur", sql);
 
-            if (options.AllowDataLoss) statements.Add(sql);
+            if (options.AllowDataLoss) dropStmts.Add(sql);
             else gated.Add(action);
         }
 
@@ -343,7 +349,10 @@ public static class TableScriptGenerator
         foreach (var skip in localSkips)
             skipped.Add(new SkippedObject(key, skip));
 
-        var ordered = renames.Concat(verPre).Concat(pre).Concat(statements).Concat(post).ToList();
+        // Sıra: rename → temporal-kapat → (pre) index/constraint DROP → kolon DROP →
+        // kolon ALTER + öznitelikler → kolon ADD → (post) index/constraint ADD.
+        var ordered = renames.Concat(verPre).Concat(pre)
+            .Concat(dropStmts).Concat(statements).Concat(addStmts).Concat(post).ToList();
 
         if (ordered.Count == 0)
         {

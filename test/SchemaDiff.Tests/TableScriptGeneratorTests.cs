@@ -92,6 +92,23 @@ public class TableScriptGeneratorTests
     }
 
     [Fact]
+    public void Drop_column_is_emitted_before_add_column()
+    {
+        // Aynı tabloda hem kolon düşüyor hem ekleniyor → DROP önce gelmeli (satır boyutu/kolon
+        // sayısı sınırı geçici aşılmasın; SSDT de drop'ları önce yapar).
+        var key = Table("T");
+        var source = Database("dev", [Obj(key, 1, columns: [Column("Id"), Column("NewCol", typeName: "int")])]);
+        var target = Database("prod", [Obj(key, 2, columns: [Column("Id"), Column("OldCol", typeName: "int")], rowCount: 100)]);
+
+        var sql = Generate(source, target, new TableScriptOptions { AllowDataLoss = true }).Sql;
+
+        var dropAt = sql.IndexOf("DROP COLUMN [OldCol]", StringComparison.Ordinal);
+        var addAt = sql.IndexOf("ADD [NewCol]", StringComparison.Ordinal);
+        Assert.True(dropAt >= 0 && addAt >= 0, "Hem DROP COLUMN hem ADD üretilmeli");
+        Assert.True(dropAt < addAt, "DROP COLUMN, ADD'den ÖNCE gelmeli");
+    }
+
+    [Fact]
     public void Column_case_only_change_emits_sp_rename_when_case_sensitive_columns_on()
     {
         var key = Table("T");
