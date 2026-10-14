@@ -118,7 +118,9 @@ public static class ScriptExecutor
         }
         catch (OperationCanceledException)
         {
-            run.Push(ExecuteMessage.Fail("İşlem iptal edildi."));
+            run.Push(ExecuteMessage.Fail(
+                "İşlem durduruldu. Açık transaction geri alındı — önceki commit'li adımlar (ör. şema oluşturma) kalmış olabilir."));
+            run.Push(ExecuteMessage.Info($"Completion time: {DateTimeOffset.Now:yyyy-MM-ddTHH:mm:ss.fffffffK}"));
             run.Complete(false);
         }
         catch (Exception ex)
@@ -196,11 +198,24 @@ public sealed class ExecuteRun
     private readonly object _gate = new();   // net8 + net10 uyumlu
     private TaskCompletionSource _signal = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly List<ExecuteMessage> _messages = new();
+    private readonly CancellationTokenSource _cts = new();
 
     public int TotalBatches { get; private set; }
     public int DoneBatches { get; private set; }
     public bool Finished { get; private set; }
     public bool Success { get; private set; }
+    public bool Cancelled { get; private set; }
+
+    /// <summary>RunAsync'e verilir; SqlCommand bu token'ı dinler, araya girince batch durur.</summary>
+    public CancellationToken Token => _cts.Token;
+
+    /// <summary>Koşumu yarıda durdurur: açık batch iptal edilir, transaction geri alınır.
+    /// _cts.Cancel() kilit DIŞINDA — senkron iptal callback'i _gate'e girip kilitlenmesin.</summary>
+    public void Cancel()
+    {
+        lock (_gate) { if (Finished) return; Cancelled = true; }
+        _cts.Cancel();
+    }
 
     public Task Changed { get { lock (_gate) return _signal.Task; } }
 
