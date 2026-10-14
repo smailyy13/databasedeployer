@@ -2114,8 +2114,8 @@ function showScriptDir(dir) {
   state.scriptActiveDir = dir;
   for (const b of document.querySelectorAll('#scriptDialog .stab')) b.classList.toggle('active', b.dataset.dir === dir);
   scriptFileName = d.fileName;
-  // Çalıştırma görünümünden script görünümüne dön (varsa onay çubuğunu/paneli kapat).
-  $('execConfirm').hidden = true;
+  // Çalıştırma görünümünden script görünümüne dön (varsa onay popup'ını/paneli kapat).
+  closeDeployConfirm();
   $('execPanel').hidden = true;
 
   const len = d.sql.length;
