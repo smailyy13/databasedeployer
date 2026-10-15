@@ -288,6 +288,10 @@ public static class TableScriptGenerator
 
         // ALTER: iki tarafta da var ama farklı.
         var retyped = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Gerçekten ALTER COLUMN yazılan kolonlar (gated/atlanan hariç): değişmeyen ama bu
+        // kolonu içeren index'ler SQL tarafından ALTER'ı kilitler (Msg 5074); onları da düşürüp
+        // yeniden kurmak için burada toplanır.
+        var alteredEmitted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var column in source.Columns)
         {
             if (!targetByName.TryGetValue(column.Name, out var current)) continue;
@@ -309,11 +313,11 @@ public static class TableScriptGenerator
             switch (risk)
             {
                 case AlterRisk.Safe:
-                    statements.Add(sql);
+                    statements.Add(sql); alteredEmitted.Add(column.Name);
                     break;
                 case AlterRisk.BlockedIfNotEmpty:
                     // Dolu tabloda başarısız olabilir → normalde geri bırakılır; AllowDataLoss açıkken yazılır.
-                    if (options.AllowDataLoss) statements.Add(sql);
+                    if (options.AllowDataLoss) { statements.Add(sql); alteredEmitted.Add(column.Name); }
                     else gated.Add(new GatedAction(key, column.Name,
                         $"{current.TypeDisplay} {(current.IsNullable ? "NULL" : "NOT NULL")} → " +
                         $"{column.TypeDisplay} {(column.IsNullable ? "NULL" : "NOT NULL")} — dolu tabloda ({rows} satır) başarısız olabilir", sql));
@@ -321,7 +325,7 @@ public static class TableScriptGenerator
                 case AlterRisk.DataLoss:
                     var action = new GatedAction(key, column.Name,
                         $"{current.TypeDisplay} → {column.TypeDisplay} — daraltma, veri kırpılabilir", sql);
-                    if (options.AllowDataLoss) statements.Add(sql);
+                    if (options.AllowDataLoss) { statements.Add(sql); alteredEmitted.Add(column.Name); }
                     else gated.Add(action);
                     break;
             }
@@ -334,7 +338,7 @@ public static class TableScriptGenerator
         var pre = new List<string>();
         var post = new List<string>();
         AppendIndexConstraintDiff(qualified, source, target, pre, post, fkDrops, fkAdds,
-            options.ValidateNewConstraints, options.NonclusteredIndexFilegroup);
+            options.ValidateNewConstraints, options.NonclusteredIndexFilegroup, alteredEmitted);
         AppendStatisticsDiff(qualified, source, target, pre, post);
         AppendFullTextDiff(qualified, source, target, pre, post);
         AppendSpecialIndexDiff(qualified, source, target, pre, post);
@@ -418,7 +422,8 @@ public static class TableScriptGenerator
     private static void AppendIndexConstraintDiff(
         string qualified, ObjectSnapshot source, ObjectSnapshot target,
         List<string> pre, List<string> post, List<string> fkDrops, List<string> fkAdds,
-        bool validateConstraints, string? nonclusteredFilegroup)
+        bool validateConstraints, string? nonclusteredFilegroup,
+        HashSet<string> alteredColumns)
     {
         // WITH CHECK: mevcut veri doğrulanır (SSDT varsayılanı). WITH NOCHECK: doğrulama
         // atlanır — dolu tabloya constraint eklenebilir ama "not trusted" olur.
@@ -478,9 +483,27 @@ public static class TableScriptGenerator
             if (!srcIdx.TryGetValue(name, out var s) || Sig(s) != Sig(idx))
                 pre.Add(DropIndex(qualified, idx));
         var idxAdds = new List<string>();
+        var handled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);   // drop+recreate edilen index adları
         foreach (var (name, idx) in srcIdx)
             if (!tgtIdx.TryGetValue(name, out var t) || Sig(t) != Sig(idx))
+            {
                 idxAdds.Add(CreateIndex(qualified, idx, nonclusteredFilegroup));
+                handled.Add(name);
+            }
+
+        // DEĞİŞMEYEN ama tipi değişen bir kolonu içeren index/PK/UQ: SQL Server ALTER COLUMN'ı
+        // reddeder (Msg 5074 "index is dependent on column"). Bu objeyi ALTER'dan ÖNCE düşüp
+        // SONRA aynı tanımla yeniden kur. (Zaten drop/recreate edilenler atlanır.)
+        if (alteredColumns.Count > 0)
+            foreach (var (name, idx) in srcIdx)
+            {
+                if (handled.Contains(name)) continue;
+                var touches = idx.KeyColumns.Any(k => alteredColumns.Contains(k.Column))
+                           || idx.IncludedColumns.Any(alteredColumns.Contains);
+                if (!touches) continue;
+                pre.Add(DropIndex(qualified, idx));
+                idxAdds.Add(CreateIndex(qualified, idx, nonclusteredFilegroup));
+            }
 
         // Tablo içi add sırası: index/PK-UQ → check. (FK'ler global, en sonda.)
         post.AddRange(idxAdds);
