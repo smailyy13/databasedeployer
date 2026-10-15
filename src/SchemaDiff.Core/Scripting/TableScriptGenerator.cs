@@ -765,8 +765,15 @@ public static class TableScriptGenerator
         var clusteredColumnstore = columnstore && !idx.TypeDesc.Contains("NONCLUSTERED", StringComparison.OrdinalIgnoreCase);
 
         if (clusteredColumnstore)
-            return new StringBuilder($"CREATE {idx.TypeDesc} INDEX [{idx.Name}] ON {qualified}")
-                .Append(WithOptions(idx)).Append(';').ToString();
+        {
+            // CLUSTERED COLUMNSTORE: kolon listesi/INCLUDE/WHERE yok ama DEPOLAMA YERLEŞİMİ var
+            // (ör. partition scheme: ON [ps]([kolon]) ya da filegroup: ON [fg]). Partition'lı
+            // columnstore için bu şart; yoksa index yanlış (bölümlenmemiş) kurulur.
+            var ccix = new StringBuilder($"CREATE {idx.TypeDesc} INDEX [{idx.Name}] ON {qualified}")
+                .Append(WithOptions(idx));
+            if (!string.IsNullOrEmpty(idx.Placement)) ccix.Append(" ON ").Append(idx.Placement);
+            return ccix.Append(';').ToString();
+        }
 
         var unique = idx.IsUnique && !columnstore ? "UNIQUE " : string.Empty;
         var sb = new StringBuilder($"CREATE {unique}{idx.TypeDesc} INDEX [{idx.Name}] ON {qualified} ({KeyList(idx, ordered: !columnstore)})");
