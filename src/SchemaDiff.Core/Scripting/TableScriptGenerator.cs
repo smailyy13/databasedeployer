@@ -755,8 +755,11 @@ public static class TableScriptGenerator
             var kind = idx.IsPrimaryKey ? "PRIMARY KEY" : "UNIQUE";
             var pkc = new StringBuilder(
                 $"ALTER TABLE {qualified} ADD CONSTRAINT [{idx.Name}] {kind} {Clustered(idx.TypeDesc)} ({KeyList(idx, ordered: true)})");
-            pkc.Append(WithOptions(idx)).Append(';');
-            return pkc.ToString();
+            pkc.Append(WithOptions(idx));
+            // Depolama yerleşimi (partition scheme / filegroup): ör. partition'lı clustered PK
+            // için "ON [scheme]([kolon])". Yoksa düşerdi → PK yanlış (bölümlenmemiş) kurulurdu.
+            if (!string.IsNullOrEmpty(idx.Placement)) pkc.Append(" ON ").Append(idx.Placement);
+            return pkc.Append(';').ToString();
         }
 
         var columnstore = idx.TypeDesc.Contains("COLUMNSTORE", StringComparison.OrdinalIgnoreCase);
