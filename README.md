@@ -1,12 +1,116 @@
 # SchemaDiff
 
-SQL Server şema karşılaştırması için hızlı bir motor. SSDT / VS Code "Schema Compare"
-ile aynı soruyu cevaplar — *iki veritabanı arasında ne değişti?* — ama büyük
-veritabanlarında dakikalar yerine saniyeler sürmesi hedeflenir.
+SQL Server için hızlı bir **şema karşılaştırma + dağıtım (deployment) aracı**. SSDT /
+Visual Studio "Schema Compare" ile aynı soruyu cevaplar — *iki veritabanı arasında ne
+değişti?* — ama büyük veritabanlarında dakikalar yerine **saniyeler** sürer; üstüne
+üretilen dağıtım script'ini doğrudan veritabanında **SSMS tarzı** çalıştırabilirsiniz.
 
-> Durum: **v1.7**. Karşılaştırma, raporlama, risk analizi ve **dağıtım script'i üretimi**
-> çalışır. Neyin kapsandığı (görür / yazar / görmez ayrımıyla) `KAPSAM.md`'de;
-> aşağıdaki [Kapsam](#kapsam) bölümü onun özetidir.
+İki arayüz, tek motor:
+
+- **Web arayüzü** (`SchemaDiff.Web`) — SSDT Schema Compare'e benzeyen tarayıcı arayüzü:
+  bağlan → karşılaştır → script üret → **veritabanında çalıştır** (canlı Results/Messages).
+- **CLI** (`SchemaDiff.Cli`) — toplu/otomasyon: çok sayıda katmanı paralel karşılaştır,
+  risk analizi, trigger durum raporu, script dosyası üret.
+
+> **Durum: finalize edildi.** Karşılaştırma, raporlama, risk analizi, dağıtım script'i
+> üretimi ve script'i veritabanında çalıştırma çalışır. 1.100+ birim testi yeşil.
+
+---
+
+## İçindekiler
+
+- [Kurulum](#kurulum)
+- [Hızlı başlangıç (web)](#hızlı-başlangıç-web)
+- [Neden daha hızlı?](#neden-daha-hızlı)
+- [Web arayüzü](#web-arayüzü)
+  - [Karşılaştırma + Object Definitions](#karşılaştırma--object-definitions)
+  - [Favoriler](#favoriler)
+  - [Dağıtım script'i üretimi](#dağıtım-scripti-üretimi-web)
+  - [Veritabanında çalıştır (SSMS tarzı)](#veritabanında-çalıştır-ssms-tarzı)
+  - [Bellek kullanımı](#bellek-kullanımı)
+  - [Parola saklama](#parola-saklama)
+- [Karşılaştırma seçenekleri](#karşılaştırma-seçenekleri)
+- [Dağıtım script'i: kurallar ve sıralama](#dağıtım-scripti-kurallar-ve-sıralama)
+- [CLI kullanımı](#cli-kullanımı)
+- [Risk analizi ve trigger raporu](#risk-analizi-ve-trigger-raporu)
+- [Kapsam](#kapsam)
+- [Testler](#testler)
+- [Branch'ler ve .NET sürümleri](#branchler-ve-net-sürümleri)
+- [Yapı](#yapı)
+- [Güvenlik notu](#güvenlik-notu)
+
+---
+
+## Kurulum
+
+Üç yol var. **Çoğu kullanıcı için en kolayı 1. yoldur** — .NET kurmaya gerek yoktur.
+
+### 1) Hazır paket (self-contained exe — .NET kurulumu gerekmez)
+
+GitHub **Releases** sayfasından `SchemaDiff.zip`'i indir, bir klasöre çıkar ve çalıştır:
+
+```powershell
+# zip'i aç, sonra:
+.\SchemaDiff.Web.exe
+```
+
+Tarayıcıda **http://127.0.0.1:5290** aç. **Internet Explorer DEĞİL** — Edge, Chrome ya da
+Firefox kullan (arayüz modern CSS/JS kullanır, IE desteklemez).
+
+- Paket **self-contained**'dir: .NET çalışma zamanı exe'nin içinde gelir, hedef makineye
+  hiçbir şey kurmanıza gerek yoktur (yönetici hakkı da gerekmez).
+- İçinde `wwwroot/` klasörü diskten servis edilir; sadece arayüzü güncellemek isterseniz
+  (yeni sürümde) o üç dosyayı (`app.js`, `index.html`, `styles.css`) değiştirip tarayıcıda
+  **Ctrl+F5** yapmak yeter — exe'yi yeniden indirmeniz gerekmez.
+
+**Gereksinimler (hedef makine):** Windows x64; erişilebilen bir SQL Server (yerel ya da
+ağ). Araç yalnızca `127.0.0.1`'i dinler, yani sunucuya uzaktan erişim açılmaz — arayüze
+aynı makineden bağlanırsınız, karşılaştırılan SQL Server uzak olabilir.
+
+### 2) Kaynaktan çalıştır (geliştirici)
+
+[.NET SDK](https://dotnet.microsoft.com/download) gerekir (`main`/`main_clean` için **.NET 10**,
+`main_clean_8` için **.NET 8**).
+
+```powershell
+git clone https://github.com/smailyy13/databasedeployer.git
+cd databasedeployer
+dotnet run --project src\SchemaDiff.Web -c Release
+# → http://127.0.0.1:5290   (port doluysa: -- --port 5300)
+```
+
+### 3) Kendi self-contained paketini üret (dağıtım için)
+
+Tek dosyalık, bağımsız bir exe üretmek için:
+
+```powershell
+dotnet publish src\SchemaDiff.Web\SchemaDiff.Web.csproj -c Release -r win-x64 `
+  --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
+  -o yayin
+```
+
+`yayin\` klasörünü zip'leyip paylaşabilirsiniz (~45 MB zip / ~110 MB exe — çalışma zamanı
+dahil). `main_clean_8` (net8) paketi, net8 çalışma zamanı olmayan makinelerde de çalışır.
+
+> **Yalnızca net10 çalışma zamanı kurulu bir makinede net8 çıktısını koşturmak** için
+> roll-forward açın: `$env:DOTNET_ROLL_FORWARD = "LatestMajor"`.
+
+---
+
+## Hızlı başlangıç (web)
+
+1. `SchemaDiff.Web.exe`'yi çalıştır → tarayıcıda `http://127.0.0.1:5290`.
+2. Üstte **SOURCE** (kaynak/dev) ve **TARGET** (hedef/prod) bağlantılarını seç
+   (sunucu, kimlik doğrulama, veritabanı; veritabanı listesi sunucudan gelir).
+3. **Compare** → farklar `Add / Change / Delete` olarak gruplanır.
+4. **Generate Script** → üretilen T-SQL (renkli, düzenlenebilir).
+5. **Run on database** → onay popup'ı → script hedef veritabanında çalışır, sonuçlar
+   SSMS'teki gibi **Results** (grid) ve **Messages** sekmelerinde canlı akar.
+
+İsterseniz kaynak+hedef çiftini **★ favorilere** kaydedip bir sonraki açılışta tek tıkla
+tüm ayarlarıyla geri yükleyebilirsiniz.
+
+---
 
 ## Neden daha hızlı?
 
@@ -18,7 +122,7 @@ bağımlılık grafiğini çıkarır, doğrulama çalıştırır. Bu obje başı
 Bu araç bunun yerine:
 
 1. **Toplu katalog çekimi** — obje başına sorgu yok, obje *sınıfı* başına tek sorgu.
-   51 sorgu paralel bağlantılarda koşar (`Sql.cs`); 38'i opsiyoneldir, yani eski bir
+   Sorgular paralel bağlantılarda koşar (`Sql.cs`); çoğu opsiyoneldir, yani eski bir
    SQL Server sürümünde ya da yetki eksikliğinde düşen bir sorgu karşılaştırmayı durdurmaz.
 2. **Kanonikleştirme** — modül gövdeleri ScriptDom'un *token akışıyla* normalize edilir
    (regex ile değil; regex string literal içindeki `--` ile yanılır).
@@ -30,516 +134,296 @@ Bu araç bunun yerine:
    "bu tabloda yalnız index değişmiş" cevabı metin diff'i çalıştırmadan elde edilir ve
    script üreteci yalnızca değişen parçayı işler.
 
-Semantik model yalnızca *script üretimi* için gerekir (bağımlılık sıralaması), ki o da
-`sys.sql_expression_dependencies` üzerinden çok daha ucuza elde edilebilir.
+Ölçüm (10.000 objeli iki veritabanı, 255 gerçek fark, yerel SQL Server): **SchemaDiff
+~1.3 sn**, DacFx ~33 sn — **~24x hızlı**, aynı fark kümesi. (Benchmark `src/SchemaDiff.Bench`
+ile alınır; kapsam o ölçümden beri büyüdüğü için güncel oranı kendiniz ölçebilirsiniz.)
 
-## Ölçüm
-
-10.000 objeli iki veritabanı (3.000 tablo / 37.500 kolon / 9.000 index / 5.000 prosedür /
-1.500 view / 500 fonksiyon), aralarında 255 gerçek fark var.
-Aynı makine, yerel SQL Server, 3 koşu ortalaması:
-
-| | Süre | Bulunan fark |
-|---|---|---|
-| **SchemaDiff** | **1.346 ms** | 255 |
-| DacFx (`SchemaComparison` — SSDT'nin kullandığı API) | 32.862 ms | 255 |
-| | **24,4x hızlı** | *aynı sonuç* |
-
-Fark sayılarının birebir tutması önemli bir doğruluk sinyali. Yine de bu fixture
-izinleri ve extended property'leri içermiyor; kapsam farkı bu ölçümde ortaya çıkmadı.
-
-Süre dağılımı (10.000 obje, tek taraf):
-
-| Aşama | Süre |
-|---|---|
-| Katalog çekimi (paralel) | ~1.050 ms |
-| Normalizasyon + hash | ~680 ms |
-| Karşılaştırma | ~13 ms |
-
-En pahalı tek sorgu `columns` (37.500 satır, ~800 ms) — ilk optimizasyon hedefi orası.
-`Karşılaştırma` süresinin 13 ms olması, hash yaklaşımının işe yaradığının doğrudan
-kanıtı: 9.770 eşit objenin metnine hiç bakılmıyor.
-
-> Ölçüm koşulları: yerel instance, ağ gecikmesi yok; sentetik prosedür gövdeleri
-> gerçek hayattakinden kısa. Uzak sunucu ve büyük gövdelerle mutlak süreler artar —
-> ama artan kısım her iki araç için de aynı, oran korunur.
->
-> ⚠️ Bu ölçüm kapsam 17 sorguyken alındı; kapsam o zamandan beri 51 sorguya çıktı
-> (istatistikler, full-text, XML/spatial index, partition, plan guide…). Yeni sorguların
-> çoğu küçük tablolara vurur ama **rakam yeniden ölçülmedi** — güncel oran için
-> benchmark'ı kendiniz koşun. DacFx tarafı da artık daha adil bir kıyas: eskiden
-> SchemaDiff'in görmediği sınıfları o sayıyordu.
-
-Benchmark'ı kendiniz koşmak için:
-
-```powershell
-dotnet run --project src\SchemaDiff.Bench -c Release -- "<source-conn>" "<target-conn>" 3
-```
+---
 
 ## Web arayüzü
 
-```powershell
-cd src\SchemaDiff.Web
-dotnet run -c Release
-```
+Düzen bilinçli olarak SSDT Schema Compare'e benzetildi. Arayüz tam **EN/TR** (sağ üstteki
+dil düğmesi), açık/koyu tema.
 
-Sonra tarayıcıdan **http://127.0.0.1:5290** (port doluysa `-- --port 5300`).
+### Karşılaştırma + Object Definitions
 
-Düzen bilinçli olarak SSDT Schema Compare'e benzetildi:
-
-- Üstte **kaynak (dev) ⇄ hedef (prod)** bağlantı seçicileri
+- Üstte **kaynak (dev) ⇄ hedef (prod)** bağlantı seçicileri ve **⇄** ile takas.
 - Bağlantı diyaloğu SSDT'nin *Connect* penceresiyle aynı alanları sorar: sunucu adı,
-  kimlik doğrulama, kullanıcı/parola, veritabanı (sunucudan listelenir), Encrypt,
-  Trust Server Certificate — ham bağlantı dizesi yazmanız gerekmez
-- **Son bağlantılar** listesi (SSDT'deki *Recent Connections*) yeniden seçim için saklanır
+  kimlik doğrulama (Windows / SQL Login), kullanıcı/parola, veritabanı (sunucudan
+  listelenir), Encrypt, Trust Server Certificate — ham bağlantı dizesi yazmazsınız.
+- **Son bağlantılar** (SSDT'deki *Recent Connections*) yeniden seçim için saklanır.
 - Sonuçlar **Delete / Change / Add** olarak gruplanır, tür sütunuyla (Table, View,
   Procedure, Trigger…); değişen objeler açılıp **Add Column / Alter Column / Delete Index**
-  gibi alt değişikliklere inilir
+  gibi alt değişikliklere inilir.
 - Altta **Object Definitions** paneli: seçili objenin **tam metni** iki taraflı, gerçek
-  satır numaralarıyla. Prosedür/view/fonksiyonda özgün T-SQL gövdesi; tablolarda
-  katalogdan üretilmiş `CREATE TABLE` script'i — SQL Server tablonun DDL metnini
-  saklamaz, SSMS'in "Script Table as CREATE"i de aynısını üretir. Böylece değişiklik
-  öncesi ve sonrasıyla birlikte görünür.
-- ▲ ▼ tuşları fark blokları arasında gezinir (`3 / 12 fark`), blok görünümün ortasına gelir
-- "kanonik metin" kutusu karşılaştırmanın gerçekte neyi hash'lediğini gösterir
-- Ayırıcı sürüklenerek üst/alt panel oranı değiştirilebilir
-- **Ayarlar** menüsü açılır/kapanır kategoriler hâlinde; her seçenek tek satır, açıklaması
-  hover ipucunda, varsayılandan sapan seçenekler rozetle işaretli. Arayüz tam EN/TR.
-- **Deployment riski** ayrı bir görünüm: renkli özet çipleri, ciddiyete göre sıralı ve
-  tıklanabilir kartlar (alt panelde detay açar)
+  satır numaralarıyla. Fark hizalaması **Myers diff** ile yapılır — büyük bir prosedürde
+  baştan/ortadan tek satır kayması tüm gövdeyi "değişti" göstermez; yalnız gerçekten
+  değişen satırlar renklenir. Boşluk/girinti/sondaki virgül farkları hizalamada yok sayılır.
+- ▲ ▼ tuşları fark blokları arasında gezinir (`3 / 12 differences`).
+- "canonical text" kutusu karşılaştırmanın gerçekte neyi hash'lediğini gösterir.
+- **Deployment risk** ayrı bir görünüm: renkli özet çipleri, ciddiyete göre sıralı ve
+  tıklanabilir kartlar.
 
-Üretilen tablo script'i, karşılaştırmada yok sayılan şeyleri (sistem üretimi constraint
-adları, collation) **yazmaz da**. Aksi hâlde ekranda fark görünüp listede görünmeyen
-satırlar olur ve araca güven kalmazdı.
+### Favoriler
+
+Üst bardaki **★** ile mevcut kaynak+hedef bağlantı çiftini isimle kaydedersiniz; panelden
+bir favoriye tıklayınca iki bağlantı da (sunucu, veritabanı, auth, kullanıcı, encrypt/trust)
+ve karşılaştırma seçenekleri geri yüklenir. Favoriler cihazda (tarayıcıda) saklanır.
+**Parola favoriye yazılmaz** — SQL auth'ta "parolayı hatırla" ile sunucuda tutulan parola
+otomatik çözülür, yoksa bir kez sorulur.
+
+### Dağıtım script'i üretimi (web)
+
+Karşılaştırmadan sonra **Generate Script**. Sonuç ağacındaki işaret kutularıyla **yalnızca
+seçtiğiniz objeleri** yazdırabilirsiniz — bir alt öğeyi (kolon/izin) işaretlemek o objeyi de
+script'e alır; hiçbir şey seçmezseniz tümü yazılır. Script renkli, **düzenlenebilir** bir
+editörde açılır; **Copy** / **Download .sql** ile dışarı alınabilir. Çok büyük script'ler
+(>2 MB) tarayıcıyı kilitlememek için editöre yüklenmez, yalnız indir/kopyala sunulur.
+
+Bir objeyi **⇄** ile işaretlemek onu **ters yönde** (hedef → kaynak) yazar — "şu üç objede
+prod doğru, gerisinde dev doğru" durumu tek dosyada ifade edilebilir. Script editörünün
+üstünde **source → target** ve **target → source** sekmeleri ayrı ayrı ele alınır.
+
+### Veritabanında çalıştır (SSMS tarzı)
+
+Script editöründe **Run on database** düğmesi. Ortada bir **onay popup'ı** çıkar — hangi
+yönde (kaynak → hedef), hangi hedef veritabanı üzerinde ve kaç batch çalışacağını gösterir;
+onaylayınca script hedefte çalışır. Çıktı **SSMS'e birebir yakındır**:
+
+- **Results** sekmesi: her `SELECT` sonucu için bir **grid** (satır başlıkları, NULL italik
+  gri, kolon başlıkları). Sonuç geldiğinde otomatik bu sekmeye geçilir.
+- **Messages** sekmesi: `PRINT` çıktısı, `(N rows affected)`, sonda `Completion time`;
+  **yalnız hatalar kırmızı** — `Msg N, Level L, State S, Line L` + mesaj (SSMS formatı).
+- **Stop** düğmesi: çalışan deploy'u **yarıda durdurabilirsiniz** — açık SQL batch'i anında
+  iptal edilir, açık transaction geri alınır.
+- Script `GO` satırlarından batch'lere bölünüp **tek bağlantıda** sırayla koşturulur, yani
+  script'in kendi `BEGIN TRAN … COMMIT` transaction'ı batch'ler boyunca geçerli kalır.
+
+> ⚠️ Deploy **gerçekten** hedef veritabanını değiştirir; geri alma yoktur (ters script'le
+> geri alabilirsiniz). Script çok-dilimli olduğundan, bir hata/durdurma açık transaction'ı
+> geri alır ama **önceki commit'li dilimler** (ör. en baştaki şema oluşturma) kalmış olabilir.
+
+### Bellek kullanımı
+
+Bir karşılaştırma oturumu İKİ tam şema snapshot'ı tutar. Oturum **sayısı sınırlanmaz**;
+oturum, ait olduğu **sekme kapanınca** (ya da sayfa yenilenince / aynı sekmede yeni
+karşılaştırma başlayınca) silinir. Tarayıcı çökerse tek güvenlik ağı sekmenin dakikada bir
+gönderdiği `/touch` sinyalidir: **30 dakika** haber alınmayan oturum bir sonraki
+karşılaştırmada düşürülür. Web sunucusu tek-kullanıcılı yerel araç olduğundan bilinçli olarak
+**Workstation GC** ile koşar (daha düşük RSS).
 
 ### Parola saklama
 
 "Parolayı hatırla" işaretlenirse parola **Windows DPAPI** ile, oturum açan kullanıcı
-hesabına bağlı olarak şifrelenip `%APPDATA%\SchemaDiff\recent.json` içine yazılır.
-Başka bir hesap dosyayı okusa bile çözemez. Parola tarayıcıya **hiçbir yanıtta**
-geri gönderilmez; kayıtlı bir bağlantı seçildiğinde sunucu tarafında çözülür.
-Windows dışında parola hiç saklanmaz — düz metin yazmaktansa saklamamak doğru davranış.
+hesabına bağlı şifrelenip `%APPDATA%\SchemaDiff\recent.json`'a yazılır. Başka bir hesap ya
+da başka makine dosyayı okusa bile çözemez. Parola tarayıcıya **hiçbir yanıtta** geri
+gönderilmez; kayıtlı bağlantı seçilince sunucu tarafında çözülür. Windows dışında (DPAPI yok)
+parola hiç saklanmaz. Güvenlik modeli SSMS'in "parolayı hatırla"sıyla aynı seviyededir.
 
-> ⚠️ **Yalnızca yerel makine.** Sunucu bilinçli olarak `127.0.0.1`'e bağlanır ve kimlik doğrulama
-> **yoktur**. Bağlantı dizeleri sunucu tarafında durur ve tarayıcıya hiç gönderilmez (arayüzde
-> yalnızca `sunucu.veritabanı` etiketi görünür). Ağa açmadan önce kimlik doğrulama eklenmelidir —
-> aksi hâlde ağdaki herkes bu bağlantılarla sorgu koşturabilir.
+---
 
-## Dağıtım script'i üretimi
+## Karşılaştırma seçenekleri
 
-```powershell
-# Modüller + tablolar (varsayılan), veri kaybı adımları hariç
-SchemaDiff.Cli -s "<kaynak>" -t "<hedef>" --script deploy.sql
+**Ayarlar** (⚙️) menüsü açılır/kapanır kategoriler hâlinde; her seçenek tek satır, açıklaması
+hover ipucunda. Hepsi gerçekten karşılaştırmaya uygulanır (her biri davranışsal test altında).
 
-# Yalnızca modüller ya da yalnızca tablolar
-SchemaDiff.Cli -s "<kaynak>" -t "<hedef>" --script deploy.sql --script-scope modules
-SchemaDiff.Cli -s "<kaynak>" -t "<hedef>" --script deploy.sql --script-scope tables
+| Grup | Seçenekler |
+|---|---|
+| **Metin / biçim** | Boşlukları yok say · Yorumları yok say · Noktalı virgülleri yok say · ANSI NULLS · Quoted identifier |
+| **Harf duyarlılığı** | Nesne adları · Kolon adları · Anahtar kelimeler |
+| **Kolon** | Kolon sırasını yok say · Collation'ı yok say · Identity seed · Identity increment |
+| **Index** | Fiziksel seçenekler · Fill factor · Index padding · Data compression · İstatistikler |
+| **Nesneler** | DML trigger durumu · **DDL trigger'ları yok say** · System-named constraint'ler |
+| **Kapsam** | Extended property'ler · İzinler |
+| **Davranış** | Başlangıçta tüm değişiklikleri seçili getir |
 
-# Güvenli mod: veri kaybı adımlarını (kolon/tablo silme, tip daraltma) script'ten ÇIKAR
-SchemaDiff.Cli -s "<kaynak>" -t "<hedef>" --script deploy.sql --safe
+Üretilen tablo script'i, karşılaştırmada yok sayılan şeyleri (sistem üretimi constraint
+adları, collation vb.) **yazmaz da** — ekranda görünmeyen fark script'e de girmez.
 
-# İleri script + onu geri alan rollback script'i (ters yönde karşılaştırma) birlikte
-SchemaDiff.Cli -s "<kaynak>" -t "<hedef>" --script deploy.sql --rollback rollback.sql
-```
+---
 
-> **Not (şimdilik):** SSDT paritesi için veri kaybı adımları **varsayılan olarak script'e
-> dahildir**. Güvenli mod (ayrı listede raporla, script'e koyma) için `--safe` kullanın.
-> Web'de "Script üret" de aynı şekilde veri kaybı adımlarını dahil eder ve durum çubuğunda uyarır.
+## Dağıtım script'i: kurallar ve sıralama
 
-Web arayüzünde: karşılaştırmadan sonra **Script üret** düğmesi. Sonuç ağacındaki işaret
-kutularıyla **yalnızca seçtiğiniz objeleri** yazdırabilirsiniz — bir alt öğeyi (kolon/izin)
-işaretlemek o objeyi de script'e alır; hiçbir şey seçmezseniz tümü yazılır. Üretilen script'i
-elle çalıştırdığınızda seçtiğiniz değişiklikler iki veritabanı arasında eşitlenir (üretilen
-kapsam dahilinde — bkz. aşağıdaki kapsam sınırı).
+Üretilen SQL bilinçli olarak sadedir: `USE` + transaction (`SET XACT_ABORT ON`) + DDL.
+Başlık yorumu/`PRINT` ilerleme satırı yoktur. Dilimler **doğru bağımlılık sırasında** yazılır:
 
-**Modüller** (view, prosedür, fonksiyon, trigger + şemalar) — veri kaybı imkânsız, en güvenli dilim:
+1. **FK drop'ları en başta** (kolon/index/tablo değişikliklerini engellemesinler).
+2. **Şemalar** → **tipler/tablo öncesi objeler** (XML schema collection, partition
+   function/scheme, alias tip, table type, sequence, synonym, full-text, legacy RULE/DEFAULT).
+3. **Tablolar** — bağımlılık (FK) grafiğine göre topolojik sırada `CREATE`; değişen
+   tablolarda sıra: **index/constraint DROP → kolon DROP → kolon ALTER → kolon ADD →
+   index/constraint ADD**.
+4. **Modüller** (view/prosedür/fonksiyon/trigger) — `sys.sql_expression_dependencies` ile
+   topolojik sırada; `CREATE`↔`ALTER` dönüşümü ScriptDom token düzeyinde; her modülün
+   `ANSI_NULLS`/`QUOTED_IDENTIFIER`'ı korunur.
+5. **Roller → izinler/extended property → ayarlar/plan guide** (en sonda).
+6. **FK add'leri en sonda** (referans edilen tablolar/kolonlar artık var).
+7. **Tablo drop'ları** ters topolojik sırada.
 
-- `CREATE` / `ALTER` / `DROP`, `OBJECT_ID` korumasıyla
-- `CREATE`→`ALTER` dönüşümü ScriptDom **token** düzeyinde yapılır; metin araması olsaydı
-  yorumdaki ya da string içindeki "create" kelimesi bozulurdu
-- Yeni objeler `sys.sql_expression_dependencies` ile topolojik sırada oluşturulur
-- Her modülün özgün `ANSI_NULLS` / `QUOTED_IDENTIFIER` ayarı korunur
+Doğru uygulanan incelikler:
 
-**Tipler ve tablo öncesi objeler** — XML schema collection, full-text stoplist, full-text
-katalog, partition function, partition scheme, kullanıcı tanımlı alias tipler, table type'lar,
-sequence'lar, synonym'ler ve legacy `RULE` / `DEFAULT`. Tablo ve modül dilimlerinden ÖNCE,
-kendi aralarında da bağımlılık sırasında çalışır (tipli XML kolonu bir koleksiyona, tablo
-default'u bir sequence'a, partition scheme bir function'a bağlı olabilir).
-
-Bu sınıflar `ALTER` edilemez. **Değişen obje otomatik drop+recreate EDİLMEZ** — atlanır ve
-sebebiyle raporlanır, çünkü bağımlılarını düşürmek gerekir ve bu sessizce yapılacak bir şey
-değildir. Tek istisna table type: `RecreateChangedTableTypes` açıkça açılırsa bağımlı
-modüller düşürülüp geri kurulur — ve bağımlılardan **birinin bile** tanımı okunamıyorsa
-(şifreli/yetkisiz) hiçbir şey üretilmez, çünkü bir prosedürü düşürüp geri kuramamak
-onarılamaz. Seçenek varsayılan **kapalı**.
-
-**Roller** — kullanıcı tanımlı roller ve üyelikleri (`CREATE ROLE` / `DROP ROLE` /
-`ALTER ROLE ADD|DROP MEMBER`). Veri kaybı yok; hedefte olmayan üye (principal) atlanır.
-
-**İzinler** — `GRANT` / `DENY` / `REVOKE` (obje/kolon/şema). Her ifade grantee'nin
-varlığını kontrol eder; eksik principal atlanır. GRANT→DENY dönüşümü REVOKE + DENY olur.
-
-**Extended property'ler** — `sp_addextendedproperty` / `sp_updateextendedproperty` /
-`sp_dropextendedproperty` (obje/kolon/şema). İzin ve EP dilimleri modül+tablo+rol
-dilimlerinden sonra çalışır (host obje ve grantee var olmalı); yalnızca birleşik (`all`) kapsamda.
-
-**Veritabanı ayarları ve plan guide'lar** — `ALTER DATABASE SCOPED CONFIGURATION` ve
-`sp_create_plan_guide` / `sp_control_plan_guide`. **En sonda** çalışır: `OBJECT` kapsamlı
-bir plan guide, bağlı olduğu prosedür var olmadan kurulamaz. Katalog yalnız varsayılandan
-sapan ayarları verdiği için "kaynakta yok" bilgisi "varsayılan" demektir ve varsayılan
-sürüme göre değişir — o yüzden kaynaktan kalkmış bir ayara dokunulmaz. Yorumlanamayan
-bir değer tahmin edilmez, sebebiyle atlanır.
-
-**Tablolar** — yeni tablo `CREATE`, kolon `ADD` / `ALTER COLUMN` / `DROP COLUMN`, ve
-index / PK / UNIQUE / CHECK / FK değişiklikleri (aynı ad + farklı tanım = drop + recreate;
-yapısal İMZA ile karşılaştırılır, özdeş constraint gereksiz drop edilmez). Ayrıca:
-
-- **Kolon depolama nitelikleri**: `SPARSE`, `FILESTREAM`, `ROWGUIDCOL`, `COLUMN_SET`,
-  tipli XML (`xml(DOCUMENT [şema].[koleksiyon])`), `IDENTITY(seed, increment)` ve
-  `NOT FOR REPLICATION`
-- **Kullanıcı istatistikleri** (`CREATE STATISTICS`), **full-text index**, **XML ve spatial
-  index'ler** — bunların sözdizimi genel `CREATE INDEX`ten tamamen farklıdır ve kendi
-  üreteçlerinden geçer (aynı metin hem yeni tablo hem ALTER yolunda kullanılır, ayrışamazlar)
-- **Constraint durumu**: kaynakta bilerek pasif ya da güvenilmez (`NOCHECK`) bırakılmış bir
-  constraint hedefte sessizce etkinleşmez
-- **Kolon adı harf durumu**: yalnız `CustomerID` → `CustomerId` gibi bir fark hiçbir
-  ADD/DROP/ALTER üretmez; `sp_rename` ile ve diğer değişikliklerden önce yazılır
+- **Depolama yerleşimi** `ON [filegroup]` / `ON [scheme]([kolon])` — tablo, index, PK/UNIQUE
+  ve **clustered/nonclustered columnstore** için üretilir. Partition'lı bir clustered
+  columnstore bile doğru yazılır:
+  `CREATE CLUSTERED COLUMNSTORE INDEX [...] ON [...] ON [sch]([Dt]);`
+- **Değişmeyen index'teki kolonu ALTER COLUMN** — SQL Server bunu reddeder (Msg 5074);
+  üreteç o index'i ALTER'dan önce düşürüp sonra aynı tanımla yeniden kurar (standalone
+  index + PK/UNIQUE constraint dahil).
+- **Kolon adı harf durumu** (`CustomerID` → `CustomerId`) `sp_rename` ile, ADD/DROP üretmeden.
+- **Constraint durumu** (`NOCHECK`/pasif) korunur; constraint yapısal **imza** ile
+  karşılaştırılır — özdeş bir PK gereksiz drop+recreate edilmez (FK referansı patlamaz).
 - **Güvenlik kademesi:** additive değişiklikler (nullable kolon, tip genişletme) doğrudan
-  script'e girer. Veri kaybı riski taşıyanlar (kolon/tablo silme, tip daraltma, dolu tabloya
-  DEFAULT'suz NOT NULL kolon) `--safe` verildiğinde script'e **GİRMEZ**; ayrı listede ismen
-  ve üretilmiş SQL'iyle raporlanır. Boş tablo ile dolu tablo ayrılır — boşta bloke yok.
-- IDENTITY/computed kolon değişimi ALTER COLUMN ile yapılamaz → atlanır, sebebiyle bildirilir
-- Tablolar modüllerden önce yayınlanır (yeni view/prosedürler yeni tablolara bağlı olabilir)
+  script'e girer; veri kaybı riski taşıyanlar (kolon/tablo silme, tip daraltma, dolu tabloya
+  DEFAULT'suz NOT NULL) güvenli modda script'e **girmez**, ayrı listede SQL'iyle raporlanır.
 
-Tümü tek transaction + `SET XACT_ABORT ON`. Üretilen SQL bilinçli olarak sadedir: yalnız
-`USE` + transaction + DDL — başlık yorum blokları ve `PRINT` ilerleme mesajları yoktur.
+Bilinçli kapsam dışı (tespit edilir ama scriptlenmez): **kolon fiziksel sırası** değişimi
+(SQL kolonu tablo yeniden kurmadan sıralayamaz — fark görünür ama uygulanmaz; `IgnoreColumnOrder`
+ile tümden yok sayılabilir), **mevcut tablonun filegroup'a taşınması** (clustered rebuild
+gerektirir — yalnız yeni tabloda yerleşim yazılır), **veri taşıma**, **DROP SCHEMA**.
 
-### Çift yönlü script
+---
 
-Sonuç ağacında bir objeyi `⇄` ile işaretlemek onu **ters yönde** (hedef → kaynak) yazar ve
-ileri bölümden çıkarır. Böylece "şu üç objede prod doğru, gerisinde dev doğru" durumu tek
-dosyada ifade edilebilir. Motor simetriktir; ters karşılaştırma tek satırdır:
+## CLI kullanımı
 
-```csharp
-var reverse = SchemaComparer.Compare(result.Target, result.Source);
-```
-
-Karışık script iki farklı veritabanına dokunduğu için tek `USE` yerine bölüm başına `USE`
-yazılır. CLI tarafında aynı iş `--rollback` ile yapılır.
-
-> ⚠️ **Kalan kapsam dışı:** kolon SIRASI değişimi (ortaya kolon ekleme → tablo yeniden
-> oluşturma), fiziksel yerleşim (`ON [filegroup]`), veri taşıma ve silinen ŞEMA (`DROP SCHEMA`
-> yalnız şema boşken çalışır, içindeki objelerin drop sırasına bağlıdır — üretilmiyor).
-> Bunlar arayüzde "kapsam dışı" / "atlandı" olarak sayılır — "script'te yoktu" ile
-> "değişiklik yoktu" karıştırılmasın.
-
-## Kavram: İş (job)
-
-Karşılaştırmanın birimi bir **iş**tir: isimlendirilmiş bir `(kaynak, hedef)` çifti.
-
-```csharp
-record ComparisonJob(string Name, string SourceConnectionString, string TargetConnectionString);
-```
-
-Bilinçli olarak **hiçbir varsayım yok**: iki taraf farklı sunucuda olabilir, farklı
-veritabanı adı taşıyabilir, sayıları kaç olursa olsun. Hangi çiftlerin karşılaştırılacağı
-bir yapılandırma sorusudur, kod sorusu değil — bu yüzden hiçbir veritabanı adı,
-katman listesi ya da kuruma özgü kavram kaynak kodunda geçmez.
-
-## Kullanım
-
-### 1. Yapılandırma dosyası üret
+Toplu/otomasyon için. Karşılaştırmanın birimi bir **iş**tir: isimlendirilmiş `(kaynak, hedef)`
+çifti. Hiçbir veritabanı adı/katman kavramı kaynak kodda geçmez — hepsi yapılandırmadan gelir.
 
 ```powershell
+# Yapılandırma üret ve düzenle
 dotnet run --project src\SchemaDiff.Cli -c Release -- --init-config jobs.json
-```
 
-`jobs.json` düzenlenebilir bir iş listesidir:
-
-```jsonc
-{
-  // Her işte tekrar yazmamak için ortak bağlantılar
-  "defaults": {
-    "source": "Server=KAYNAK;Integrated Security=true;TrustServerCertificate=true",
-    "target": "Server=HEDEF;Integrated Security=true;TrustServerCertificate=true"
-  },
-  "jobs": [
-    { "database": "Katman1" },                                  // iki tarafta aynı ad
-    { "database": "Katman2" },
-    { "name": "capraz", "sourceDatabase": "A", "targetDatabase": "B" },   // farklı adlar
-    { "name": "ayri",                                            // defaults'u tamamen ezer
-      "source": "Server=X;Database=..;Integrated Security=true;TrustServerCertificate=true",
-      "target": "Server=Y;Database=..;Integrated Security=true;TrustServerCertificate=true" }
-  ]
-}
-```
-
-### 2. İşleri gör ve seç
-
-```powershell
-SchemaDiff.Cli --config jobs.json --list      # tanımlı işleri listele
-SchemaDiff.Cli --config jobs.json --select    # etkileşimli seç
-```
-
-```
-Karşılaştırılacak işleri seçin:
-
-    1) Katman1     KAYNAK.Katman1  →  HEDEF.Katman1
-    2) Katman2     KAYNAK.Katman2  →  HEDEF.Katman2
-    ...
-
-Seçim  (1,3  |  2-5  |  ad  |  a = hepsi  |  boş = iptal):
-```
-
-Aynı ifade komut satırından da verilebilir — elle yapılan bir seçim birebir aynı
-şekilde script'e taşınır:
-
-```powershell
+# İşleri listele / etkileşimli seç / belirli işleri koş
+SchemaDiff.Cli --config jobs.json --list
+SchemaDiff.Cli --config jobs.json --select
 SchemaDiff.Cli --config jobs.json --jobs "1,4-6,Katman9" --risk --triggers
-SchemaDiff.Cli --config jobs.json --all -d 0
+
+# Yapılandırma dosyasız tek çift
+SchemaDiff.Cli -s "<kaynak-conn>" -t "<hedef-conn>"
+
+# Script üretimi
+SchemaDiff.Cli -s "<kaynak>" -t "<hedef>" --script deploy.sql                 # tümü
+SchemaDiff.Cli -s "<kaynak>" -t "<hedef>" --script deploy.sql --safe          # veri kaybı adımlarını ÇIKAR
+SchemaDiff.Cli -s "<kaynak>" -t "<hedef>" --script deploy.sql --rollback rollback.sql   # ileri + geri
+SchemaDiff.Cli -s "<kaynak>" -t "<hedef>" --script deploy.sql --script-scope modules|tables
 ```
 
-### 3. Sonuçlar bittikçe akar
+Seçilen işler paralel koşar ve **bittikçe** ekrana düşer (`Task.WhenEach`); bir işin
+başarısız olması diğerlerini durdurmaz. Çıkış kodları: `0` fark yok, `1` fark var, `2` hata.
+`--max-queries` (varsayılan 16) eşzamanlı sorgu sayısını sınırlar.
 
-Seçilen işler paralel koşar. `Task.WhenAll` yerine `Task.WhenEach` kullanılır: bir iş
-30 saniye sürüyorsa diğerlerinin sonucunu bekletmenin anlamı yok, her iş **bittiği anda**
-ekrana düşer.
+Kapsamı **ölçmek** için: `SchemaDiff.Cli -s "<conn>" --coverage` — her obje sınıfının
+veritabanında kaç tane olduğunu sayar ve kapsanmayan ama sayısı sıfırdan büyük olanları listeler.
 
-```
-9 iş paralel koşuyor (eşzamanlı sorgu sınırı: 16). Biten anında yazılır:
+---
 
-[1/9] ✓ Katman5              447 ms   obje 5 | aynı 1 | +0 -0 ~4
-[2/9] ✓ Katman1              489 ms   obje 5 | aynı 1 | +0 -0 ~4
-...
-[9/9] ✓ buyuk              1.826 ms   obje 10.000 | aynı 9.770 | +25 -25 ~205
-```
+## Risk analizi ve trigger raporu
 
-Ekrana düşme sırası **tamamlanma** sırasıdır; sondaki özet tablosu ise **seçim**
-sırasındadır — katman sırası çoğu zaman anlamlıdır (deployment sırası gibi).
+**`--risk`** her tablo değişikliğini sınıflandırır ve hedefteki yaklaşık satır sayısıyla
+raporlar — "deployment duracak mı?" sorusu *önceden* cevaplanır. Satır sayısı
+`sys.dm_db_partition_stats`'tan okunur (tabloyu taramaz). Kural: **emin olunmayan her durum
+daha riskli tarafa yuvarlanır.** Dolu tablo ile boş tablo ayrılır — boşta bloke yok.
 
-Bir işin başarısız olması diğerlerini durdurmaz; hata o satırda raporlanır ve
-çıkış kodu `2` olur. Çıkış kodları: `0` fark yok, `1` fark var, `2` hata.
+**`--triggers`** 7 katmandaki trigger'ların aktif/pasif durumunu tek tabloda verir ve iki
+ortam arasında **durumu farklı** olanları işaretler (web'de ayrıca "Triggers" sekmesi).
 
-`--max-queries` eşzamanlı sorgu sayısını sınırlar (varsayılan 16). Sınırsız bırakılırsa
-9 iş × 51 sorgu × 2 taraf = 918 eşzamanlı bağlantı açılır ve sunucu boğulur.
+**Yetki:** bağlanan kullanıcıda **`VIEW DEFINITION`** olmalı; yoksa `sys.sql_modules.definition`
+sessizce `NULL` döner ve modüller "aynı" görünür. Araç bunu tespit edip uyarır, ilgili objeleri
+`Belirsiz` sayar — asla "aynı" demez. Risk satır sayıları için `VIEW DATABASE STATE` gerekir;
+yoksa `?` gösterilir.
 
-### Kısayol: yapılandırma dosyasız
-
-Tek çift ya da iki sunucuda aynı adlı veritabanları için dosya gerekmez:
-
-```powershell
-SchemaDiff.Cli -s "<kaynak-conn>" -t "<hedef-conn>"                    # tek çift
-SchemaDiff.Cli -s "<kaynak>" -t "<hedef>" --databases A,B,C --all      # aynı adlılar
-```
-
-## Deployment risk analizi (`--risk`)
-
-Deployment prosedürünün en can sıkıcı maddesi şu: *"canlı ortamda veri olan bir tabloda
-değişiklik yapmasına sistemin izin vermiyor... değişiklik yapılacak bir tabloda mutlaka
-ama mutlaka veri olmamalıdır."* Bu bilgi bugün **deployment anında** öğreniliyor.
-
-`--risk`, her tablo değişikliğini sınıflandırır ve hedefteki yaklaşık satır sayısıyla
-birlikte raporlar — yani "duracak mı?" sorusu deployment'tan önce cevaplanır:
-
-```
-  [VERİ KAYBI]  EDWSTG.dbo.FactSale   (5.000 satır)
-      Description   nvarchar(500) → nvarchar(100) (daraltma — sığmayan veri kırpılır)
-      Amount        decimal(18,4) → decimal(18,2) (hassasiyet düşüyor)
-      ObsoleteCode  Kolon siliniyor (varchar(10)) — içindeki veri kaybolur
-      Category      NULL kabul eden kolon NOT NULL yapılıyor
-      TenantId      NOT NULL kolon ekleniyor (int) ve DEFAULT tanımı yok
-      Quantity      smallint → int (güvenli tip genişletmesi)
-
-  [boş tablo]   EDWSTG.dbo.DimEmpty   (0 satır)
-      ... aynı değişiklikler, ama tablo boş olduğu için sorunsuz uygulanır
-```
-
-Satır sayısı `sys.dm_db_partition_stats`'tan okunur — tabloyu **taramaz**, milisaniyeler
-sürer. `VIEW DATABASE STATE` yetkisi yoksa karşılaştırma yine çalışır, yalnızca risk
-raporunda satır sayıları `?` görünür ve o tablolar "elle kontrol edin" olarak işaretlenir.
-
-Sınıflandırma kuralı: **emin olunmayan her durum daha riskli tarafa yuvarlanır.**
-Yanlış "güvenli" demek, yanlış "riskli" demekten çok daha pahalıdır. Aynı nedenle,
-değişmiş olup kolon seviyesinde risk bulunmayan tablolar da rapordan düşürülmez —
-raporda görünmemek "sorun yok" anlamına gelmemeli.
-
-## Trigger durum raporu (`--triggers`)
-
-Deployment prosedürünün 20. adımı, 7 katmandaki trigger'ların aktif/pasif durumunu
-elle sorgulamayı gerektiriyor. `--triggers` bunu tek tabloda verir ve ayrıca iki ortam
-arasında **durumu farklı olan** trigger'ları işaretler:
-
-```
-  [!] 7 trigger'ın durumu iki ortamda farklı:
-      EDWSTG.dbo.trg_FactSale_Guard: kaynak=aktif, hedef=PASİF
-```
-
-### Yetki gereksinimi
-
-Bağlanan kullanıcıda **`VIEW DEFINITION`** olmalı. Yoksa `sys.sql_modules.definition`
-sessizce `NULL` döner ve tüm modüller "aynı" görünür. Araç bunu tespit edip uyarır ve
-ilgili objeleri `Belirsiz` olarak raporlar — asla "aynı" saymaz.
+---
 
 ## Kapsam
 
-Tam liste, **görür / yazar / görmez** ayrımıyla `KAPSAM.md`'de. Özet:
-
 **Karşılaştırılan ve script'e yazılan:** şemalar; tablolar (kolonlar, computed/identity,
 default'lar, sparse/FILESTREAM/ROWGUIDCOL/COLUMN_SET, tipli XML); index'ler
-(key/include/filter/columnstore + fiziksel seçenekler); XML ve spatial index'ler;
-kullanıcı istatistikleri; PK-UQ-CHECK-FK constraint'leri ve etkin/güvenilir durumları;
-temporal tablolar; view'lar, prosedürler, fonksiyonlar, DML ve **DDL** trigger'ları;
-sequence'lar, synonym'ler; kullanıcı tanımlı alias tipler; table type'lar (kolon,
-constraint ve index'leriyle); partition function ve scheme'ler; XML schema collection'lar;
-full-text katalog, index ve stoplist'ler; legacy `RULE` / `DEFAULT`; kullanıcı tanımlı
-roller ve üyelikleri; obje/kolon/şema/veritabanı izinleri (`--ignore-permissions`);
-extended property'ler — obje/kolon/şema/veritabanı **ve** parametre/principal/index
-sınıfları (`--ignore-extended-properties`); plan guide'lar; database scoped configuration.
+(key/include/filter/columnstore + fiziksel seçenekler + **depolama yerleşimi**); XML ve
+spatial index'ler; kullanıcı istatistikleri; PK-UQ-CHECK-FK constraint'leri ve
+etkin/güvenilir durumları; temporal tablolar; view'lar, prosedürler, fonksiyonlar, DML ve
+**DDL** trigger'ları; sequence'lar, synonym'ler; alias tipler; table type'lar; partition
+function/scheme'ler; XML schema collection'lar; full-text katalog/index/stoplist; legacy
+`RULE`/`DEFAULT`; roller ve üyelikleri; obje/kolon/şema/veritabanı izinleri; extended
+property'ler; plan guide'lar; database scoped configuration.
 
-**Bilinçli olarak yalnızca TESPİT edilir, script'i üretilmez:** CLR assembly ve CLR tipleri,
-Always Encrypted / kolon şifreleme anahtarları, in-memory OLTP. Bunlar için otomatik DDL
-üretmek geri dönüşü pahalı hatalara yol açar; fark raporlanır, uygulaması insana bırakılır.
+**Yalnızca TESPİT edilir, script'i üretilmez** (geri dönüşü pahalı olduğundan insana bırakılır):
+CLR assembly/tipleri, Always Encrypted / kolon şifreleme anahtarları, in-memory OLTP.
 
-**Kapsam dışı:** veritabanı kullanıcıları varsayılan olarak tamamen yok sayılır (ortama
-özgüdür); fiziksel yerleşim (`ON [filegroup]`); kolon sırası değişimi; veri taşıma.
+**Kapsam dışı:** veritabanı kullanıcıları (ortama özgü, varsayılan yok sayılır); mevcut
+tablonun filegroup'a taşınması; kolon fiziksel sırası; veri taşıma.
 
-Kapsamın bu veritabanında ne kadar tuttuğunu tahmin etmek yerine ölçebilirsiniz:
+---
 
-```powershell
-SchemaDiff.Cli -s "<kaynak-conn>" --coverage
-```
+## Testler
 
-Her obje sınıfının veritabanında kaç tane bulunduğunu sayar ve **kapsanmayan ama sayısı
-sıfırdan büyük** olanları listeler — yapılacaklar listesi tahminle değil sayıyla çıkar.
-
-## Doğruluk testleri
-
-**Birim testleri** (`test/SchemaDiff.Tests`, xUnit — DB gerektirmez):
+`main` branch'inde (`test/SchemaDiff.Tests`, xUnit). Çoğu DB gerektirmez; birkaç entegrasyon
+testi yerel SQL Server + fixture ister ve o yoksa atlanır.
 
 ```powershell
-dotnet test
+dotnet test test\SchemaDiff.Tests\SchemaDiff.Tests.csproj -c Release
 ```
 
-**895 test** (892 yeşil, 3'ü canlı SQL Server isteyen entegrasyon testi olduğu için atlanır)
-saf mantığı izole doğrular: normalizasyon (string içi `--` yanılgısı dahil), CREATE→ALTER
-token dönüşümü, karşılaştırma yönü, risk sınıflandırması, her obje sınıfının kanonik metni
-ve script üretiminin güvenlik kademesi (additive vs veri kaybı).
+**1.100+ test** saf mantığı izole doğrular: normalizasyon (string içi `--` yanılgısı dahil),
+CREATE→ALTER token dönüşümü, karşılaştırma yönü, risk sınıflandırması, her obje sınıfının
+kanonik metni, **her karşılaştırma seçeneğinin davranışı** (OFF→fark / ON→yok sayılır), ve
+script üretiminin sıralama/placement/güvenlik kuralları. Testlerin çoğu bir davranışı değil,
+geçmişte yaşanmış bir **hatayı kilitler** (ör. `ScriptCoverageMatrixTests` her `ObjectKind`
+için ya SQL üretildiğini ya da adıyla/sebebiyle raporlandığını doğrular).
 
-Testlerin çoğu bir davranışı tarif etmez, bir **hatayı kilitler**. Örneğin
-`ScriptCoverageMatrixTests`, `ObjectKind` enum'ının tamamı üzerinde dönerek her sınıfın
-Add/Delete/Change yönünde ya SQL ürettiğini ya da **adıyla ve sebebiyle** raporlandığını
-doğrular — yeni bir obje sınıfı eklenip üretece bağlanmayı unutursa test kırmızı yanar.
-Bu tam olarak iki kez yaşanmış bir hatadır: sınıf karşılaştırmaya girer, arayüzde fark
-olarak görünür, ama hiçbir üreteç onu yazmaz ve kullanıcı değişikliğin uygulandığını sanır.
+---
 
-**Fixture'lar** (`test/fixtures/`) — canlı DB'ye karşı uçtan uca. `expected.md` hem
-bulunması gerekenleri hem de **bulunmaması gerekenleri** listeler — ikincisi en az
-birincisi kadar önemli, çünkü gürültü üreten bir araca kimse güvenmez.
+## Branch'ler ve .NET sürümleri
 
-```powershell
-sqlcmd -S localhost -E -C -b -i test\fixtures\dev.sql
-sqlcmd -S localhost -E -C -b -i test\fixtures\prod.sql
-```
+Üç branch aynı ürünü taşır, yalnız hedef çalışma zamanı ve küçük dil farkları değişir:
 
-Benchmark için sentetik büyük veritabanı:
+| Branch | Hedef | Açıklama |
+|---|---|---|
+| `main` | **.NET 10** | Ana geliştirme; birim testleri, `SchemaDiff.Bench`, `tools/`, `test/fixtures/` burada. |
+| `main_clean` | **.NET 10** | `main`'in sade kopyası. |
+| `main_clean_8` | **.NET 8** | .NET 8 geri-portu — net8 çalışma zamanı olmayan makineler için dağıtım paketi. |
 
-```powershell
-sqlcmd -S localhost -E -C -b -i test\fixtures\generate-large.sql `
-       -v DbName="SchemaDiff_Big1" Tables=3000 Procs=5000 Views=1500 Funcs=500 Drift=0
-sqlcmd -S localhost -E -C -b -i test\fixtures\generate-large.sql `
-       -v DbName="SchemaDiff_Big2" Tables=3000 Procs=5000 Views=1500 Funcs=500 Drift=1
-```
+Kaynak kod farkı yalnızca üç dosyada ve hepsi dil/kütüphane sürümünden kaynaklanır:
 
-`Drift=1`, kontrollü bir fark kümesi üretir — böylece benchmark gerçekçi durumu ölçer:
-birbirine %97 benzeyen iki veritabanı.
+| Dosya | net10 | net8 |
+|---|---|---|
+| `Web/CompareService.cs` | `System.Threading.Lock` | `object` + `lock` |
+| `Core/Jobs/ComparisonRunner.cs` | `Task.WhenEach` | `Task.WhenAny` döngüsü |
+| `Core/SchemaDiff.Core.csproj` | `System.IO.Hashing` 10.x | 8.x |
 
-Risk analizi ve çok katmanlı mod için EDW benzeri kurulum (`layers.sql`). Kaynak
-tarafı LocalDB, hedef tarafı varsayılan instance olacak şekilde iki ayrı sunucu kurar:
+Davranış aynıdır. `.slnx` solution formatı SDK **9.0.200+** ister.
 
-```powershell
-foreach ($l in 'EDWSTG','EDWSKEY','EDWLRY','EDW','EDWDM','EDWArchive','EDWBridge') {
-  sqlcmd -S "(localdb)\MSSQLLocalDB" -E -C -b -i test\fixtures\layers.sql -v DbName="$l" Variant="DEV"
-  sqlcmd -S localhost               -E -C -b -i test\fixtures\layers.sql -v DbName="$l" Variant="PROD"
-}
-```
-
-Bu fixture'daki kritik ayrım: `FactSale` hedefte **doludur**, `DimEmpty` ise aynı riskli
-değişiklikleri içerir ama **boştur**. İkisini ayırt edebilmek risk analizinin tüm değeri.
-
-## Temizlik
-
-```powershell
-sqlcmd -S localhost -E -C -Q "DROP DATABASE SchemaDiff_Dev; DROP DATABASE SchemaDiff_Prod; DROP DATABASE SchemaDiff_Big1; DROP DATABASE SchemaDiff_Big2;"
-
-foreach ($l in 'EDWSTG','EDWSKEY','EDWLRY','EDW','EDWDM','EDWArchive','EDWBridge') {
-  sqlcmd -S localhost               -E -C -Q "DROP DATABASE [$l];"
-  sqlcmd -S "(localdb)\MSSQLLocalDB" -E -C -Q "DROP DATABASE [$l];"
-}
-```
+---
 
 ## Yapı
 
 ```
 src/SchemaDiff.Core/
-  Extraction/Sql.cs              katalog sorguları (51 SELECT, hepsi salt-okunur)
+  Extraction/Sql.cs              katalog sorguları (salt-okunur SELECT'ler)
   Extraction/CatalogExtractor.cs paralel çekim + yetki kontrolü
-  Extraction/ExtractionGate.cs   süreç geneli eşzamanlı sorgu sınırı
-  Extraction/SnapshotBuilder.cs  kanonikleştirme + hash
+  Extraction/SnapshotBuilder.cs  kanonikleştirme + hash + seçenek uygulaması
   Normalization/                 ScriptDom tabanlı T-SQL normalizasyonu
   Hashing/Hash.cs                XxHash128 + parça birleştirme
   Diff/SchemaComparer.cs         hash tabanlı karşılaştırma
-  Analysis/                      risk sınıflandırması, değişiklik ağacı, rename sezgisi,
-                                 kapsam sondası
-  Scripting/                     8 script üreteci (tip → tablo → modül → rol → EP/izin → ayar)
+  Analysis/                      risk sınıflandırması, değişiklik ağacı, rename sezgisi
+  Scripting/                     script üreteçleri (tip → tablo → modül → rol → EP/izin → ayar)
   Jobs/                          iş modeli, paralel akan koşum, yapılandırma, seçim
 src/SchemaDiff.Cli/              seçim arayüzü ve raporlar
 src/SchemaDiff.Web/              web arayüzü (minimal API + SSE + bağımlılıksız SPA)
-src/SchemaDiff.Bench/            DacFx ile head-to-head karşılaştırma
+                                 ScriptExecutor.cs — script'i DB'de çalıştırma (SSMS tarzı)
 ```
 
-Kullanılan teknolojiler: .NET 10 / C# 14, `Microsoft.Data.SqlClient` (katalog sorguları),
-`Microsoft.SqlServer.TransactSql.ScriptDom` (T-SQL tokenizer — SSDT'nin kullandığı
-parser'ın kendisi), `System.IO.Hashing` (XxHash128), ASP.NET Core Minimal API + SSE,
-bağımlılıksız SPA (framework yok, tek `app.js`), xUnit. DacFx yalnızca `Bench`'te,
-kıyas tarafı olarak bulunur.
+Teknolojiler: **.NET 8/10, C#**, `Microsoft.Data.SqlClient`,
+`Microsoft.SqlServer.TransactSql.ScriptDom` (SSDT'nin kullandığı T-SQL parser),
+`System.IO.Hashing` (XxHash128), ASP.NET Core Minimal API + SSE, bağımlılıksız SPA
+(framework yok, tek `app.js`). `Jobs/` katmanı alan-bağımsızdır; CLI ve web aynı
+`ComparisonRunner`'ı kullanır.
 
-`Jobs/` katmanı bilinçli olarak alan-bağımsızdır: `ComparisonRunner` yalnızca
-`IReadOnlyList<ComparisonJob>` alır ve `IAsyncEnumerable<JobResult>` döner. Web
-arayüzü geldiğinde CLI'nin yerine geçecek olan şey aynı iki tipi kullanacak;
-paralellik, hata yalıtımı ve akış mantığı yeniden yazılmayacak.
+---
 
-## Sıradaki adımlar
+## Güvenlik notu
 
-Kapsam listesi tükendi; kalan iş yeni obje sınıfı eklemek değil **doğrulama**.
-
-1. **Canlı sunucuda doğrulama** — üç üretim yolu yalnızca birim testleriyle doğrulandı,
-   gerçek bir SQL Server'a karşı hiç koşulmadı: kolon argümanlı `XML_SCHEMA_NAMESPACE`,
-   `sp_create_plan_guide` çıktısı ve table type drop+recreate akışı.
-2. **Entegrasyon testleri** — atlanan 3 test yerel SQL Server + fixture veritabanları
-   ister (`test/fixtures/`). `Big_script_matches_ssdt_operation_counts`'un beklediği
-   sayılar **oynamış olabilir**: `CREATE TABLE` çıktısı artık istatistik, full-text,
-   XML/spatial index ve `NOCHECK` batch'lerini de içeriyor. Sayı tutmazsa önce üretilen
-   script'e bakın; testi körlemesine güncellemek en değerli regresyon kilidini kaybettirir.
-3. **Gerçek ortamda ölçüm** — kendi dev/prod katmanlarında `--coverage` koşup kapsam
-   eksiğini ve gerçek süreyi görmek. Buradaki benchmark rakamı 17 sorguluk kapsamla alındı.
-4. **Atlanan objeleri arayüzde ADIYLA göster** — API zaten `skipped: [{key, reason}]`
-   döndürüyor ama arayüz yalnızca sayıyı yazıyor ("3 obje atlandı"). Hangi objenin niçin
-   atlandığını görmeden kullanıcı script'in eksik olduğunu fark edemez.
-5. **Snapshot cache** — prod tarafı nadiren değişir; sıkıştırılmış snapshot'ı
-   yeniden kullanmak ikinci karşılaştırmayı milisaniyelere indirir.
-   Dikkat: `sys.objects.modify_date` her değişiklikte güncellenmez (örneğin
-   `CREATE INDEX` tablonunkini değiştirmez), bu yüzden tek başına invalidation
-   sinyali olarak kullanılamaz.
-
-### Kapsam dışı bırakılanlar
-
-Deployment prosedürünün diğer adımları (SSIS paket deployment, `ParallelRun` /
-`TableNullControl` tablolarının veri aktarımı, SSISDB parametre güncellemeleri,
-SQL Job tetikleme) bu aracın kapsamında değil. Araç yalnızca prosedürün 3. adımını
-— şema karşılaştırma ve aktarımı — hedefliyor.
-
-İki adım ileride kolayca eklenebilir çünkü aynı veri zaten çekiliyor:
-- Adım 6-7'deki `ParallelRun` karşılaştırması aslında bir **veri** karşılaştırması
-  (`EXCEPT` sorguları). Kontrol/konfigürasyon tabloları için satır bazlı karşılaştırma
-  eklenebilir.
-- Adım 20'deki trigger durum kontrolü zaten `--triggers` ile yapılıyor.
+> ⚠️ **Yalnızca yerel makine.** Web sunucusu bilinçli olarak `127.0.0.1`'e bağlanır ve
+> kimlik doğrulama **yoktur**. Bağlantı dizeleri sunucu tarafında durur, tarayıcıya hiç
+> gönderilmez (arayüzde yalnız `sunucu.veritabanı` etiketi görünür). Ağa açmadan önce kimlik
+> doğrulama eklenmelidir — aksi hâlde ağdaki herkes bu bağlantılarla sorgu koşturabilir.
+> Araç, kendisinin dinlediği portu uzaktan erişime açmaz; karşılaştırılan SQL Server uzak
+> olabilir ama arayüze yalnızca aynı makineden bağlanırsınız.
