@@ -49,6 +49,9 @@ public sealed record SnapshotOptions
     /// <summary>DML trigger'ın etkin/pasif durumunu yok say (SSDT: "Ignore DML trigger state").</summary>
     public bool IgnoreDmlTriggerState { get; init; }
 
+    /// <summary>Veritabanı seviyesi DDL trigger'ları karşılaştırmaya hiç katma (dışla).</summary>
+    public bool IgnoreDdlTriggers { get; init; }
+
     /// <summary>Kolonları tanım sırasına göre değil ada göre karşılaştır.</summary>
     public bool IgnoreColumnOrder { get; init; }
 
@@ -583,7 +586,9 @@ internal static class SnapshotBuilder
             objects[key] = snapshot;
         }
 
-        // Veritabanı seviyesi DDL trigger'ları (şema yok, ad benzersiz).
+        // Veritabanı seviyesi DDL trigger'ları (şema yok, ad benzersiz). "DDL trigger'ları yok
+        // say" seçeneği açıkken hiç eklenmez → karşılaştırmada/sonuçta görünmezler.
+        if (!options.IgnoreDdlTriggers)
         foreach (var dt in catalog.DdlTriggers)
         {
             var key = new ObjectKey(string.Empty, dt.Name, ObjectKind.DdlTrigger);

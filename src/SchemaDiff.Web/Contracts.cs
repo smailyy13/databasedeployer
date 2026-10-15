@@ -45,6 +45,7 @@ public sealed record CompareOptionsDto(
     bool IgnoreAnsiNulls = true,
     bool IgnoreQuotedIdentifiers = true,
     bool IgnoreDmlTriggerState = false,
+    bool IgnoreDdlTriggers = false,
     bool IgnoreSystemNamedConstraints = true,
     bool IgnoreExtendedProperties = false,
     bool IgnorePermissions = false,
