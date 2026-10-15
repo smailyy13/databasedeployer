@@ -357,11 +357,26 @@ tablonun filegroup'a taşınması; kolon fiziksel sırası; veri taşıma.
 
 ## Testler
 
-`main` branch'inde (`test/SchemaDiff.Tests`, xUnit). Çoğu DB gerektirmez; birkaç entegrasyon
-testi yerel SQL Server + fixture ister ve o yoksa atlanır.
+`main` branch'inde tam test paketi (`test/SchemaDiff.Tests`, xUnit) bulunur; testlerin çoğu
+veritabanı gerektirmez. `main_clean` ve `main_clean_8` branch'leri de aynı üç veritabanı
+entegrasyon testini içerir. Entegrasyon testleri yerel SQL Server gerektirir.
 
 ```powershell
 dotnet test test\SchemaDiff.Tests\SchemaDiff.Tests.csproj -c Release
+```
+
+Büyük veritabanı entegrasyon testleri, yerel SQL Server üzerinde her çalıştırmaya özel
+`SchemaDiff_TestBig_<kimlik>_Source/Target` veritabanlarını oluşturur. Kaynak `Drift=0`,
+hedef `Drift=1` verisiyle hazırlanır; testler bitince yalnız bu geçici veritabanları silinir.
+Önceden eşitlenmiş olabilecek `SchemaDiff_Big1/Big2` demo veritabanları değiştirilmez ve
+test verisi olarak kullanılmaz. Yerel SQL Server yoksa bu testler atlanır; sunucu varsa
+test kullanıcısının veritabanı oluşturma/silme yetkisi gerekir. Küçük entegrasyon testi,
+varsa `SchemaDiff_Dev/Prod` fixture çiftini kullanmaya devam eder.
+
+Yalnız veritabanı entegrasyon testlerini çalıştırmak için:
+
+```powershell
+dotnet test test\SchemaDiff.Tests\SchemaDiff.Tests.csproj -c Release --filter Category=Integration
 ```
 
 **1.100+ test** saf mantığı izole doğrular: normalizasyon (string içi `--` yanılgısı dahil),
