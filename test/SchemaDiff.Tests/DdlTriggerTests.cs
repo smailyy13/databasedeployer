@@ -42,6 +42,20 @@ public class DdlTriggerTests
     }
 
     [Fact]
+    public void Ignore_ddl_triggers_excludes_them_from_comparison()
+    {
+        // "DDL trigger'ları yok say" açıkken, yalnız kaynakta olan bir DDL trigger bile
+        // karşılaştırmaya girmez → fark üretmez.
+        var opts = SnapshotOptions.Default with { IgnoreDdlTriggers = true };
+        var source = SnapshotBuilder.Build(
+            Catalog(Trg("trgAudit", "CREATE TRIGGER trgAudit ON DATABASE FOR CREATE_TABLE AS SELECT 1")),
+            new ExtractionReport(), opts);
+        var target = SnapshotBuilder.Build(Catalog(), new ExtractionReport(), opts);
+
+        Assert.Empty(SchemaComparer.Compare(source, target).Differences);
+    }
+
+    [Fact]
     public void Identical_ddl_triggers_produce_no_difference()
     {
         var t = Trg("trgAudit", "CREATE TRIGGER trgAudit ON DATABASE FOR DROP_TABLE AS SELECT 1");

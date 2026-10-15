@@ -222,6 +222,7 @@ public sealed class CompareService
             IgnoreAnsiNulls = options.IgnoreAnsiNulls,
             IgnoreQuotedIdentifiers = options.IgnoreQuotedIdentifiers,
             IgnoreDmlTriggerState = options.IgnoreDmlTriggerState,
+            IgnoreDdlTriggers = options.IgnoreDdlTriggers,
             IgnoreExtendedProperties = options.IgnoreExtendedProperties,
             IgnorePermissions = options.IgnorePermissions,
             CaseSensitiveNames = options.CaseSensitiveNames,
