@@ -1,5 +1,7 @@
 # SchemaDiff
 
+📄 [Kullanım Kılavuzu (PDF)](docs/SchemaDiff-Kullanim-Kilavuzu.pdf)
+
 SQL Server için hızlı bir **şema karşılaştırma + dağıtım (deployment) aracı**. SSDT /
 Visual Studio "Schema Compare" ile aynı soruyu cevaplar — *iki veritabanı arasında ne
 değişti?* — ama büyük veritabanlarında dakikalar yerine **saniyeler** sürer; üstüne

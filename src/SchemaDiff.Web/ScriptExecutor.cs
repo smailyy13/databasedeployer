@@ -47,7 +47,7 @@ public static class ScriptExecutor
         run.SetTotal(batches.Count);
         if (batches.Count == 0)
         {
-            run.Push(ExecuteMessage.Info("(Çalıştırılacak ifade yok — script boş.)"));
+            run.Push(ExecuteMessage.App("info", "(Çalıştırılacak ifade yok — script boş.)", "execNoStatements"));
             run.Complete(true);
             return;
         }
@@ -78,7 +78,9 @@ public static class ScriptExecutor
                 {
                     if (e.RecordCount < 0) return;
                     producedOutput = true;
-                    run.Push(ExecuteMessage.Info(e.RecordCount == 1 ? "(1 row affected)" : $"({e.RecordCount} rows affected)"));
+                    run.Push(ExecuteMessage.App("rows", e.RecordCount == 1 ? "(1 row affected)" : $"({e.RecordCount} rows affected)",
+                        e.RecordCount == 1 ? "execRowAffected" : "execRowsAffected",
+                        new() { ["n"] = e.RecordCount.ToString(CultureInfo.InvariantCulture) }));
                 };
 
                 try
@@ -100,9 +102,9 @@ public static class ScriptExecutor
                     // Terminal hatalar: SSMS biçiminde (Msg/Level/State/Line) raporla, dur.
                     foreach (SqlError err in ex.Errors)
                         run.Push(ExecuteMessage.Server("error", err));
-                    run.Push(ExecuteMessage.Fail(
-                        "İşlem başarısız oldu. Açık transaction geri alındı — önceki commit'li adımlar (ör. şema oluşturma) kalmış olabilir."));
-                    run.Push(ExecuteMessage.Info($"Completion time: {DateTimeOffset.Now:yyyy-MM-ddTHH:mm:ss.fffffffK}"));
+                    run.Push(ExecuteMessage.App("fail",
+                        "İşlem başarısız oldu. Açık transaction geri alındı — önceki commit'li adımlar (ör. şema oluşturma) kalmış olabilir.", "execFailedRollback"));
+                    run.Push(ExecuteMessage.CompletionTime());
                     run.Complete(false);
                     return;
                 }
@@ -112,15 +114,15 @@ public static class ScriptExecutor
 
             // SSMS: sonuç/row-count yoksa "Commands completed successfully."; her zaman tamamlanma zamanı.
             if (!producedOutput)
-                run.Push(ExecuteMessage.Done("Commands completed successfully."));
-            run.Push(ExecuteMessage.Info($"Completion time: {DateTimeOffset.Now:yyyy-MM-ddTHH:mm:ss.fffffffK}"));
+                run.Push(ExecuteMessage.App("done", "Commands completed successfully.", "execCompleted"));
+            run.Push(ExecuteMessage.CompletionTime());
             run.Complete(true);
         }
         catch (OperationCanceledException)
         {
-            run.Push(ExecuteMessage.Fail(
-                "İşlem durduruldu. Açık transaction geri alındı — önceki commit'li adımlar (ör. şema oluşturma) kalmış olabilir."));
-            run.Push(ExecuteMessage.Info($"Completion time: {DateTimeOffset.Now:yyyy-MM-ddTHH:mm:ss.fffffffK}"));
+            run.Push(ExecuteMessage.App("fail",
+                "İşlem durduruldu. Açık transaction geri alındı — önceki commit'li adımlar (ör. şema oluşturma) kalmış olabilir.", "execCancelledRollback"));
+            run.Push(ExecuteMessage.CompletionTime());
             run.Complete(false);
         }
         catch (Exception ex)
@@ -170,8 +172,19 @@ public sealed record ExecuteMessage(
     string Kind, string Text, int? Number, int? Level, int? State, int? Line,
     IReadOnlyList<string>? Columns = null,
     IReadOnlyList<IReadOnlyList<string?>>? Rows = null,
-    bool Truncated = false)
+    bool Truncated = false,
+    string? TranslationKey = null,
+    IReadOnlyDictionary<string, string>? Variables = null)
 {
+    public static ExecuteMessage App(string kind, string text, string key, Dictionary<string, string>? variables = null) =>
+        new(kind, text, null, null, null, null, TranslationKey: key, Variables: variables);
+
+    public static ExecuteMessage CompletionTime()
+    {
+        var time = DateTimeOffset.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffffffK", CultureInfo.InvariantCulture);
+        return App("info", $"Completion time: {time}", "execCompletionTime", new() { ["time"] = time });
+    }
+
     public static ExecuteMessage Info(string text) => new("info", text, null, null, null, null);
     public static ExecuteMessage Simple(string kind, string text) => new(kind, text, null, null, null, null);
     public static ExecuteMessage Fail(string text) => new("fail", text, null, null, null, null);
