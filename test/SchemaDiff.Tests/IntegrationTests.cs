@@ -6,12 +6,12 @@ using SchemaDiff.Core.Scripting;
 namespace SchemaDiff.Tests;
 
 /// <summary>
-/// Canlı SQL Server'a karşı uçtan uca regresyon. Fixture veritabanları (SchemaDiff_Dev/Prod,
-/// SchemaDiff_Big1/Big2) yoksa testler ATLANIR (Skip) — CI'da DB olmasa bile derleme yeşil kalır.
-/// Yerelde çalışınca script üretiminin SSDT'yle uyumunu ve fark sayılarını kilitler.
+/// Canlı SQL Server'a karşı uçtan uca regresyon. Büyük fixture, sınıfa özel geçici
+/// veritabanlarında üretilir ve testler bitince silinir; demo DB'lerinin durumuna bağlı değildir.
+/// Yerel SQL Server yoksa büyük testler, küçük fixture yoksa küçük test atlanır.
 /// </summary>
 [Trait("Category", "Integration")]
-public class IntegrationTests
+public class IntegrationTests(LargeDatabaseFixture fixture) : IClassFixture<LargeDatabaseFixture>
 {
     private static string Conn(string db) =>
         $"Server=localhost;Database={db};Integrated Security=true;TrustServerCertificate=true;Encrypt=false;Connect Timeout=5";
@@ -45,9 +45,9 @@ public class IntegrationTests
     [SkippableFact]
     public async Task Big_fixture_yields_expected_difference_count()
     {
-        Skip.IfNot(DbAvailable("SchemaDiff_Big1") && DbAvailable("SchemaDiff_Big2"), "Big fixture DB'leri yok.");
+        Skip.IfNot(fixture.UnavailableReason is null, fixture.UnavailableReason ?? "SQL Server kullanılamıyor.");
 
-        var result = await SchemaDiffService.CompareAsync(Conn("SchemaDiff_Big1"), Conn("SchemaDiff_Big2"));
+        var result = await SchemaDiffService.CompareAsync(fixture.SourceConnection, fixture.TargetConnection);
 
         // Big2, generate-large.sql'de Drift=1 ile üretildi — kontrollü, sabit fark kümesi.
         Assert.Equal(359, result.Differences.Count);
@@ -56,10 +56,10 @@ public class IntegrationTests
     [SkippableFact]
     public async Task Big_script_matches_ssdt_operation_counts()
     {
-        Skip.IfNot(DbAvailable("SchemaDiff_Big1") && DbAvailable("SchemaDiff_Big2"), "Big fixture DB'leri yok.");
+        Skip.IfNot(fixture.UnavailableReason is null, fixture.UnavailableReason ?? "SQL Server kullanılamıyor.");
 
         var options = SnapshotOptions.Default with { KeepDisplayScripts = true };
-        var result = await SchemaDiffService.CompareAsync(Conn("SchemaDiff_Big1"), Conn("SchemaDiff_Big2"), options);
+        var result = await SchemaDiffService.CompareAsync(fixture.SourceConnection, fixture.TargetConnection, options);
 
         var module = ModuleScriptGenerator.Generate(result, selection: null, ScriptOptions.Default);
         var table = TableScriptGenerator.Generate(result, selection: null, new TableScriptOptions { AllowDataLoss = true });

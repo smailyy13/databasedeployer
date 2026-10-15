@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <EmbeddedResource Include="..\fixtures\generate-large.sql" LogicalName="SchemaDiff.Tests.GenerateLarge.sql" />
   </ItemGroup>
 
   <ItemGroup>
