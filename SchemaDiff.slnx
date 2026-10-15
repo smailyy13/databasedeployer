@@ -4,4 +4,7 @@
     <Project Path="src/SchemaDiff.Core/SchemaDiff.Core.csproj" />
     <Project Path="src/SchemaDiff.Web/SchemaDiff.Web.csproj" />
   </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/SchemaDiff.Tests/SchemaDiff.Tests.csproj" />
+  </Folder>
 </Solution>
