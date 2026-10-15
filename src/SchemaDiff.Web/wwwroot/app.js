@@ -1,24 +1,14 @@
 'use strict';
 
 const $ = (id) => document.getElementById(id);
-let LANG = localStorage.getItem('lang') || 'en';
+let LANG = localStorage.getItem('lang') === 'tr' ? 'tr' : 'en';
 let THEME = localStorage.getItem('theme') || 'light';
 const num = (n) => (n ?? 0).toLocaleString(LANG === 'tr' ? 'tr-TR' : 'en-US');
 
 // Backend'den gelen obje türü etiketlerinin Türkçe GÖSTERİMİ (anahtar/değer değişmez,
 // yalnız ekranda). Haritada olmayan tür İngilizce kalır.
-const TYPE_TR = {
-  'Table': 'Tablo', 'View': 'Görünüm', 'Procedure': 'Prosedür',
-  'Scalar Function': 'Skaler Fonksiyon', 'Inline Function': 'Satır İçi Fonksiyon',
-  'Table Function': 'Tablo Fonksiyonu', 'Trigger': 'Trigger', 'DDL Trigger': 'DDL Trigger',
-  'Schema': 'Şema', 'Synonym': 'Synonym', 'Sequence': 'Sequence',
-  'Role': 'Rol', 'User': 'Kullanıcı', 'User-Defined Type': 'Kullanıcı Tipi',
-  'Table Type': 'Tablo Tipi', 'Partition Function': 'Bölüm Fonksiyonu',
-  'Partition Scheme': 'Bölüm Şeması', 'Full-Text Catalog': 'Tam Metin Kataloğu',
-  'Full-Text Stoplist': 'Tam Metin Stop-listesi', 'XML Schema Collection': 'XML Şema Koleksiyonu',
-  'Plan Guide': 'Plan Guide', 'Rule or Default': 'Rule/Default', 'Database': 'Veritabanı',
-};
-const typeLabel = (s) => LANG === 'tr' ? (TYPE_TR[s] ?? s) : s;
+const TYPE_TR = UI_LABELS_TR;
+const typeLabel = (s) => uiLabel(s, LANG);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -26,6 +16,25 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
 
 const I18N = {
   en: {
+    pageTitle: "Schema Compare",
+    minimapTip: "Difference/match map — click to navigate",
+    close: "Close",
+    forgetConnection: "Remove recent connection",
+    sourcesRequired: "Source and target servers are required.",
+    databasesRequired: "Select source and target databases.",
+    missingRunConnection: "No connection information for this run. Compare again.",
+    execNoStatements: "(No statements to execute — the script is empty.)",
+    execRowsAffected: "({n} rows affected)",
+    execRowAffected: "({n} row affected)",
+    execCompleted: "Commands completed successfully.",
+    execCompletionTime: "Completion time: {time}",
+    execFailedRollback: "Operation failed. The open transaction was rolled back — earlier committed steps (such as schema creation) may remain.",
+    execCancelledRollback: "Operation stopped. The open transaction was rolled back — earlier committed steps (such as schema creation) may remain.",
+    sqlMessage: "Msg",
+    sqlLevel: "Level",
+    sqlState: "State",
+    sqlLine: "Line",
+
     source: 'Source', target: 'Target', selectConnection: 'select connection',
     swap: 'Source ↔ Target', compare: 'Compare', generateScript: 'Generate Script',
     newComparison: 'New comparison', newComparisonTip: 'Open a new comparison in a separate tab',
@@ -72,9 +81,9 @@ const I18N = {
     startingCompare: 'starting comparison…', couldNotStart: 'Could not start.',
     comparing: 'comparing {source} → {target}…', connectionLost: 'Connection lost.',
     cancelCompare: 'Cancel', statusCancelled: 'Comparison cancelled.',
-    progressLine: '{source} → {target} · %{percent} · {elapsed} elapsed',
+    progressLine: '{source} → {target} · {percent}% · {elapsed} elapsed',
     secShort: '{n}s', minShort: '{n}m',
-    loadMeta: '%{percent} · {elapsed} elapsed',
+    loadMeta: '{percent}% · {elapsed} elapsed',
     loadStarting: 'Starting…',
     loadConnecting: 'Connecting to databases…',
     loadExtracting: 'Reading schema (querying catalog)…',
@@ -163,6 +172,25 @@ const I18N = {
     opt_caseSensitiveKeywords: 'Case-sensitive keywords', optn_caseSensitiveKeywords: 'When on, "select" and "SELECT" differ. Off (default): keyword casing is ignored. Identifiers and literals are unaffected.',
   },
   tr: {
+    pageTitle: "Şema Karşılaştırma",
+    minimapTip: "Fark/eşleşme haritası — gitmek için tıklayın",
+    close: "Kapat",
+    forgetConnection: "Son bağlantıyı kaldır",
+    sourcesRequired: "Kaynak ve hedef sunucu zorunlu.",
+    databasesRequired: "Kaynak ve hedef veritabanı seçilmeli.",
+    missingRunConnection: "Bu koşum için bağlantı bilgisi yok (yeniden karşılaştırın).",
+    execNoStatements: "(Çalıştırılacak ifade yok — script boş.)",
+    execRowsAffected: "({n} satır etkilendi)",
+    execRowAffected: "({n} satır etkilendi)",
+    execCompleted: "Komutlar başarıyla tamamlandı.",
+    execCompletionTime: "Tamamlanma zamanı: {time}",
+    execFailedRollback: "İşlem başarısız oldu. Açık transaction geri alındı — önceki commit'li adımlar (ör. şema oluşturma) kalmış olabilir.",
+    execCancelledRollback: "İşlem durduruldu. Açık transaction geri alındı — önceki commit'li adımlar (ör. şema oluşturma) kalmış olabilir.",
+    sqlMessage: "Mesaj",
+    sqlLevel: "Düzey",
+    sqlState: "Durum",
+    sqlLine: "Satır",
+
     source: 'Kaynak', target: 'Hedef', selectConnection: 'bağlantı seçin',
     swap: 'Kaynak ↔ Hedef', compare: 'Karşılaştır', generateScript: 'Script Üret',
     newComparison: 'Yeni karşılaştırma', newComparisonTip: 'Yeni karşılaştırmayı ayrı sekmede aç',
@@ -170,7 +198,7 @@ const I18N = {
     favNeedBoth: 'Önce kaynak ve hedefi seç.', favNamePrompt: 'Favori adı:',
     favNameTitle: 'Favori kaydet', save: 'Kaydet',
     favLoaded: 'Favori yüklendi — kontrol edip Karşılaştır.', favRemove: 'Kaldır', favNoPass: '(parola kaydedilmez — sorulursa gir)',
-    reverseTip: 'Ters (geri alma) için işaretle — Generate Script\'te dahil edilir',
+    reverseTip: 'Ters (geri alma) için işaretle — Script Üret işlemine dahil edilir',
     reverseIncluded: '{n} obje ters bölümde',
     generateScriptTip: 'Seçili değişikliklerden dağıtım script\'i üret',
     options: 'Karşılaştırma seçenekleri', toggleTheme: 'Temayı değiştir', toggleLang: 'Dil',
@@ -184,7 +212,7 @@ const I18N = {
     sc_ctrla: 'Diff panelinde: yalnız o panelin temiz SQL’ini seç',
     pickTwo: 'Karşılaştırmak için iki bağlantı seçin.', allTypes: 'Tüm türler',
     searchPh: 'şema veya obje ara…',
-    tabDiff: 'Farklar', tabRisk: 'Deployment riski', tabTriggers: 'Trigger\'lar',
+    tabDiff: 'Farklar', tabRisk: 'Dağıtım riski', tabTriggers: 'Tetikleyiciler',
     tabResults: 'Sonuçlar', tabMessages: 'Mesajlar', execNull: 'NULL', execRowsTrunc: '(ilk {n} satır gösteriliyor)',
     type: 'Tür', objectDefinitions: 'Obje Tanımları',
     prevDiff: 'Önceki fark', nextDiff: 'Sonraki fark', canonicalText: 'kanonik metin',
@@ -309,10 +337,29 @@ function t(key, vars) {
 
 function applyI18n() {
   document.documentElement.lang = LANG;
+  document.title = t('pageTitle');
   for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
   for (const el of document.querySelectorAll('[data-i18n-title]')) el.title = t(el.dataset.i18nTitle);
   for (const el of document.querySelectorAll('[data-i18n-ph]')) el.placeholder = t(el.dataset.i18nPh);
+  for (const el of document.querySelectorAll('[data-i18n-aria]')) el.setAttribute('aria-label', t(el.dataset.i18nAria));
   $('langLabel').textContent = LANG === 'en' ? 'TR' : 'EN';
+}
+
+// Reformat only complete application message templates. SQL Server messages and
+// user-supplied SQL/identifiers do not pass through substring translation.
+function localizedUiText(text) {
+  for (const language of ['en', 'tr']) {
+    for (const [key, template] of Object.entries(I18N[language])) {
+      if (typeof template !== 'string' || !template) continue;
+      const { regex, names } = messagePattern(template);
+      const match = regex.exec(text);
+      if (match) return t(key, Object.fromEntries(names.map((name, i) => [name, match[i + 1]])));
+    }
+  }
+  if (text === 'Sunucu adı zorunlu.') return t('serverRequired');
+  if (text === 'Çalıştırılacak script boş.') return t('deployEmpty');
+  if (text === 'İşlem iptal edildi.') return t('statusCancelled');
+  return text;
 }
 
 function applyTheme() {
@@ -517,7 +564,8 @@ function openConnect(which) {
   state.editing = which;
   const existing = state[which];
 
-  $('connTitle').textContent = t(which === 'source' ? 'connectSource' : 'connectTarget');
+  $('connTitle').dataset.i18n = which === 'source' ? 'connectSource' : 'connectTarget';
+  $('connTitle').textContent = t($('connTitle').dataset.i18n);
   $('cServer').value = existing?.server ?? '';
   $('cAuth').value = existing?.authentication ?? 'Windows';
   $('cUser').value = existing?.userName ?? '';
@@ -578,7 +626,7 @@ async function loadRecent() {
           <div class="recent-label">${esc(r.label)}</div>
           <div class="recent-sub">${esc(r.authentication === 'SqlLogin' ? (r.userName ?? 'SQL') : 'Windows')}${r.hasStoredPassword ? esc(t('pwSaved')) : ''}</div>
         </div>
-        <button class="recent-x" data-forget="${esc(r.id)}">✕</button>
+        <button class="recent-x" data-forget="${esc(r.id)}" title="${esc(t('forgetConnection'))}" aria-label="${esc(t('forgetConnection'))}">✕</button>
       </div>`).join('');
 
     for (const el of list.querySelectorAll('.recent-item')) {
@@ -618,7 +666,7 @@ function applyRecent(item) {
 
 function setConnStatus(text, kind = '') {
   const el = $('connStatus');
-  el.textContent = text;
+  el.textContent = localizedUiText(text);
   el.className = `conn-status ${kind}`;
 }
 
@@ -859,16 +907,8 @@ async function compare() {
     else state.checked.clear();
     $('scriptBtn').disabled = false;
     renderAll();
-    const r = state.result;
-    // Açık, kelimeyle özet: sıfır olan kategoriler gösterilmez (kalabalık yapmasın).
-    const parts = [t('statObjects', { n: num(r.sourceObjects) })];
-    if (r.changeCount) parts.push(t('statChanged', { n: num(r.changeCount) }));
-    if (r.addCount) parts.push(t('statAdded', { n: num(r.addCount) }));
-    if (r.deleteCount) parts.push(t('statRemoved', { n: num(r.deleteCount) }));
-    parts.push(t('statEqual', { n: num(r.equal) }));
-    parts.push(formatDuration(r.durationMs / 1000));
-    const msg = `${r.sourceLabel} → ${r.targetLabel}  ·  ${parts.join('  ·  ')}`;
-    setStatus(msg);
+    setStatus(comparisonSummary());
+    $('statusbar').dataset.resultSummary = 'true';
     $('compareBtn').disabled = false;
   });
 
@@ -892,8 +932,20 @@ async function compare() {
 
 function setStatus(text, kind = '') {
   const bar = $('statusbar');
-  bar.textContent = text;
+  delete bar.dataset.resultSummary;
+  bar.textContent = localizedUiText(text);
   bar.className = `statusbar ${kind}`;
+}
+
+function comparisonSummary() {
+  const r = state.result;
+  const parts = [t('statObjects', { n: num(r.sourceObjects) })];
+  if (r.changeCount) parts.push(t('statChanged', { n: num(r.changeCount) }));
+  if (r.addCount) parts.push(t('statAdded', { n: num(r.addCount) }));
+  if (r.deleteCount) parts.push(t('statRemoved', { n: num(r.deleteCount) }));
+  parts.push(t('statEqual', { n: num(r.equal) }));
+  parts.push(formatDuration(r.durationMs / 1000));
+  return `${r.sourceLabel} → ${r.targetLabel}  ·  ${parts.join('  ·  ')}`;
 }
 
 // Saniyeyi okunur süreye çevirir: "8sn", "1,6sn", "1dk 20sn", "2dk".
@@ -992,12 +1044,12 @@ function renderTree() {
     html += `<div class="group ${group.cls}" data-group="${group.action}">
       <span class="c-type">
         <span class="caret">${collapsed ? '▸' : '▾'}</span>
-        <span class="gname">${group.label}</span>
+        <span class="gname">${typeLabel(group.label)}</span>
         <span class="gcount">${num(rows.length)}</span>
       </span>
       <span></span>
       <span class="c-mid"><input type="checkbox" class="pick gpick" data-gpick="${group.action}"
-        ${allChecked ? 'checked' : ''} title="${esc(t('selectGroupTip', { g: group.label }))}"></span>
+        ${allChecked ? 'checked' : ''} title="${esc(t('selectGroupTip', { g: typeLabel(group.label) }))}"></span>
       <span></span>
     </div>`;
     if (collapsed) continue;
@@ -1041,7 +1093,7 @@ function renderTree() {
         html += `<div class="row-cat${struck}" data-cat="${esc(catKey)}">
           <span class="c-type" style="padding-left:56px">
             <span class="caret">${catOpen ? '▾' : '▸'}</span>
-            <span class="folder">${esc(category)}</span>
+            <span class="folder">${esc(typeLabel(category))}</span>
             <span class="catcount">${items.length}</span>
           </span><span></span><span></span><span></span>
         </div>`;
@@ -1134,13 +1186,13 @@ function objectRow(change, objKey) {
 function childRow(change, objKey, catKey, item) {
   const pickKey = `${catKey}›${item.name}`;
   const name = item.qualifiedName;
-  const detail = item.detail ? `<span class="child-detail">${esc(item.detail)}</span>` : '';
+  const detail = item.detail ? `<span class="child-detail">${esc(changeDetail(item, LANG))}</span>` : '';
   // Ne kendisi ne parent obje tikli değilse soluk (obje tikliyse tüm alt öğeleri girer).
   const dim = selectionActive() && !(state.checked.has(objKey) || state.checked.has(pickKey)) ? ' dim' : '';
 
   return `<div class="row-child${dim}" data-key="${esc(objKey)}"
       data-schema="${esc(change.schema)}" data-name="${esc(change.name)}" data-kind="${esc(change.objectType)}">
-    <span class="c-type" style="padding-left:74px">${esc(item.itemType)}</span>
+    <span class="c-type" style="padding-left:74px">${esc(typeLabel(item.itemType))}</span>
     <span class="c-name">${item.action === 'Delete' ? '' : esc(name)}</span>
     <span class="c-mid">
       <input type="checkbox" class="pick" data-pick="${esc(pickKey)}" ${state.checked.has(pickKey) ? 'checked' : ''}>
@@ -1426,7 +1478,7 @@ function renderRisk() {
       : (r.rows === null ? esc(t('rowsUnknown')) : esc(t('rowsN', { n: num(r.rows) })));
     const findings = r.findings.map((f) =>
       `<div class="finding"><span class="fdot ${fdot(f.risk)}"></span>` +
-      `<span class="fcol">${esc(f.column)}</span><span class="fdesc">${esc(f.description)}</span></div>`).join('');
+      `<span class="fcol">${esc(riskColumnLabel(f.column, LANG))}</span><span class="fdesc">${esc(riskText(f.description, LANG))}</span></div>`).join('');
     return `<div class="risk sev-${tag}${sel}" data-key="${esc(key)}" data-kind="${esc(kind)}" data-schema="${esc(r.schema)}" data-name="${esc(r.name)}">
         <div class="risk-head">
           <span class="tag ${tag}">${esc(t(lk))}</span>
@@ -2197,7 +2249,7 @@ function updateAutocomplete() {
 function renderAcPopup() {
   const pop = $('acPopup');
   pop.innerHTML = ac.items.map((v, i) =>
-    `<div class="ac-item${i === ac.index ? ' active' : ''}" data-i="${i}">${esc(v.word)}<span class="ac-kind">${v.kind}</span></div>`).join('');
+    `<div class="ac-item${i === ac.index ? ' active' : ''}" data-i="${i}">${esc(v.word)}<span class="ac-kind">${esc(autocompleteLabel(v.kind, LANG))}</span></div>`).join('');
   const { x, y } = caretCoords($('codeInput'));
   pop.style.left = Math.min(x, window.innerWidth - 350) + 'px';
   pop.style.top = (y + 18) + 'px';
@@ -2291,7 +2343,7 @@ function execTargetLabel(dir) {
   return dir === 'reverse' ? (r.sourceLabel || '') : (r.targetLabel || '');
 }
 function closeExecStream() { state.execSource?.close(); state.execSource = null; }
-function setExecStatus(text, cls) { const el = $('execStatus'); el.textContent = text; el.className = 'exec-status ' + (cls || ''); }
+function setExecStatus(text, cls) { const el = $('execStatus'); el.textContent = localizedUiText(text); el.className = 'exec-status ' + (cls || ''); }
 
 // SSMS gibi iki sekme: "Results" (grid'ler) ve "Messages" (metin). Sonuç kümesi gelince
 // Results'a geçilir; aksi halde Messages aktif kalır.
@@ -2336,6 +2388,8 @@ function renderResultGrid(m) {
   if (m.truncated) {
     const note = document.createElement('div');
     note.className = 'grid-trunc';
+    note.dataset.messageKey = 'execRowsTrunc';
+    note.dataset.messageVars = JSON.stringify({ n: rows.length });
     note.textContent = t('execRowsTrunc', { n: rows.length });
     wrap.appendChild(note);
   }
@@ -2351,11 +2405,11 @@ function appendExecLine(m) {
   // Terminal hata: SSMS gibi iki satır — "Msg …, Level …, State …, Line …" + mesaj.
   if (m.kind === 'error' && (m.number != null || m.line != null)) {
     const bits = [];
-    if (m.number != null) bits.push(`Msg ${m.number}`);
-    if (m.level != null) bits.push(`Level ${m.level}`);
-    if (m.state != null) bits.push(`State ${m.state}`);
-    if (m.line != null) bits.push(`Line ${m.line}`);
-    const head = document.createElement('div'); head.className = 'el-err'; head.textContent = bits.join(', ');
+    if (m.number != null) bits.push(`${t('sqlMessage')} ${m.number}`);
+    if (m.level != null) bits.push(`${t('sqlLevel')} ${m.level}`);
+    if (m.state != null) bits.push(`${t('sqlState')} ${m.state}`);
+    if (m.line != null) bits.push(`${t('sqlLine')} ${m.line}`);
+    const head = document.createElement('div'); head.className = 'el-err'; head.textContent = bits.join(', '); head.dataset.sqlError = JSON.stringify(m);
     const body = document.createElement('div'); body.className = 'el-errmsg'; body.textContent = m.text;
     log.appendChild(head); log.appendChild(body);
   } else {
@@ -2363,7 +2417,11 @@ function appendExecLine(m) {
     div.className = m.kind === 'rows' ? 'el-rows'
       : (m.kind === 'error' || m.kind === 'fail') ? 'el-fail'
       : m.kind === 'done' ? 'el-done' : '';
-    div.textContent = m.text;
+    if (m.translationKey) {
+      div.dataset.messageKey = m.translationKey;
+      div.dataset.messageVars = JSON.stringify(m.variables || {});
+    }
+    div.textContent = m.translationKey ? t(m.translationKey, m.variables) : m.text;
     log.appendChild(div);
   }
   if (atBottom) log.scrollTop = log.scrollHeight;
@@ -2516,8 +2574,27 @@ $('langBtn').addEventListener('click', () => {
   localStorage.setItem('lang', LANG);
   applyI18n();
   renderEndpoints();
-  if (state.result) renderAll();
+  renderAll();
   if (state.detail) renderDetail();
+  if (!state.compare) $('statusbar').textContent = $('statusbar').dataset.resultSummary ? comparisonSummary() : localizedUiText($('statusbar').textContent);
+  else renderLoading();
+  $('connStatus').textContent = localizedUiText($('connStatus').textContent);
+  $('execStatus').textContent = localizedUiText($('execStatus').textContent);
+  for (const el of document.querySelectorAll('[data-message-key]'))
+    el.textContent = t(el.dataset.messageKey, JSON.parse(el.dataset.messageVars));
+  for (const el of document.querySelectorAll('[data-sql-error]')) {
+    const m = JSON.parse(el.dataset.sqlError);
+    el.textContent = [['sqlMessage', m.number], ['sqlLevel', m.level], ['sqlState', m.state], ['sqlLine', m.line]]
+      .filter(([, value]) => value != null).map(([key, value]) => `${t(key)} ${value}`).join(', ');
+  }
+  if (!$('connDialog').hidden) loadRecent();
+  if (!$('favPanel').hidden) renderFavList();
+  if (!$('execConfirmDialog').hidden) openDeployConfirm();
+  if (ac.open) renderAcPopup();
+  if (!$('scriptBigNote').hidden && state.scriptHuge) {
+    const sql = state.scriptDirs[state.scriptActiveDir].sql;
+    $('scriptBigNote').textContent = t('scriptTooBig', { size: formatBytes(sql.length), lines: countLines(sql) });
+  }
   if (!$('optDialog').hidden) renderOptions();   // ayarlar açıksa etiket/açıklamaları da çevir
 });
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Schema Compare</title>
+<title data-i18n="pageTitle">Schema Compare</title>
 <link rel="icon" href="favicon.png">
 <script>document.documentElement.dataset.theme = localStorage.getItem('theme') || 'light';</script>
 <link rel="stylesheet" href="styles.css">
@@ -49,7 +49,7 @@
 <div class="dialog narrow" id="favNameDialog" hidden>
   <div class="dialog-head">
     <h2 data-i18n="favNameTitle">Save favorite</h2>
-    <button class="x" id="favNameClose">✕</button>
+    <button class="x" data-i18n-title="close" data-i18n-aria="close" id="favNameClose">✕</button>
   </div>
   <div class="dialog-body single">
     <label class="row"><span data-i18n="favNamePrompt">Favorite name:</span>
@@ -67,7 +67,7 @@
 <div class="dialog narrow" id="execConfirmDialog" hidden>
   <div class="dialog-head">
     <h2 data-i18n="deployConfirmTitle">Run on database?</h2>
-    <button class="x" id="execConfirmClose">✕</button>
+    <button class="x" data-i18n-title="close" data-i18n-aria="close" id="execConfirmClose">✕</button>
   </div>
   <div class="dialog-body single">
     <p class="ec-dir" id="execConfirmDir"></p>
@@ -122,7 +122,7 @@
       <div class="diff" id="defBody">
         <p class="missing" data-i18n="selectRow">Select a row above.</p>
       </div>
-      <div class="diff-minimap" id="diffMinimap" title="Fark/eşleşme haritası — tıkla ve git"></div>
+      <div class="diff-minimap" id="diffMinimap" data-i18n-title="minimapTip" title="Difference/match map — click to navigate"></div>
     </div>
   </section>
 
@@ -143,7 +143,7 @@
 <div class="dialog" id="connDialog" hidden>
   <div class="dialog-head">
     <h2 id="connTitle" data-i18n="connect">Connect</h2>
-    <button class="x" id="connClose">✕</button>
+    <button class="x" data-i18n-title="close" data-i18n-aria="close" id="connClose">✕</button>
   </div>
 
   <div class="dialog-body">
@@ -206,7 +206,7 @@
 <div class="dialog narrow" id="optDialog" hidden>
   <div class="dialog-head">
     <h2 data-i18n="comparisonOptions">Comparison options</h2>
-    <button class="x" id="optClose">✕</button>
+    <button class="x" data-i18n-title="close" data-i18n-aria="close" id="optClose">✕</button>
   </div>
   <div class="dialog-body single">
     <div id="optList" class="opt-list"></div>
@@ -223,7 +223,7 @@
 <div class="dialog narrow" id="scDialog" hidden>
   <div class="dialog-head">
     <h2 data-i18n="shortcutsTitle">Keyboard shortcuts</h2>
-    <button class="x" id="scClose">✕</button>
+    <button class="x" data-i18n-title="close" data-i18n-aria="close" id="scClose">✕</button>
   </div>
   <div class="dialog-body single">
     <table class="sc-table">
@@ -252,7 +252,7 @@
       <button class="stab" data-dir="reverse" data-i18n="dirReverse">target → source</button>
     </div>
     <div class="grow"></div>
-    <button class="x" id="scriptClose">✕</button>
+    <button class="x" data-i18n-title="close" data-i18n-aria="close" id="scriptClose">✕</button>
   </div>
   <div class="dialog-body single">
     <div class="big-note" id="scriptBigNote" hidden></div>
@@ -290,6 +290,7 @@
 
 <div class="ac-popup" id="acPopup" hidden></div>
 
+<script src="localization.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
